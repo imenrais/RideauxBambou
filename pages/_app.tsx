@@ -8,7 +8,6 @@ import { CartProvider } from "../contexts/CartContext";
 import { DarkModeProvider } from "../contexts/DarkModeContext";
 import { SimpleCartProvider } from "../contexts/SimpleCartContext";
 import { ToastProvider } from "../contexts/ToastContext";
-// DevToolsWrapper removed for production
 import "../styles/globals.css";
 
 export default function App({ Component, pageProps: { session, ...pageProps } }: AppProps) {
@@ -17,23 +16,23 @@ export default function App({ Component, pageProps: { session, ...pageProps } }:
       new QueryClient({
         defaultOptions: {
           queries: {
-            staleTime: 5 * 60 * 1000, // 5 minutes - increased for better performance
-            gcTime: 10 * 60 * 1000, // 10 minutes - keep data in cache longer
+            staleTime: 5 * 60 * 1000,
+            gcTime: 10 * 60 * 1000,
             retry: (failureCount, error) => {
               if (error instanceof Error && "status" in error) {
                 const status = (error as any).status;
                 if (status >= 400 && status < 500) {
-                  return false; // Don't retry client errors
+                  return false;
                 }
               }
-              return failureCount < 2; // Reduced retries for faster failure
+              return failureCount < 2;
             },
-            refetchOnWindowFocus: false, // Disabled for better performance
-            refetchOnReconnect: false, // Disabled to prevent unnecessary refetches
-            refetchOnMount: false, // Use cached data when available
+            refetchOnWindowFocus: false,
+            refetchOnReconnect: false,
+            refetchOnMount: false,
           },
           mutations: {
-            retry: false, // No retries for mutations
+            retry: false,
             retryDelay: 0,
           },
         },

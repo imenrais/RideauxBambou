@@ -9,7 +9,6 @@ import Footer from "../components/Footer";
 import Navigation from "../components/Navigation";
 import { useSimpleCart } from "../contexts/SimpleCartContext";
 import { useToast } from "../contexts/ToastContext";
-// PerformanceMonitor removed for production
 
 interface CheckoutFormData {
   firstName: string;
