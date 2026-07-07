@@ -1,0 +1,229 @@
+import { motion } from "framer-motion";
+import { GetServerSideProps } from "next";
+import Link from "next/link";
+import { useRouter } from "next/router";
+import { signIn, getSession, signOut } from "next-auth/react";
+import { useState } from "react";
+
+import BackButton from "../components/BackButton";
+import StandardLayout from "../components/layout/StandardLayout";
+import Button from "../components/ui/Button";
+import Input from "../components/ui/Input";
+import PasswordInput from "../components/ui/PasswordInput";
+
+interface LoginPageProps {
+  title: string;
+}
+
+export default function LoginPage({ title }: LoginPageProps) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState("");
+  const router = useRouter();
+
+  const handleEmailLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setError("");
+
+    try {
+      const result = await signIn("credentials", {
+        email,
+        password,
+        portal: "admin",
+        redirect: false,
+      });
+
+      if (result?.error) {
+        setError("Email ou mot de passe incorrect");
+      } else {
+        // Check if user is admin and redirect accordingly
+        const session = await getSession();
+        if (session?.user?.role === "admin") {
+          router.push("/admin");
+        } else {
+          setError("Accès administrateur requis");
+          await signOut({ redirect: false });
+        }
+      }
+    } catch {
+      setError("Une erreur est survenue");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    setIsLoading(true);
+    setError("");
+
+    try {
+      console.warn("Attempting Google login...");
+      const result = await signIn("google", {
+        callbackUrl: "/",
+        redirect: false,
+      });
+
+      console.warn("Google login result:", result);
+
+      if (result?.error) {
+        setError(`Erreur lors de la connexion avec Google: ${result.error}`);
+        setIsLoading(false);
+      } else if (result?.ok) {
+        // Check if user is admin and redirect accordingly
+        const session = await getSession();
+        if (session?.user?.role === "admin") {
+          router.push("/admin");
+        } else {
+          setError("Accès administrateur requis");
+          await signOut({ redirect: false });
+          setIsLoading(false);
+        }
+      }
+    } catch (error) {
+      console.error("Google login error:", error);
+      setError("Erreur lors de la connexion avec Google");
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <StandardLayout title={title} description="Connexion - Rideaux Bambou">
+      <div className="-mx-4 -my-8 min-h-screen bg-white px-4 py-8 dark:bg-gray-900">
+        {/* Back Button and Main Content */}
+        <div className="px-4 py-6 sm:px-6 sm:py-8">
+          <BackButton href="/" />
+
+          {/* Main Content */}
+          <main className="mx-auto w-full max-w-md px-0 pb-12 sm:px-6">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.8, delay: 0.2 }}
+              className="rounded-3xl border border-gray-200/50 bg-white/80 p-6 shadow-2xl ring-1 ring-gray-200/20 backdrop-blur-sm sm:p-8 dark:border-gray-700/50 dark:bg-gray-800/80 dark:ring-gray-700/20"
+            >
+              {/* Header */}
+              <div className="mb-8 text-center">
+                <img
+                  src="/logo.png"
+                  alt="Rideaux Bambou"
+                  className="mx-auto mb-4 h-12 w-12 object-contain"
+                />
+                <h2 className="mb-2 text-2xl font-bold text-gray-900 dark:text-white">
+                  Connexion Admin
+                </h2>
+                <p className="text-gray-600 dark:text-gray-400">Réservé aux administrateurs</p>
+              </div>
+
+              {/* Error Message */}
+              {error && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-red-600 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400"
+                >
+                  {error}
+                </motion.div>
+              )}
+
+              {/* Email/Password Form */}
+              <form onSubmit={handleEmailLogin} className="space-y-6">
+                <Input
+                  id="email"
+                  name="email"
+                  type="email"
+                  label="Adresse email"
+                  placeholder="votre@email.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                />
+
+                <div>
+                  <PasswordInput
+                    id="password"
+                    name="password"
+                    label="Mot de passe"
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                  />
+                  <div className="mt-2 text-left">
+                    <Link
+                      href="/forgot-password"
+                      className="text-sm font-medium text-green-600 hover:text-green-700 dark:text-green-500 dark:hover:text-green-400"
+                    >
+                      Mot de passe oublié ?
+                    </Link>
+                  </div>
+                </div>
+
+                <Button
+                  type="submit"
+                  variant="primary"
+                  fullWidth
+                  loading={isLoading}
+                  className="w-full"
+                >
+                  {isLoading ? "Connexion..." : "Se connecter"}
+                </Button>
+              </form>
+
+              {/* Divider */}
+              <div className="relative my-6">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-gray-300 dark:border-gray-600" />
+                </div>
+                <div className="relative flex justify-center text-sm">
+                  <span className="bg-white px-2 text-gray-500 dark:bg-gray-800">Ou</span>
+                </div>
+              </div>
+
+              {/* Google Login */}
+              <Button
+                onClick={handleGoogleLogin}
+                disabled={isLoading}
+                variant="secondary"
+                fullWidth
+                icon={
+                  <svg className="h-5 w-5" viewBox="0 0 24 24">
+                    <path
+                      fill="#4285F4"
+                      d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                    />
+                    <path
+                      fill="#34A853"
+                      d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                    />
+                    <path
+                      fill="#FBBC05"
+                      d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+                    />
+                    <path
+                      fill="#EA4335"
+                      d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+                    />
+                  </svg>
+                }
+                iconPosition="left"
+              >
+                Continuer avec Google
+              </Button>
+
+            </motion.div>
+          </main>
+        </div>
+      </div>
+    </StandardLayout>
+  );
+}
+
+export const getServerSideProps: GetServerSideProps = async () => {
+  return {
+    props: {
+      title: "Connexion Admin - Rideaux Bambou",
+    },
+  };
+};

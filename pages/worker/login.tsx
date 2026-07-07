@@ -1,0 +1,143 @@
+import { motion } from "framer-motion";
+import { GetServerSideProps } from "next";
+import Link from "next/link";
+import { useRouter } from "next/router";
+import { signIn } from "next-auth/react";
+import { useState } from "react";
+
+import BackButton from "../../components/BackButton";
+import StandardLayout from "../../components/layout/StandardLayout";
+import Button from "../../components/ui/Button";
+import Input from "../../components/ui/Input";
+import PasswordInput from "../../components/ui/PasswordInput";
+
+interface WorkerLoginPageProps {
+  title: string;
+}
+
+export default function WorkerLoginPage({ title }: WorkerLoginPageProps) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState("");
+  const router = useRouter();
+
+  const handleWorkerLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setError("");
+
+    try {
+      const result = await signIn("credentials", {
+        email,
+        password,
+        portal: "worker",
+        redirect: false,
+      });
+
+      if (result?.error) {
+        setError("Accès travailleur requis");
+      } else {
+        router.push("/");
+      }
+    } catch {
+      setError("Une erreur est survenue");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <StandardLayout title={title} description="Connexion Travailleur - Rideaux Bambou">
+      <div className="-mx-4 -my-8 min-h-screen bg-white px-4 py-8 dark:bg-gray-900">
+        <div className="px-4 py-6 sm:px-6 sm:py-8">
+          <BackButton href="/" />
+
+          <main className="mx-auto w-full max-w-md px-0 pb-12 sm:px-6">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.8, delay: 0.2 }}
+              className="rounded-3xl border border-gray-200/50 bg-white/80 p-6 shadow-2xl ring-1 ring-gray-200/20 backdrop-blur-sm sm:p-8 dark:border-gray-700/50 dark:bg-gray-800/80 dark:ring-gray-700/20"
+            >
+              <div className="mb-8 text-center">
+                <img
+                  src="/logo.png"
+                  alt="Rideaux Bambou"
+                  className="mx-auto mb-4 h-12 w-12 object-contain"
+                />
+                <h2 className="mb-2 text-2xl font-bold text-gray-900 dark:text-white">
+                  Connexion Travailleur
+                </h2>
+                <p className="text-gray-600 dark:text-gray-400">
+                  Réservé à l'équipe interne
+                </p>
+              </div>
+
+              {error && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-red-600 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400"
+                >
+                  {error}
+                </motion.div>
+              )}
+
+              <form onSubmit={handleWorkerLogin} className="space-y-6">
+                <Input
+                  id="email"
+                  name="email"
+                  type="email"
+                  label="Adresse email"
+                  placeholder="votre@email.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                />
+
+                <div>
+                  <PasswordInput
+                    id="password"
+                    name="password"
+                    label="Mot de passe"
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                  />
+                  <div className="mt-2 text-left">
+                    <Link
+                      href="/forgot-password"
+                      className="text-sm font-medium text-green-600 hover:text-green-700 dark:text-green-500 dark:hover:text-green-400"
+                    >
+                      Mot de passe oublié ?
+                    </Link>
+                  </div>
+                </div>
+
+                <Button
+                  type="submit"
+                  variant="primary"
+                  fullWidth
+                  loading={isLoading}
+                  className="w-full"
+                >
+                  {isLoading ? "Connexion..." : "Se connecter"}
+                </Button>
+              </form>
+            </motion.div>
+          </main>
+        </div>
+      </div>
+    </StandardLayout>
+  );
+}
+
+export const getServerSideProps: GetServerSideProps = async () => {
+  return {
+    props: {
+      title: "Connexion Travailleur - Rideaux Bambou",
+    },
+  };
+};
