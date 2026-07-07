@@ -68,6 +68,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Create reset URL
     const resetUrl = `${process.env.NEXTAUTH_URL || "http://localhost:3000"}/reset-password?token=${resetToken}`;
 
+    const isDevelopment = process.env.NODE_ENV !== "production";
+
     // Send email
     try {
       const emailUser = process.env.EMAIL_SERVER_USER?.trim();
@@ -76,17 +78,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       // Check if email is configured
       if (!emailUser || !emailPassword) {
-        console.warn("Email not configured. Reset link:", resetUrl);
-        console.log("=".repeat(80));
-        console.log("PASSWORD RESET LINK FOR:", user.email);
-        console.log("Copy this link to reset password:", resetUrl);
-        console.log("=".repeat(80));
+        if (isDevelopment) {
+          console.warn("Email not configured. Reset link:", resetUrl);
+          console.log("=".repeat(80));
+          console.log("PASSWORD RESET LINK FOR:", user.email);
+          console.log("Copy this link to reset password:", resetUrl);
+          console.log("=".repeat(80));
+        }
 
         return res.status(200).json({
           success: true,
-          message: "Password reset email sent successfully",
-          resetUrl: resetUrl, // Always return resetUrl in development
-          developmentMode: true,
+          message: isDevelopment
+            ? "Password reset email sent successfully"
+            : "If an account exists with this email, a password reset link has been sent.",
+          ...(isDevelopment ? { resetUrl, developmentMode: true } : {}),
         });
       }
 
@@ -172,8 +177,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       return res.status(200).json({
         success: true,
-        message: "Password reset email sent successfully",
-        resetUrl: resetUrl, // Always return resetUrl for debugging
+        message: "If an account exists with this email, a password reset link has been sent.",
+        ...(isDevelopment ? { resetUrl } : {}),
       });
     } catch (emailError) {
       console.error("Email sending error:", emailError);
