@@ -1,5 +1,6 @@
 import { NextApiRequest, NextApiResponse } from "next";
 
+import { setPublicCacheHeaders } from "../../lib/api-cache";
 import { prisma } from "../../lib/prisma";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -12,6 +13,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       where: { isActive: true },
       orderBy: [{ order: "asc" }, { createdAt: "desc" }],
     });
+    setPublicCacheHeaders(res, 300);
+
     return res.status(200).json({
       success: true,
       data: reviews.map((r) => ({ ...r, _id: r.id })),

@@ -1,11 +1,12 @@
-import { useEffect, useState } from "react";
+import { motion } from "framer-motion";
 import Head from "next/head";
 import Link from "next/link";
-import { motion } from "framer-motion";
 import { useRouter } from "next/router";
-import Navigation from "../components/Navigation";
-import Footer from "../components/Footer";
+import { useEffect, useState } from "react";
+
 import BackButton from "../components/BackButton";
+import Footer from "../components/Footer";
+import Navigation from "../components/Navigation";
 
 interface OrderDetails {
   orderId: string;
@@ -23,6 +24,13 @@ interface OrderDetails {
 export default function OrderSuccessPage() {
   const router = useRouter();
   const [orderDetails, setOrderDetails] = useState<OrderDetails | null>(null);
+  const handleBackNavigation = () => {
+    if (typeof window !== "undefined" && window.history.length > 1) {
+      router.back();
+      return;
+    }
+    void router.push("/");
+  };
 
   useEffect(() => {
     const raw = sessionStorage.getItem("last-order-details");
@@ -59,7 +67,7 @@ export default function OrderSuccessPage() {
 
         <main className="mx-auto max-w-4xl px-4 py-12 sm:px-6 lg:px-8">
           <div className="mb-6">
-            <BackButton href="/#boutique" />
+            <BackButton />
           </div>
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -134,7 +142,7 @@ export default function OrderSuccessPage() {
                     <strong>Livraison:</strong> {formatPrice(orderDetails.deliveryFee)}
                   </p>
                   <p>
-                    <strong>Installation:</strong>{" "}
+                    <strong>Pose :</strong>{" "}
                     {orderDetails.wantsInstallation
                       ? formatPrice(orderDetails.installationFee)
                       : "Non demandée"}
@@ -226,12 +234,13 @@ export default function OrderSuccessPage() {
               >
                 Continuer mes achats
               </Link>
-              <Link
-                href="/"
+              <button
+                type="button"
+                onClick={handleBackNavigation}
                 className="inline-flex items-center rounded-md border border-gray-300 bg-white px-6 py-3 text-base font-medium text-gray-700 transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
               >
-                Retour à l'accueil
-              </Link>
+                Retour à l&apos;accueil
+              </button>
             </motion.div>
           </motion.div>
         </main>

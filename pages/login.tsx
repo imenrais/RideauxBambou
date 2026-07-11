@@ -10,6 +10,7 @@ import StandardLayout from "../components/layout/StandardLayout";
 import Button from "../components/ui/Button";
 import Input from "../components/ui/Input";
 import PasswordInput from "../components/ui/PasswordInput";
+import { getEmailValidationError, normalizeEmailValue } from "../lib/email-validation";
 
 interface LoginPageProps {
   title: string;
@@ -18,18 +19,35 @@ interface LoginPageProps {
 export default function LoginPage({ title }: LoginPageProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [emailError, setEmailError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const router = useRouter();
 
+  const handleEmailChange = (value: string) => {
+    setEmail(value);
+    if (emailError) {
+      setEmailError(getEmailValidationError(value, { required: true }));
+    }
+  };
+
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    const normalizedEmail = normalizeEmailValue(email);
+    const validationError = getEmailValidationError(normalizedEmail, { required: true });
+    setEmail(normalizedEmail);
+    setEmailError(validationError);
+    if (validationError) {
+      return;
+    }
+
     setIsLoading(true);
     setError("");
 
     try {
       const result = await signIn("credentials", {
-        email,
+        email: normalizedEmail,
         password,
         portal: "admin",
         redirect: false,
@@ -89,7 +107,7 @@ export default function LoginPage({ title }: LoginPageProps) {
   };
 
   return (
-    <StandardLayout title={title} description="Connexion - Rideaux Bambou">
+    <StandardLayout title={title} description="Connexion - Rideaux Bambou" showCartIcon={false}>
       <div className="-mx-4 -my-8 min-h-screen bg-white px-4 py-8 dark:bg-gray-900">
         {/* Back Button and Main Content */}
         <div className="px-4 py-6 sm:px-6 sm:py-8">
@@ -136,7 +154,13 @@ export default function LoginPage({ title }: LoginPageProps) {
                   label="Adresse email"
                   placeholder="votre@email.com"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => handleEmailChange(e.target.value)}
+                  onBlur={() => {
+                    const normalizedEmail = normalizeEmailValue(email);
+                    setEmail(normalizedEmail);
+                    setEmailError(getEmailValidationError(normalizedEmail, { required: true }));
+                  }}
+                  error={emailError}
                   required
                 />
 
@@ -152,7 +176,7 @@ export default function LoginPage({ title }: LoginPageProps) {
                   />
                   <div className="mt-2 text-left">
                     <Link
-                      href="/forgot-password"
+                      href="/mot-de-passe-oublie"
                       className="text-sm font-medium text-green-600 hover:text-green-700 dark:text-green-500 dark:hover:text-green-400"
                     >
                       Mot de passe oublié ?
@@ -165,6 +189,7 @@ export default function LoginPage({ title }: LoginPageProps) {
                   variant="primary"
                   fullWidth
                   loading={isLoading}
+                  disabled={isLoading || Boolean(emailError)}
                   className="w-full"
                 >
                   {isLoading ? "Connexion..." : "Se connecter"}

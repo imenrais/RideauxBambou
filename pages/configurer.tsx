@@ -1,44 +1,51 @@
+import { useQuery } from "@tanstack/react-query";
 import Head from "next/head";
 import Image from "next/image";
 import { useRouter } from "next/router";
-import { useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import Footer from "../components/Footer";
 import Navigation from "../components/Navigation";
 import Button from "../components/ui/Button";
 import Card from "../components/ui/Card";
+import PriceDisplay from "../components/ui/PriceDisplay";
 import { useSimpleCart } from "../contexts/SimpleCartContext";
+import { formatPanneauWidthOption } from "../lib/panneau-pricing";
+import {
+  formFieldClass,
+  formFieldDisabledClass,
+  formFieldLabelClass,
+  formNumberFieldClass,
+  formSelectClass,
+} from "../lib/form-field-styles";
+import { usePublicProductsQuery } from "../lib/products-query";
+import { OUT_OF_STOCK_CLIENT_MESSAGE } from "../lib/product-availability-sync";
 
 interface Product {
   _id: string;
   name: string;
   image: string;
+  isAvailable: boolean;
+  supportsPanneau?: boolean;
 }
 
 const STORE_WIDTH_MAX = 210;
 
 export default function ConfigurerProduitPage() {
   const router = useRouter();
-  const { addItem, calculatePrice } = useSimpleCart();
+  const { addItem, calculatePrice, storePriceSettings, panneauConfig, pricesLoaded } = useSimpleCart();
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [width, setWidth] = useState<number | "">("");
-  const [height, setHeight] = useState<number | "">(210);
+  const [height, setHeight] = useState<number | "">("");
   const [curtainType, setCurtainType] = useState<"panneau" | "store">("panneau");
   const [quantity, setQuantity] = useState(1);
   const [wantsInstallation, setWantsInstallation] = useState<boolean | null>(null);
   const [selectedProductId, setSelectedProductId] = useState("");
+  const hasInitializedSelectionRef = useRef(false);
   const [priceCalculation, setPriceCalculation] = useState({ area: 0, pricePerM2: 0, total: 0 });
   const [storeWidthError, setStoreWidthError] = useState("");
 
-  const { data: productsData, isLoading: isProductsLoading } = useQuery({
-    queryKey: ["products-configurer"],
-    queryFn: async () => {
-      const response = await fetch("/api/products");
-      const data = await response.json();
-      return data.success ? (data.data as Product[]) : [];
-    },
-  });
+  const { data: productsData, isLoading: isProductsLoading } = usePublicProductsQuery();
 
   const { data: installationFeeData } = useQuery({
     queryKey: ["installation-fee-configurer"],
@@ -55,39 +62,125 @@ export default function ConfigurerProduitPage() {
     refetchOnWindowFocus: false,
   });
 
-  const products = Array.isArray(productsData) ? productsData : [];
-  const initialProductId =
-    typeof router.query.productId === "string" ? router.query.productId : undefined;
+  const products = useMemo(() => (Array.isArray(productsData) ? productsData : []), [productsData]);
+  const storeProducts = products;
+  const panneauProductsAll = useMemo(
+    () => products.filter((item) => item.supportsPanneau === true),
+    [products]
+  );
+  const availableStoreProducts = useMemo(
+    () => storeProducts.filter((item) => item.isAvailable !== false),
+    [storeProducts]
+  );
+  const availablePanneauProducts = useMemo(
+    () => panneauProductsAll.filter((item) => item.isAvailable !== false),
+    [panneauProductsAll]
+  );
+  const panneauWidthValues = useMemo(
+    () => new Set(panneauConfig.widths.map((entry) => entry.widthCm)),
+    [panneauConfig.widths]
+  );
+  const productsForCurtainType =
+    curtainType === "panneau" ? panneauProductsAll : storeProducts;
+  const availableProductsForCurtainType =
+    curtainType === "panneau" ? availablePanneauProducts : availableStoreProducts;
+
+  const queryProductId =
+    typeof router.query.productId === "string" ? router.query.productId : "";
 
   useEffect(() => {
+    if (!router.isReady || isProductsLoading || hasInitializedSelectionRef.current) {
+      return;
+    }
+
     if (!products.length) {
       return;
     }
 
-    if (selectedProductId) {
+    const queryProduct = queryProductId
+      ? products.find((product) => product._id === queryProductId)
+      : undefined;
+
+    if (queryProduct) {
+      setCurtainType(queryProduct.supportsPanneau === true ? "panneau" : "store");
+      setSelectedProductId(queryProduct._id);
+    } else if (availablePanneauProducts.length > 0) {
+      setCurtainType("panneau");
+      setSelectedProductId(availablePanneauProducts[0]._id);
+    } else if (availableStoreProducts.length > 0) {
+      setCurtainType("store");
+      setSelectedProductId(availableStoreProducts[0]._id);
+    } else {
+      setCurtainType("store");
+      setSelectedProductId(products[0]?._id ?? "");
+    }
+
+    hasInitializedSelectionRef.current = true;
+  }, [
+    router.isReady,
+    queryProductId,
+    isProductsLoading,
+    products,
+    availablePanneauProducts,
+    availableStoreProducts,
+  ]);
+
+  useEffect(() => {
+    if (!hasInitializedSelectionRef.current) {
       return;
     }
 
-    const queryProductExists = initialProductId && products.some((p) => p._id === initialProductId);
-    setSelectedProductId(queryProductExists ? initialProductId : products[0]._id);
-  }, [products, initialProductId, selectedProductId]);
-
-  const product = useMemo(() => {
-    if (!products.length || !selectedProductId) {
-      return null;
+    if (!productsForCurtainType.length) {
+      if (selectedProductId) {
+        setSelectedProductId("");
+      }
+      return;
     }
 
-    const selected = products.find((p) => p._id === selectedProductId);
-    if (!selected) {
+    if (
+      selectedProductId &&
+      productsForCurtainType.some((product) => product._id === selectedProductId)
+    ) {
+      return;
+    }
+
+    if (
+      curtainType === "store" &&
+      queryProductId &&
+      productsForCurtainType.some((product) => product._id === queryProductId)
+    ) {
+      setSelectedProductId(queryProductId);
+      return;
+    }
+
+    const fallbackProduct =
+      availableProductsForCurtainType[0] ?? productsForCurtainType[0] ?? null;
+    setSelectedProductId(fallbackProduct?._id ?? "");
+  }, [
+    productsForCurtainType,
+    availableProductsForCurtainType,
+    selectedProductId,
+    curtainType,
+    queryProductId,
+  ]);
+
+  const selectedProduct = useMemo(
+    () => productsForCurtainType.find((product) => product._id === selectedProductId) ?? null,
+    [productsForCurtainType, selectedProductId]
+  );
+
+  const product = useMemo(() => {
+    if (!selectedProduct) {
       return null;
     }
 
     return {
-      productId: selected._id,
-      productName: selected.name,
-      productImage: selected.image || "/14.jpeg",
+      productId: selectedProduct._id,
+      productName: selectedProduct.name,
+      productImage: selectedProduct.image || "/14.jpeg",
+      isAvailable: selectedProduct.isAvailable !== false,
     };
-  }, [products, selectedProductId]);
+  }, [selectedProduct]);
 
   useEffect(() => {
     const updateDarkMode = () => {
@@ -104,15 +197,21 @@ export default function ConfigurerProduitPage() {
 
   useEffect(() => {
     if (curtainType === "panneau") {
-      setHeight(210);
-      setWidth((prevWidth) => (prevWidth === 100 || prevWidth === 130 ? prevWidth : ""));
+      setHeight(panneauConfig.fixedHeightCm);
+      setWidth((prevWidth) =>
+        typeof prevWidth === "number" && panneauWidthValues.has(prevWidth) ? prevWidth : ""
+      );
       setStoreWidthError("");
       return;
     }
 
-    setHeight((prevHeight) => (prevHeight === 210 ? "" : prevHeight));
-    setWidth((prevWidth) => (prevWidth === 100 || prevWidth === 130 ? "" : prevWidth));
-  }, [curtainType]);
+    setHeight((prevHeight) =>
+      prevHeight === panneauConfig.fixedHeightCm ? "" : prevHeight
+    );
+    setWidth((prevWidth) =>
+      typeof prevWidth === "number" && panneauWidthValues.has(prevWidth) ? "" : prevWidth
+    );
+  }, [curtainType, panneauConfig.fixedHeightCm, panneauWidthValues]);
 
   useEffect(() => {
     if (width === "" || height === "" || width <= 0 || height <= 0) {
@@ -120,14 +219,14 @@ export default function ConfigurerProduitPage() {
       return;
     }
 
-    const calculation = calculatePrice(width, height);
+    const calculation = calculatePrice(width, height, curtainType);
     setPriceCalculation(calculation);
-  }, [width, height, calculatePrice]);
+  }, [width, height, curtainType, calculatePrice, panneauConfig, pricesLoaded]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!product) {
+    if (!product || !product.isAvailable) {
       return;
     }
 
@@ -138,6 +237,12 @@ export default function ConfigurerProduitPage() {
       return;
     }
     if (curtainType === "store" && width > STORE_WIDTH_MAX) {
+      return;
+    }
+    if (
+      curtainType === "panneau" &&
+      !availablePanneauProducts.some((p) => p._id === selectedProductId)
+    ) {
       return;
     }
 
@@ -152,7 +257,7 @@ export default function ConfigurerProduitPage() {
     });
 
     void router.push({
-      pathname: "/checkout",
+      pathname: "/paiement",
       query: { install: wantsInstallation ? "yes" : "no" },
     });
   };
@@ -160,8 +265,6 @@ export default function ConfigurerProduitPage() {
   const formatPrice = (price: number) =>
     new Intl.NumberFormat("fr-FR", { style: "currency", currency: "TND" }).format(price);
 
-  const clampNumber = (value: number, min: number, max: number) =>
-    Math.min(max, Math.max(min, value));
   const isStoreWidthInvalid = curtainType === "store" && typeof width === "number" && width > STORE_WIDTH_MAX;
 
   return (
@@ -179,49 +282,87 @@ export default function ConfigurerProduitPage() {
             <Card className="lg:col-span-2">
               <p className="text-gray-700 dark:text-gray-300">Chargement des références...</p>
             </Card>
-          ) : !product ? (
-            <Card className="lg:col-span-2">
-              <h1 className="text-xl font-semibold text-gray-900 dark:text-white">
-                Produit introuvable
-              </h1>
-              <p className="mt-2 text-gray-600 dark:text-gray-300">
-                Merci de revenir a la section Nos Produits puis cliquer sur Acheter maintenant.
-              </p>
-              <div className="mt-5">
-                <Button onClick={() => router.push("/#boutique")}>Retour aux produits</Button>
-              </div>
-            </Card>
           ) : (
             <>
               <Card className="h-fit">
-                <div className="relative mb-4 h-56 overflow-hidden rounded-lg bg-gray-100 sm:h-72 dark:bg-gray-700">
-                  <Image src={product.productImage} alt={product.productName} fill className="object-cover" />
-                </div>
-                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{product.productName}</h1>
+                {product ? (
+                  <>
+                    <div className="relative mb-4 h-56 overflow-hidden rounded-lg bg-gray-100 sm:h-72 dark:bg-gray-700">
+                      <Image
+                        src={product.productImage}
+                        alt={product.productName}
+                        fill
+                        className={`object-cover ${product.isAvailable ? "" : "grayscale"}`}
+                      />
+                      {!product.isAvailable && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-gray-900/40 px-4 text-center">
+                          <span className="rounded-full bg-white/95 px-4 py-2 text-sm font-semibold text-red-700 shadow-sm dark:bg-gray-900/95 dark:text-red-300">
+                            {OUT_OF_STOCK_CLIENT_MESSAGE}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                    <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+                      {product.productName}
+                    </h1>
+                    {!product.isAvailable && (
+                      <p className="mt-2 text-sm text-red-600 dark:text-red-400">
+                        {OUT_OF_STOCK_CLIENT_MESSAGE}. Choisissez une autre référence disponible pour
+                        continuer votre commande.
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <div className="rounded-lg border border-dashed border-gray-300 px-4 py-10 text-center dark:border-gray-600">
+                    <p className="text-base font-medium text-gray-700 dark:text-gray-200">
+                      Choisir la référence
+                    </p>
+                    <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                      Sélectionnez une référence pour afficher le visuel produit.
+                    </p>
+                  </div>
+                )}
               </Card>
 
               <Card>
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div>
-                    <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    <label className={formFieldLabelClass}>
                       Référence
                     </label>
                     <select
                       value={selectedProductId}
                       onChange={(e) => setSelectedProductId(e.target.value)}
-                      className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                      className={formSelectClass}
                       required
                     >
-                      {products.map((item) => (
-                        <option key={item._id} value={item._id}>
+                      {productsForCurtainType.map((item) => (
+                        <option
+                          key={item._id}
+                          value={item._id}
+                          disabled={!item.isAvailable}
+                        >
                           {item.name}
+                          {!item.isAvailable ? ` — ${OUT_OF_STOCK_CLIENT_MESSAGE}` : ""}
                         </option>
                       ))}
                     </select>
+                    {curtainType === "panneau" && productsForCurtainType.length === 0 && (
+                      <p className="mt-1 text-xs text-red-600 dark:text-red-400">
+                        Aucune référence panneau configurée.
+                      </p>
+                    )}
+                    {curtainType === "panneau" &&
+                      productsForCurtainType.length > 0 &&
+                      availableProductsForCurtainType.length === 0 && (
+                        <p className="mt-1 text-xs text-red-600 dark:text-red-400">
+                          Toutes les références panneau sont en {OUT_OF_STOCK_CLIENT_MESSAGE.toLowerCase()}.
+                        </p>
+                      )}
                   </div>
 
                   <div>
-                    <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    <label className={formFieldLabelClass}>
                       Type de rideau
                     </label>
                     <div className="flex flex-wrap gap-4">
@@ -264,14 +405,14 @@ export default function ConfigurerProduitPage() {
 
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div>
-                      <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      <label className={formFieldLabelClass}>
                         Largeur (cm)
                       </label>
                       {curtainType === "panneau" ? (
                         <select
                           value={width}
                           onChange={(e) => setWidth(e.target.value ? Number(e.target.value) : "")}
-                          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                          className={formSelectClass}
                           style={{
                             color: width === "" ? "#9CA3AF" : undefined,
                           }}
@@ -280,12 +421,15 @@ export default function ConfigurerProduitPage() {
                           <option value="" style={{ color: "#9CA3AF" }}>
                             Choisir la largeur
                           </option>
-                          <option value={100} style={{ color: isDarkMode ? "#FFFFFF" : "#111827" }}>
-                            1m (100cm)
-                          </option>
-                          <option value={130} style={{ color: isDarkMode ? "#FFFFFF" : "#111827" }}>
-                            1m30 (130cm)
-                          </option>
+                          {panneauConfig.widths.map((entry) => (
+                            <option
+                              key={entry.id}
+                              value={entry.widthCm}
+                              style={{ color: isDarkMode ? "#FFFFFF" : "#111827" }}
+                            >
+                              {formatPanneauWidthOption(entry)}
+                            </option>
+                          ))}
                         </select>
                       ) : (
                         <input
@@ -313,7 +457,7 @@ export default function ConfigurerProduitPage() {
                               setStoreWidthError("");
                             }
                           }}
-                          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400 dark:border-gray-600 dark:bg-gray-700 dark:text-white [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield]"
+                          className={formNumberFieldClass}
                           required
                         />
                       )}
@@ -329,22 +473,23 @@ export default function ConfigurerProduitPage() {
                           )}
                         </>
                       )}
-                      {curtainType === "panneau" && (
+                      {curtainType === "panneau" && panneauConfig.widths.length > 0 && (
                         <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                          Largeurs disponibles: 100 cm ou 130 cm uniquement.
+                          Largeurs disponibles:{" "}
+                          {panneauConfig.widths.map((entry) => `${entry.widthCm} cm`).join(", ")}.
                         </p>
                       )}
                     </div>
                     <div>
-                      <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      <label className={formFieldLabelClass}>
                         Hauteur (cm)
                       </label>
                       {curtainType === "panneau" ? (
                         <input
                           type="number"
-                          value={210}
+                          value={panneauConfig.fixedHeightCm}
                           disabled
-                          className="w-full rounded-md border border-gray-300 bg-gray-100 px-3 py-2 text-sm text-gray-700 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                          className={formFieldDisabledClass}
                         />
                       ) : (
                         <input
@@ -363,20 +508,20 @@ export default function ConfigurerProduitPage() {
                             }
                             setHeight(parsed);
                           }}
-                          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400 dark:border-gray-600 dark:bg-gray-700 dark:text-white [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield]"
+                          className={formNumberFieldClass}
                           required
                         />
                       )}
                       {curtainType === "panneau" && (
                         <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                          Hauteur fixe pour panneau: 210 cm.
+                          Hauteur fixe pour panneau: {panneauConfig.fixedHeightCm} cm.
                         </p>
                       )}
                     </div>
                   </div>
 
                   <div>
-                    <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    <label className={formFieldLabelClass}>
                       Pose
                     </label>
                     <div className="flex flex-wrap gap-4">
@@ -418,7 +563,7 @@ export default function ConfigurerProduitPage() {
                   </div>
 
                   <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    <label className={formFieldLabelClass}>
                       Quantite
                     </label>
                     <div className="flex flex-wrap items-center justify-start gap-1.5">
@@ -433,8 +578,7 @@ export default function ConfigurerProduitPage() {
                         type="number"
                         value={quantity}
                         readOnly
-                        className="w-10 rounded-md border border-gray-300 px-0 py-1.5 text-center text-sm font-medium leading-none focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                        style={{ textAlign: "center" }}
+                        className="h-8 w-10 rounded-md border border-gray-300 px-0 text-center text-sm font-medium leading-none [text-align-last:center] focus:outline-none [-moz-appearance:textfield] dark:border-gray-600 dark:bg-gray-700 dark:text-white [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                       />
                       <button
                         type="button"
@@ -449,12 +593,48 @@ export default function ConfigurerProduitPage() {
                   <div className="rounded-lg bg-gray-50 p-4 dark:bg-gray-700">
                     <div className="space-y-1 text-sm text-gray-600 dark:text-gray-300">
                       <div className="flex justify-between">
-                        <span>Prix par m²:</span>
-                        <span>{formatPrice(priceCalculation.pricePerM2)}</span>
+                        <span>
+                          {curtainType === "panneau" ? "Prix:" : "Prix par m²:"}
+                        </span>
+                        <span>
+                          {curtainType === "panneau" ? (
+                            (() => {
+                              const selectedWidth = panneauConfig.widths.find(
+                                (entry) => entry.widthCm === width
+                              );
+
+                              if (!selectedWidth) {
+                                return formatPrice(priceCalculation.total);
+                              }
+
+                              return (
+                                <PriceDisplay
+                                  pricePerM2={selectedWidth.price}
+                                  salePricePerM2={selectedWidth.salePrice}
+                                  isSaleActive={panneauConfig.isSaleActive === true}
+                                  suffix=""
+                                  inline
+                                  listClassName="text-sm text-gray-500 line-through dark:text-gray-400"
+                                  saleClassName="text-sm font-semibold text-green-600 dark:text-green-400"
+                                />
+                              );
+                            })()
+                          ) : (
+                            <PriceDisplay
+                              pricePerM2={storePriceSettings.pricePerM2}
+                              salePricePerM2={storePriceSettings.salePricePerM2}
+                              isSaleActive={storePriceSettings.isSaleActive === true}
+                              suffix=""
+                              inline
+                              listClassName="text-sm text-gray-500 line-through dark:text-gray-400"
+                              saleClassName="text-sm font-semibold text-green-600 dark:text-green-400"
+                            />
+                          )}
+                        </span>
                       </div>
                       {wantsInstallation === true && (
                         <div className="flex justify-between text-sm">
-                          <span>Frais d&apos;installation</span>
+                          <span>Frais de pose</span>
                           <span>{formatPrice(installationFeeData?.fee || 11)}</span>
                         </div>
                       )}
@@ -470,21 +650,21 @@ export default function ConfigurerProduitPage() {
                     </div>
                   </div>
 
-                  <div className="flex flex-col gap-3 pt-2 sm:flex-row">
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      onClick={() => router.push("/#boutique")}
-                      className="w-full sm:flex-1"
-                    >
-                      Retour
-                    </Button>
+                  <div className="pt-2">
                     <Button
                       type="submit"
-                      disabled={wantsInstallation === null || isStoreWidthInvalid || height === ""}
-                      className="w-full bg-green-600 hover:bg-green-700 sm:flex-1 disabled:cursor-not-allowed disabled:opacity-60"
+                      disabled={
+                        wantsInstallation === null ||
+                        isStoreWidthInvalid ||
+                        height === "" ||
+                        !product ||
+                        !product.isAvailable
+                      }
+                      className="w-full bg-green-600 hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      Continuer
+                      {product && !product.isAvailable
+                        ? OUT_OF_STOCK_CLIENT_MESSAGE
+                        : "Continuer"}
                     </Button>
                   </div>
                 </form>

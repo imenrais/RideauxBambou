@@ -16,6 +16,7 @@ import {
   getPasswordStrengthLabel,
   getPasswordStrengthColor,
 } from "../lib/password-validation";
+import { getEmailValidationError, normalizeEmailValue } from "../lib/email-validation";
 
 interface SignupPageProps {
   title: string;
@@ -31,6 +32,7 @@ export default function SignupPage({ title }: SignupPageProps) {
   });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const [emailError, setEmailError] = useState("");
   const [success, setSuccess] = useState(false);
   const [passwordStrength, setPasswordStrength] = useState({
     score: 0,
@@ -46,6 +48,10 @@ export default function SignupPage({ title }: SignupPageProps) {
       [name]: value,
     });
 
+    if (name === "email" && emailError) {
+      setEmailError(getEmailValidationError(value, { required: true }));
+    }
+
     // Check password strength when password changes
     if (name === "password") {
       const strength = checkPasswordStrength(value);
@@ -57,6 +63,15 @@ export default function SignupPage({ title }: SignupPageProps) {
     e.preventDefault();
     setIsLoading(true);
     setError("");
+
+    const normalizedEmail = normalizeEmailValue(formData.email);
+    const validationError = getEmailValidationError(normalizedEmail, { required: true });
+    setFormData((prev) => ({ ...prev, email: normalizedEmail }));
+    setEmailError(validationError);
+    if (validationError) {
+      setIsLoading(false);
+      return;
+    }
 
     // Validation
     if (formData.password !== formData.confirmPassword) {
@@ -81,7 +96,7 @@ export default function SignupPage({ title }: SignupPageProps) {
           name: `${formData.firstName} ${formData.lastName}`,
           firstName: formData.firstName,
           lastName: formData.lastName,
-          email: formData.email,
+          email: normalizedEmail,
           password: formData.password,
         }),
       });
@@ -93,7 +108,7 @@ export default function SignupPage({ title }: SignupPageProps) {
         // Auto login after successful signup
         setTimeout(async () => {
           await signIn("credentials", {
-            email: formData.email,
+            email: normalizedEmail,
             password: formData.password,
             redirect: false,
           });
@@ -245,6 +260,12 @@ export default function SignupPage({ title }: SignupPageProps) {
                     placeholder="votre@email.com"
                     value={formData.email}
                     onChange={handleInputChange}
+                    onBlur={() => {
+                      const normalizedEmail = normalizeEmailValue(formData.email);
+                      setFormData((prev) => ({ ...prev, email: normalizedEmail }));
+                      setEmailError(getEmailValidationError(normalizedEmail, { required: true }));
+                    }}
+                    error={emailError}
                     required
                   />
 
@@ -341,6 +362,7 @@ export default function SignupPage({ title }: SignupPageProps) {
                     variant="primary"
                     fullWidth
                     loading={isLoading}
+                    disabled={isLoading || Boolean(emailError)}
                     className="w-full"
                   >
                     {isLoading ? "Création du compte..." : "Créer mon compte"}
@@ -393,7 +415,7 @@ export default function SignupPage({ title }: SignupPageProps) {
                   <p className="text-gray-600 dark:text-gray-400">
                     Déjà un compte?{" "}
                     <Link
-                      href="/login"
+                      href="/connexion"
                       className="font-medium text-green-600 transition-colors hover:text-green-700 dark:text-green-400 dark:hover:text-green-300"
                     >
                       Se connecter

@@ -11,6 +11,7 @@ import Badge from "../../components/ui/Badge";
 import Button from "../../components/ui/Button";
 import Card from "../../components/ui/Card";
 import Loading from "../../components/ui/Loading";
+import { formSelectClass } from "../../lib/form-field-styles";
 
 interface UserOrdersProps {
   title: string;
@@ -25,7 +26,7 @@ export default function UserOrders({ title }: UserOrdersProps) {
   useEffect(() => {
     if (status === "loading") return;
     if (!session) {
-      router.push("/login?callbackUrl=/profile/orders");
+      router.push("/connexion?callbackUrl=/profil/commandes");
     }
   }, [session, status, router]);
 
@@ -120,7 +121,7 @@ export default function UserOrders({ title }: UserOrdersProps) {
                 <select
                   value={selectedStatus}
                   onChange={(e) => setSelectedStatus(e.target.value)}
-                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400 sm:w-auto dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                  className={`${formSelectClass} sm:w-auto`}
                 >
                   <option value="all">All Orders</option>
                   <option value="pending">Pending</option>

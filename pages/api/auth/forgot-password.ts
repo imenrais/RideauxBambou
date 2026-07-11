@@ -3,11 +3,14 @@ import { z } from "zod";
 import crypto from "crypto";
 import nodemailer from "nodemailer";
 import { enforceIpRateLimit, getRequestIp } from "../../../lib/auth-throttle";
+import { requiredEmailSchema } from "../../../lib/email-validation";
+import { getEmailFromAddress } from "../../../lib/email-sender";
+import { renderPasswordResetEmail } from "../../../lib/email-templates";
 import { prisma } from "../../../lib/prisma";
 
 // Validation schema
 const forgotPasswordSchema = z.object({
-  email: z.string().email("Invalid email address"),
+  email: requiredEmailSchema,
 });
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -41,7 +44,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const { email } = validationResult.data;
 
     // Find user by email
-    const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+    const user = await prisma.user.findUnique({ where: { email } });
 
     // Only proceed if user exists
     if (!user) {
@@ -66,7 +69,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
 
     // Create reset URL
-    const resetUrl = `${process.env.NEXTAUTH_URL || "http://localhost:3000"}/reset-password?token=${resetToken}`;
+    const resetUrl = `${process.env.NEXTAUTH_URL || "http://localhost:3000"}/reinitialiser-mot-de-passe?token=${resetToken}`;
 
     const isDevelopment = process.env.NODE_ENV !== "production";
 
@@ -106,65 +109,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       });
 
       const mailOptions = {
-        from: process.env.EMAIL_FROM || "noreply@rideaux-bambou.com",
+        from: getEmailFromAddress(),
         to: user.email,
         subject: "Réinitialisation de votre mot de passe - Rideaux Bambou",
-        html: `
-          <!DOCTYPE html>
-          <html>
-            <head>
-              <meta charset="utf-8">
-              <style>
-                body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-                .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-                .header { background-color: #16a34a; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
-                .header h1 { color: white; margin: 0; }
-                .content { background-color: #f9fafb; padding: 30px; border-radius: 0 0 8px 8px; }
-                .button { display: inline-block; background-color: #16a34a; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; margin: 20px 0; font-weight: bold; }
-                .button:hover { background-color: #15803d; }
-                .footer { text-align: center; padding: 20px; color: #6b7280; font-size: 12px; }
-              </style>
-            </head>
-            <body>
-              <div class="container">
-                <div class="header">
-                  <h1>Rideaux Bambou</h1>
-                </div>
-                <div class="content">
-                  <h2>Réinitialisation de mot de passe</h2>
-                  <p>Bonjour,</p>
-                  <p>Vous avez demandé la réinitialisation de votre mot de passe. Cliquez sur le bouton ci-dessous pour créer un nouveau mot de passe :</p>
-                  <div style="text-align: center;">
-                    <a href="${resetUrl}" class="button">Réinitialiser mon mot de passe</a>
-                  </div>
-                  <p>Ce lien est valable pendant 1 heure.</p>
-                  <p>Si vous n'avez pas demandé cette réinitialisation, vous pouvez ignorer cet email.</p>
-                  <p>Cordialement,<br>L'équipe Rideaux Bambou</p>
-                </div>
-                <div class="footer">
-                  <p>© ${new Date().getFullYear()} Rideaux Bambou. Tous droits réservés.</p>
-                </div>
-              </div>
-            </body>
-          </html>
-        `,
+        html: renderPasswordResetEmail(resetUrl),
         text: `
-          Réinitialisation de mot de passe - Rideaux Bambou
-          
-          Bonjour,
-          
-          Vous avez demandé la réinitialisation de votre mot de passe.
-          
-          Cliquez sur le lien suivant pour créer un nouveau mot de passe :
-          ${resetUrl}
-          
-          Ce lien est valable pendant 1 heure.
-          
-          Si vous n'avez pas demandé cette réinitialisation, vous pouvez ignorer cet email.
-          
-          Cordialement,
-          L'équipe Rideaux Bambou
-        `,
+Réinitialisation de mot de passe - Rideaux Bambou
+
+Bonjour,
+
+Vous avez demandé la réinitialisation de votre mot de passe.
+
+Cliquez sur le lien suivant pour créer un nouveau mot de passe :
+${resetUrl}
+
+Ce lien est valable pendant 1 heure.
+
+Si vous n'avez pas demandé cette réinitialisation, vous pouvez ignorer cet email.
+
+Cordialement,
+L'équipe Rideaux Bambou
+        `.trim(),
       };
 
       console.log("📧 Sending password reset email to:", user.email);

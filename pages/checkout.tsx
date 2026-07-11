@@ -4,11 +4,28 @@ import Head from "next/head";
 import { useRouter } from "next/router";
 import { useState, useEffect } from "react";
 
-import BackButton from "../components/BackButton";
 import Footer from "../components/Footer";
 import Navigation from "../components/Navigation";
 import { useSimpleCart } from "../contexts/SimpleCartContext";
 import { useToast } from "../contexts/ToastContext";
+import { getEmailValidationError, normalizeEmailValue } from "../lib/email-validation";
+import { getPhoneValidationError, normalizePhoneValue } from "../lib/phone-validation";
+import { usePublicProductsQuery } from "../lib/products-query";
+import { OUT_OF_STOCK_CLIENT_MESSAGE } from "../lib/product-availability-sync";
+import {
+  getCitiesForGovernorate,
+  GOVERNORATE_CODE_MAP,
+  resolveGovernorateName,
+  TUNISIAN_GOVERNORATES,
+  normalizeGovernorate,
+} from "../lib/tunisia-locations";
+import {
+  formFieldClass,
+  formFieldLabelClass,
+  formSelectClass,
+  formSelectDisabledClass,
+  formTextareaClass,
+} from "../lib/form-field-styles";
 
 interface CheckoutFormData {
   firstName: string;
@@ -22,318 +39,6 @@ interface CheckoutFormData {
   notes: string;
 }
 
-const TUNISIAN_GOVERNORATES = [
-  "Ariana",
-  "Béja",
-  "Ben Arous",
-  "Bizerte",
-  "Gabès",
-  "Gafsa",
-  "Jendouba",
-  "Kairouan",
-  "Kasserine",
-  "Kebili",
-  "Kef",
-  "Mahdia",
-  "Manouba",
-  "Medenine",
-  "Monastir",
-  "Nabeul",
-  "Sfax",
-  "Sidi Bouzid",
-  "Siliana",
-  "Sousse",
-  "Tataouine",
-  "Tozeur",
-  "Tunis",
-  "Zaghouan",
-];
-
-const GOVERNORATE_CITIES: Record<string, string[]> = {
-  Ariana: [
-    "Ariana",
-    "La Soukra",
-    "Raoued",
-    "Kalaat el-Andalous",
-    "Sidi Thabet",
-    "Mnihla",
-    "Ettadhamen",
-  ],
-  "Béja": ["Béja", "Medjez el-Bab", "Testour", "Nefza", "Teboursouk", "Amdoun", "Goubellat", "Thibar"],
-  "Ben Arous": [
-    "Ben Arous",
-    "Mégrine",
-    "El Mourouj",
-    "Radès",
-    "Hammam Lif",
-    "Hammam Chott",
-    "Ezzahra",
-    "Bou Mhel el-Bassatine",
-    "Mohamedia",
-    "Fouchana",
-    "Mornag",
-    "Medina Jedida",
-  ],
-  Bizerte: [
-    "Bizerte",
-    "Menzel Bourguiba",
-    "Mateur",
-    "Ras Jebel",
-    "Ghar El Melh",
-    "El Alia",
-    "Menzel Jemil",
-    "Menzel Abderrahmane",
-    "Sejnane",
-    "Joumine",
-    "Utique",
-    "Ghezala",
-    "Tinja",
-  ],
-  "Gabès": [
-    "Gabès",
-    "El Hamma",
-    "Mareth",
-    "Ghannouch",
-    "Métouia",
-    "Nouvelle Matmata",
-    "Matmata",
-    "Menzel El Habib",
-    "Oudref",
-  ],
-  Gafsa: [
-    "Gafsa",
-    "Metlaoui",
-    "Redeyef",
-    "Moularès",
-    "Mdhilla",
-    "El Ksar",
-    "Sened",
-    "El Guettar",
-    "Sidi Aïch",
-    "Belkhir",
-  ],
-  Jendouba: [
-    "Jendouba",
-    "Tabarka",
-    "Aïn Draham",
-    "Bou Salem",
-    "Ghardimaou",
-    "Fernana",
-    "Balta-Bou Aouane",
-    "Oued Mliz",
-  ],
-  Kairouan: [
-    "Kairouan",
-    "Sbikha",
-    "Bou Hajla",
-    "Nasrallah",
-    "Haffouz",
-    "Oueslatia",
-    "Hajeb El Ayoun",
-    "Chebika",
-    "Chrarda",
-    "El Alâa",
-    "Menzel Mehiri",
-  ],
-  Kasserine: [
-    "Kasserine",
-    "Sbeïtla",
-    "Thala",
-    "Feriana",
-    "Sbiba",
-    "Foussana",
-    "Haïdra",
-    "Jedeliane",
-    "El Ayoun",
-    "Majel Bel Abbès",
-    "Sbeïtba",
-  ],
-  Kebili: ["Kebili", "Douz", "Souk Lahad", "Faouar", "Jemna", "El Golâa"],
-  Kef: [
-    "Le Kef",
-    "Dahmani",
-    "Tajerouine",
-    "Jerissa",
-    "Sakiet Sidi Youssef",
-    "Kalaat Senan",
-    "Sers",
-    "Al Ksour",
-    "Nebeur",
-    "Kalaat Khasba",
-    "Menzel Salem",
-  ],
-  Mahdia: [
-    "Mahdia",
-    "El Jem",
-    "Ksour Essef",
-    "Chebba",
-    "Melloulèche",
-    "Bou Merdes",
-    "Ouled Chamekh",
-    "Sidi Alouane",
-    "Rejiche",
-    "Hebira",
-    "Chorbane",
-    "Kerker",
-  ],
-  Manouba: [
-    "Manouba",
-    "Oued Ellil",
-    "Den Den",
-    "Tebourba",
-    "Mornaguia",
-    "Jedeida",
-    "Douar Hicher",
-    "Borj El Amri",
-  ],
-  Medenine: [
-    "Medenine",
-    "Houmt Souk (Djerba)",
-    "Midoun (Djerba)",
-    "Ajim (Djerba)",
-    "Zarzis",
-    "Ben Guerdane",
-    "Sidi Makhlouf",
-    "Beni Khedache",
-  ],
-  Monastir: [
-    "Monastir",
-    "Moknine",
-    "Ksar Hellal",
-    "Jemmal",
-    "Sahline",
-    "Teboulba",
-    "Bekalta",
-    "Sayada",
-    "Ouerdanine",
-    "Ksibet el-Médiouni",
-    "Khniss",
-    "Bembla",
-    "Zaouiet Kontoch",
-    "Touza",
-  ],
-  Nabeul: [
-    "Nabeul",
-    "Hammamet",
-    "Kélibia",
-    "Korba",
-    "Menzel Temime",
-    "Grombalia",
-    "Soliman",
-    "Dar Chaâbane El Fehri",
-    "El Haouaria",
-    "Beni Khiar",
-    "Takilsa",
-    "Menzel Bouzelfa",
-    "Beni Khalled",
-    "Azmour",
-  ],
-  Sfax: [
-    "Sfax",
-    "Sakiet Ezzit",
-    "Sakiet ed-Daïer",
-    "Thyna",
-    "El Aïn",
-    "Gremda",
-    "Chihia",
-    "Jbeniana",
-    "Kerkennah",
-    "Mahres",
-    "Agareb",
-    "Bir Ali Ben Khalifa",
-    "Skhira",
-    "El Hencha",
-    "Graïba",
-  ],
-  "Sidi Bouzid": [
-    "Sidi Bouzid",
-    "Regueb",
-    "Meknassy",
-    "Jilma",
-    "Bir El Hafey",
-    "Menzel Bouzaiane",
-    "Ouled Haffouz",
-    "Souk Jedid",
-    "Mezzouna",
-    "Cebbalat Awled Asker",
-  ],
-  Siliana: [
-    "Siliana",
-    "Makthar",
-    "Bou Arada",
-    "Gaâfour",
-    "El Krib",
-    "Bargou",
-    "Kesra",
-    "Rohia",
-    "El Aroussa",
-    "Sidi Bou Rouis",
-  ],
-  Sousse: [
-    "Sousse",
-    "Hammam Sousse",
-    "M'saken",
-    "Kalâa Kebira",
-    "Kalâa Sghira",
-    "Akouda",
-    "Port El Kantaoui",
-    "Enfidha",
-    "Bouficha",
-    "Hergla",
-    "Sidi Bou Ali",
-    "Kondar",
-    "Messadine",
-  ],
-  Tataouine: ["Tataouine", "Ghomrassen", "Remada", "Smâr", "Bir Lahmar", "Dehiba"],
-  Tozeur: ["Tozeur", "Nefta", "Degache", "Tamerza", "Hazoua", "Hamma du Jérid"],
-  Tunis: [
-    "Tunis",
-    "La Marsa",
-    "Carthage",
-    "Sidi Bou Said",
-    "Le Bardo",
-    "La Goulette",
-    "El Kram",
-    "Gammarth",
-    "Sidi Hassine",
-  ],
-  Zaghouan: ["Zaghouan", "El Fahs", "Bir Mcherga", "Nadhour", "Zriba", "Saouaf"],
-};
-
-const normalizeGovernorate = (value: string) =>
-  value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .trim();
-
-const GOVERNORATE_CODE_MAP: Record<string, string> = {
-  ariana: "AR",
-  beja: "BJ",
-  "ben arous": "BA",
-  bizerte: "BI",
-  gabes: "GB",
-  gafsa: "GF",
-  jendouba: "JE",
-  kairouan: "KR",
-  kasserine: "KS",
-  kebili: "KB",
-  kef: "KF",
-  mahdia: "MH",
-  manouba: "MN",
-  medenine: "ME",
-  monastir: "MO",
-  nabeul: "NB",
-  sfax: "SF",
-  "sidi bouzid": "SB",
-  siliana: "SL",
-  sousse: "SO",
-  tataouine: "TT",
-  tozeur: "TO",
-  tunis: "TU",
-  zaghouan: "ZA",
-};
-
 export default function CheckoutPage() {
   const router = useRouter();
   const {
@@ -344,6 +49,8 @@ export default function CheckoutPage() {
   } = useSimpleCart();
   const [wantsInstallation, setWantsInstallation] = useState(false);
   const [orderCompleted, setOrderCompleted] = useState(false);
+  const [emailError, setEmailError] = useState("");
+  const [phoneError, setPhoneError] = useState("");
   const { error: showError } = useToast();
   const [formData, setFormData] = useState<CheckoutFormData>({
     firstName: "",
@@ -356,6 +63,8 @@ export default function CheckoutPage() {
     postalCode: "",
     notes: "",
   });
+
+  const { data: productsData } = usePublicProductsQuery();
 
   // Fetch installation fee
   const { data: installationFeeData } = useQuery({
@@ -402,12 +111,12 @@ export default function CheckoutPage() {
         normalizeGovernorate(fee.state) === normalizedSelectedState ||
         fee.stateCode === selectedStateCode
     )?.fee || 0;
-  const citiesForSelectedGovernorate = GOVERNORATE_CITIES[formData.state] || [];
+  const citiesForSelectedGovernorate = getCitiesForGovernorate(formData.state);
 
   // Handle empty cart redirect
   useEffect(() => {
     if (!cartLoading && items.length === 0 && !orderCompleted) {
-      router.push("/simple-cart");
+      router.push("/panier");
     }
   }, [cartLoading, items.length, router, orderCompleted]);
 
@@ -423,6 +132,14 @@ export default function CheckoutPage() {
       setWantsInstallation(false);
     }
   }, [router.isReady, router.query.install]);
+
+  const availableProductIds = new Set(
+    (Array.isArray(productsData) ? productsData : [])
+      .filter((product) => product.isAvailable)
+      .map((product) => product._id)
+  );
+  const unavailableItems = items.filter((item) => !availableProductIds.has(item.productId));
+  const hasUnavailableItems = unavailableItems.length > 0;
 
   const checkoutMutation = useMutation({
     mutationFn: async (orderData: any) => {
@@ -470,7 +187,7 @@ export default function CheckoutPage() {
       sessionStorage.setItem("last-order-details", JSON.stringify(orderDetails));
       setOrderCompleted(true);
       clearCart();
-      router.push("/order-success");
+      router.push("/commande-reussie");
     },
     onError: (error) => {
       console.error("Checkout error:", error);
@@ -480,23 +197,48 @@ export default function CheckoutPage() {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
+    const nextValue =
+      name === "phone" ? normalizePhoneValue(value) : name === "email" ? value : value;
     setFormData((prev) => ({
       ...prev,
-      [name]: value,
+      [name]: nextValue,
     }));
+
+    if (name === "email" && emailError) {
+      setEmailError(getEmailValidationError(nextValue));
+    }
+    if (name === "phone" && phoneError) {
+      setPhoneError(getPhoneValidationError(nextValue, { required: true }));
+    }
   };
 
   const handleSelectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({
       ...prev,
-      [name]: value,
+      [name]: name === "state" ? resolveGovernorateName(value) : value,
       ...(name === "state" ? { city: "" } : {}),
     }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    const normalizedEmail = normalizeEmailValue(formData.email);
+    const normalizedPhone = normalizePhoneValue(formData.phone);
+    const nextEmailError = getEmailValidationError(normalizedEmail);
+    const nextPhoneError = getPhoneValidationError(normalizedPhone, { required: true });
+    setEmailError(nextEmailError);
+    setPhoneError(nextPhoneError);
+    setFormData((prev) => ({ ...prev, email: normalizedEmail, phone: normalizedPhone }));
+    if (nextEmailError || nextPhoneError) {
+      return;
+    }
+
+    if (hasUnavailableItems) {
+      showError(`Un des produits de votre panier est en ${OUT_OF_STOCK_CLIENT_MESSAGE.toLowerCase()}.`);
+      return;
+    }
 
     const orderData = {
       items: items.map((item) => ({
@@ -506,7 +248,11 @@ export default function CheckoutPage() {
         height: item.height,
         totalCost: item.calculation.total * item.quantity,
       })),
-      customerInfo: formData,
+      customerInfo: {
+        ...formData,
+        email: normalizedEmail,
+        phone: normalizedPhone,
+      },
       totalAmount:
         getTotalPrice() +
         currentDeliveryFee +
@@ -555,9 +301,6 @@ export default function CheckoutPage() {
 
         <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
           <div className="py-6 sm:px-0">
-            <div className="mb-6">
-              <BackButton href="/simple-cart" />
-            </div>
             {/* Header */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -572,6 +315,12 @@ export default function CheckoutPage() {
                 Remplissez vos informations pour finaliser votre commande
               </p>
             </motion.div>
+
+            {hasUnavailableItems && (
+              <div className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-900/20 dark:text-red-300">
+                Certains articles sont en {OUT_OF_STOCK_CLIENT_MESSAGE.toLowerCase()}. Retournez au panier pour les retirer avant de valider la commande.
+              </div>
+            )}
 
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-3 lg:gap-8">
               {/* Order Summary */}
@@ -600,41 +349,15 @@ export default function CheckoutPage() {
                             {item.curtainType === "panneau" ? "Panneau" : "Store"} - Qté:{" "}
                             {item.quantity}
                           </p>
+                          {!availableProductIds.has(item.productId) && (
+                            <p className="text-red-600 dark:text-red-400">{OUT_OF_STOCK_CLIENT_MESSAGE}</p>
+                          )}
                         </div>
                         <span className="text-gray-900 dark:text-white">
                           {formatPrice(item.calculation.total * item.quantity)}
                         </span>
                       </div>
                     ))}
-
-                    {/* Installation Option */}
-                    <div className="border-t border-gray-200 pt-3 dark:border-gray-700">
-                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                        <div className="flex items-center space-x-3">
-                          <input
-                            type="checkbox"
-                            id="checkout-installation-option"
-                            checked={wantsInstallation}
-                            onChange={(e) => setWantsInstallation(e.target.checked)}
-                            className="h-4 w-4 rounded border-gray-300 text-green-600 focus:ring-green-500"
-                          />
-                          <label
-                            htmlFor="checkout-installation-option"
-                            className="text-sm font-medium text-gray-900 dark:text-white"
-                          >
-                            Installation professionnelle
-                          </label>
-                        </div>
-                        <span className="text-sm text-gray-600 dark:text-gray-400">
-                          {wantsInstallation
-                            ? formatPrice(installationFeeData?.fee || 11)
-                            : "Gratuite"}
-                        </span>
-                      </div>
-                      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                        Nos experts installent vos rideaux pour un rendu parfait
-                      </p>
-                    </div>
 
                     {currentDeliveryFee > 0 && (
                       <div className="flex justify-between text-sm">
@@ -647,7 +370,7 @@ export default function CheckoutPage() {
                     {wantsInstallation && (
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-600 dark:text-gray-400">
-                          Frais d'installation
+                          Frais de pose
                         </span>
                         <span className="text-gray-900 dark:text-white">
                           {formatPrice(installationFeeData?.fee || 11)}
@@ -688,7 +411,7 @@ export default function CheckoutPage() {
                       <div>
                         <label
                           htmlFor="firstName"
-                          className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
+                          className={formFieldLabelClass}
                         >
                           Prénom *
                         </label>
@@ -699,7 +422,7 @@ export default function CheckoutPage() {
                           value={formData.firstName}
                           onChange={handleInputChange}
                           required
-                          className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:border-transparent focus:ring-2 focus:ring-green-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                          className={formSelectClass}
                           style={{
                             color: "rgb(17, 24, 39)",
                             WebkitTextFillColor: "rgb(17, 24, 39)",
@@ -710,7 +433,7 @@ export default function CheckoutPage() {
                       <div>
                         <label
                           htmlFor="lastName"
-                          className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
+                          className={formFieldLabelClass}
                         >
                           Nom *
                         </label>
@@ -721,7 +444,7 @@ export default function CheckoutPage() {
                           value={formData.lastName}
                           onChange={handleInputChange}
                           required
-                          className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:border-transparent focus:ring-2 focus:ring-green-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                          className={formSelectClass}
                           style={{
                             color: "rgb(17, 24, 39)",
                             WebkitTextFillColor: "rgb(17, 24, 39)",
@@ -734,7 +457,7 @@ export default function CheckoutPage() {
                     <div>
                       <label
                         htmlFor="email"
-                        className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
+                        className={formFieldLabelClass}
                       >
                         Email (optionnel)
                       </label>
@@ -744,19 +467,27 @@ export default function CheckoutPage() {
                         name="email"
                         value={formData.email}
                         onChange={handleInputChange}
-                        className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:border-transparent focus:ring-2 focus:ring-green-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                        onBlur={() => {
+                          const normalizedEmail = normalizeEmailValue(formData.email);
+                          setFormData((prev) => ({ ...prev, email: normalizedEmail }));
+                          setEmailError(getEmailValidationError(normalizedEmail));
+                        }}
+                        className={formFieldClass}
                         style={{
                           color: "rgb(17, 24, 39)",
                           WebkitTextFillColor: "rgb(17, 24, 39)",
                           opacity: 1,
                         }}
                       />
+                      {emailError && (
+                        <p className="mt-1 text-sm text-red-500 dark:text-red-400">{emailError}</p>
+                      )}
                     </div>
 
                     <div>
                       <label
                         htmlFor="phone"
-                        className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
+                        className={formFieldLabelClass}
                       >
                         Téléphone *
                       </label>
@@ -766,20 +497,29 @@ export default function CheckoutPage() {
                         name="phone"
                         value={formData.phone}
                         onChange={handleInputChange}
+                        onBlur={() =>
+                          setPhoneError(getPhoneValidationError(formData.phone, { required: true }))
+                        }
+                        inputMode="numeric"
+                        maxLength={8}
+                        pattern="[0-9]*"
                         required
-                        className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:border-transparent focus:ring-2 focus:ring-green-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                        className={formFieldClass}
                         style={{
                           color: "rgb(17, 24, 39)",
                           WebkitTextFillColor: "rgb(17, 24, 39)",
                           opacity: 1,
                         }}
                       />
+                      {phoneError && (
+                        <p className="mt-1 text-sm text-red-500 dark:text-red-400">{phoneError}</p>
+                      )}
                     </div>
 
                     <div>
                       <label
                         htmlFor="address"
-                        className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
+                        className={formFieldLabelClass}
                       >
                         Adresse *
                       </label>
@@ -790,7 +530,7 @@ export default function CheckoutPage() {
                         value={formData.address}
                         onChange={handleInputChange}
                         required
-                        className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:border-transparent focus:ring-2 focus:ring-green-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                        className={formFieldClass}
                         style={{
                           color: "rgb(17, 24, 39)",
                           WebkitTextFillColor: "rgb(17, 24, 39)",
@@ -803,7 +543,7 @@ export default function CheckoutPage() {
                       <div>
                         <label
                           htmlFor="state"
-                          className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
+                          className={formFieldLabelClass}
                         >
                           Gouvernorat *
                         </label>
@@ -813,7 +553,7 @@ export default function CheckoutPage() {
                           value={formData.state}
                           onChange={handleSelectChange}
                           required
-                          className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:border-transparent focus:ring-2 focus:ring-green-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                          className={formSelectClass}
                         >
                           <option value="">Sélectionnez un gouvernorat</option>
                           {TUNISIAN_GOVERNORATES.map((governorate) => (
@@ -826,7 +566,7 @@ export default function CheckoutPage() {
                       <div>
                         <label
                           htmlFor="city"
-                          className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
+                          className={formFieldLabelClass}
                         >
                           Ville *
                         </label>
@@ -837,7 +577,7 @@ export default function CheckoutPage() {
                           onChange={handleSelectChange}
                           required
                           disabled={!formData.state}
-                          className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:border-transparent focus:ring-2 focus:ring-green-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                          className={formSelectDisabledClass}
                         >
                           <option value="">
                             {formData.state
@@ -857,7 +597,7 @@ export default function CheckoutPage() {
                       <div>
                         <label
                           htmlFor="postalCode"
-                          className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
+                          className={formFieldLabelClass}
                         >
                           Code postal *
                         </label>
@@ -868,7 +608,7 @@ export default function CheckoutPage() {
                           value={formData.postalCode}
                           onChange={handleInputChange}
                           required
-                          className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:border-transparent focus:ring-2 focus:ring-green-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                          className={formSelectClass}
                           style={{
                             color: "rgb(17, 24, 39)",
                             WebkitTextFillColor: "rgb(17, 24, 39)",
@@ -881,7 +621,7 @@ export default function CheckoutPage() {
                     <div>
                       <label
                         htmlFor="notes"
-                        className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
+                        className={formFieldLabelClass}
                       >
                         Notes (optionnel)
                       </label>
@@ -891,7 +631,7 @@ export default function CheckoutPage() {
                         value={formData.notes}
                         onChange={handleInputChange}
                         rows={3}
-                        className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:border-transparent focus:ring-2 focus:ring-green-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                        className={formFieldClass}
                         style={{
                           color: "rgb(17, 24, 39)",
                           WebkitTextFillColor: "rgb(17, 24, 39)",
@@ -902,7 +642,12 @@ export default function CheckoutPage() {
 
                     <button
                       type="submit"
-                      disabled={checkoutMutation.isPending}
+                      disabled={
+                        checkoutMutation.isPending ||
+                        Boolean(emailError) ||
+                        Boolean(phoneError) ||
+                        hasUnavailableItems
+                      }
                       className="w-full rounded-lg bg-gradient-to-r from-green-600 to-green-700 px-4 py-3 font-medium text-white transition-all hover:from-green-700 hover:to-green-800 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       Passer votre commande

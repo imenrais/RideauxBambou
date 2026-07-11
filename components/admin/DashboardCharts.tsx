@@ -32,6 +32,9 @@ export default function DashboardCharts() {
       const data = await response.json();
       return data.success ? data.data : { orders: [], stats: {} };
     },
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
   });
 
   // Fetch products data
@@ -42,22 +45,27 @@ export default function DashboardCharts() {
       const data = await response.json();
       return data.success ? data.data : [];
     },
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
   });
 
   // Fetch delivery fees data
-  const { data: deliveryFeesData, isLoading: deliveryFeesLoading } = useQuery({
+  const { isLoading: deliveryFeesLoading } = useQuery({
     queryKey: ["admin-delivery-fees-stats"],
     queryFn: async () => {
       const response = await fetch("/api/admin/delivery-fees");
       const data = await response.json();
       return data.success ? data.data : [];
     },
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
   });
 
   const orders = ordersData?.orders || [];
   const ordersStats = ordersData?.stats || {};
   const products = productsData || [];
-  const deliveryFees = deliveryFeesData || [];
 
   // Calculate recent orders (last 7 days)
   const sevenDaysAgo = new Date();
@@ -70,9 +78,6 @@ export default function DashboardCharts() {
     0
   );
 
-  // Calculate average order value
-  const averageOrderValue = orders.length > 0 ? totalRevenue / orders.length : 0;
-  const activeProducts = products.filter((p: any) => p.isActive).length;
   const getCustomerFullName = (order: any) => {
     const firstName = order?.customerInfo?.firstName?.trim() || "";
     const lastName = order?.customerInfo?.lastName?.trim() || "";
@@ -80,29 +85,9 @@ export default function DashboardCharts() {
     return fullName || order?.userId?.name || "Client";
   };
 
-  const systemMetrics = [
-    {
-      label: "Régions de Livraison",
-      numericValue: deliveryFees.length,
-    },
-    {
-      label: "Valeur Moyenne Commande",
-      numericValue: Math.round(averageOrderValue),
-    },
-    {
-      label: "Commandes cette Semaine",
-      numericValue: recentOrders.length,
-    },
-    {
-      label: "Produits Actifs",
-      numericValue: activeProducts,
-    },
-  ];
-  const systemMetricChartLabels = ["Régions", "Panier moyen", "Cmd/semaine", "Produits actifs"];
-
   const trendBuckets = useMemo(() => {
     const now = new Date();
-    let buckets: Array<{ key: string; label: string; orders: number; revenue: number }> = [];
+    const buckets: Array<{ key: string; label: string; orders: number; revenue: number }> = [];
 
     if (trendPeriod === "day") {
       const base = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
@@ -230,31 +215,6 @@ export default function DashboardCharts() {
   };
 
   const statusChartSeries = statusValues;
-
-  const systemChartOptions: ApexOptions = {
-    chart: { toolbar: { show: false }, foreColor: "#6b7280" },
-    plotOptions: {
-      bar: {
-        horizontal: true,
-        borderRadius: 6,
-        barHeight: "55%",
-      },
-    },
-    dataLabels: {
-      enabled: true,
-      formatter: (val: number, opts?: { dataPointIndex: number }) => {
-        const index = opts?.dataPointIndex ?? 0;
-        if (index === 1) return `${val} TND`;
-        return `${val}`;
-      },
-    },
-    xaxis: { categories: systemMetricChartLabels },
-    colors: ["#3b82f6"],
-    legend: { show: false },
-    grid: { borderColor: "#e5e7eb" },
-  };
-
-  const systemChartSeries = [{ name: "Valeur", data: systemMetrics.map((m) => m.numericValue) }];
 
   if (ordersLoading || productsLoading || deliveryFeesLoading) {
     return (

@@ -129,6 +129,51 @@ const nextConfig: NextConfig = {
   async redirects() {
     return [
       {
+        source: "/login",
+        destination: "/connexion",
+        permanent: true,
+      },
+      {
+        source: "/signup",
+        destination: "/inscription",
+        permanent: true,
+      },
+      {
+        source: "/forgot-password",
+        destination: "/mot-de-passe-oublie",
+        permanent: true,
+      },
+      {
+        source: "/reset-password",
+        destination: "/reinitialiser-mot-de-passe",
+        permanent: true,
+      },
+      {
+        source: "/checkout",
+        destination: "/paiement",
+        permanent: true,
+      },
+      {
+        source: "/order-success",
+        destination: "/commande-reussie",
+        permanent: true,
+      },
+      {
+        source: "/simple-cart",
+        destination: "/panier",
+        permanent: true,
+      },
+      {
+        source: "/cart",
+        destination: "/panier",
+        permanent: true,
+      },
+      {
+        source: "/profile/orders",
+        destination: "/profil/commandes",
+        permanent: true,
+      },
+      {
         source: "/boutique",
         destination: "/products",
         permanent: true,

@@ -17,6 +17,51 @@ interface AdminOrderNotification {
   read: boolean;
 }
 
+const ADMIN_MENU_ITEMS = [
+  { href: "/admin", label: "Tableau de Bord" },
+  { href: "/admin/orders", label: "Commandes" },
+  { href: "/admin/products", label: "Produits" },
+  { href: "/admin/users", label: "Employés" },
+  { href: "/admin/delivery-fees", label: "Frais de Livraison" },
+  { href: "/admin/reviews", label: "Avis" },
+] as const;
+
+const isAdminRouteActive = (pathname: string, href: string) => {
+  if (href === "/admin") {
+    return pathname === "/admin";
+  }
+  return pathname === href || pathname.startsWith(`${href}/`);
+};
+
+const NOTIFICATIONS_STORAGE_KEY = "admin-order-notifications";
+const DISMISSED_NOTIFICATIONS_KEY = "admin-order-notifications-dismissed";
+
+const readDismissedNotificationIds = (): Set<string> => {
+  if (typeof window === "undefined") {
+    return new Set();
+  }
+
+  try {
+    const saved = localStorage.getItem(DISMISSED_NOTIFICATIONS_KEY);
+    if (!saved) {
+      return new Set();
+    }
+
+    const parsed = JSON.parse(saved);
+    return new Set(Array.isArray(parsed) ? parsed.filter((id) => typeof id === "string") : []);
+  } catch {
+    return new Set();
+  }
+};
+
+const writeDismissedNotificationIds = (ids: Set<string>) => {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  localStorage.setItem(DISMISSED_NOTIFICATIONS_KEY, JSON.stringify([...ids]));
+};
+
 export default function AdminNavigation() {
   const { data: session } = useSession();
   const router = useRouter();
@@ -24,6 +69,7 @@ export default function AdminNavigation() {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [notifications, setNotifications] = useState<AdminOrderNotification[]>([]);
+  const [notificationsHydrated, setNotificationsHydrated] = useState(false);
 
   const { data: recentOrdersData } = useQuery({
     queryKey: ["admin-notification-center-orders"],
@@ -33,23 +79,33 @@ export default function AdminNavigation() {
       return data.success ? data.data : { orders: [] };
     },
     enabled: session?.user?.role === "admin",
-    refetchInterval: 20000,
+    staleTime: 15 * 1000,
+    refetchInterval: 30 * 1000,
+    refetchOnWindowFocus: true,
   });
 
   useEffect(() => {
-    const saved = localStorage.getItem("admin-order-notifications");
-    if (!saved) return;
-    try {
-      const parsed = JSON.parse(saved);
-      if (Array.isArray(parsed)) {
-        setNotifications(parsed);
+    const saved = localStorage.getItem(NOTIFICATIONS_STORAGE_KEY);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          const dismissedIds = readDismissedNotificationIds();
+          setNotifications(parsed.filter((item) => !dismissedIds.has(item.orderId)));
+        }
+      } catch {
+        setNotifications([]);
       }
-    } catch {
-      setNotifications([]);
     }
+
+    setNotificationsHydrated(true);
   }, []);
 
   useEffect(() => {
+    if (!notificationsHydrated) {
+      return;
+    }
+
     if (!session?.user?.role || session.user.role !== "admin") {
       return;
     }
@@ -60,12 +116,18 @@ export default function AdminNavigation() {
     }
 
     setNotifications((prev) => {
-      const merged = [...prev];
+      const dismissedIds = readDismissedNotificationIds();
+      const merged = prev.filter((item) => !dismissedIds.has(item.orderId));
 
       for (const order of incomingOrders) {
-        const existingIndex = merged.findIndex((n) => n.orderId === order._id);
+        const orderId = order._id as string;
+        if (dismissedIds.has(orderId)) {
+          continue;
+        }
+
+        const existingIndex = merged.findIndex((n) => n.orderId === orderId);
         const incomingPayload: AdminOrderNotification = {
-          orderId: order._id,
+          orderId,
           customerName: `${order.customerInfo?.firstName || ""} ${order.customerInfo?.lastName || ""}`.trim(),
           totalAmount: Number(order.totalAmount || 0),
           createdAt: order.createdAt,
@@ -75,44 +137,63 @@ export default function AdminNavigation() {
 
         if (existingIndex === -1) {
           merged.unshift(incomingPayload);
-        } else {
-          merged[existingIndex] = {
-            ...merged[existingIndex],
-            ...incomingPayload,
-            read: merged[existingIndex].read,
-          };
+          continue;
         }
+
+        const existing = merged[existingIndex];
+        merged[existingIndex] = {
+          ...existing,
+          customerName: incomingPayload.customerName,
+          totalAmount: incomingPayload.totalAmount,
+          createdAt: incomingPayload.createdAt,
+          status: incomingPayload.status,
+          read: existing.read,
+        };
       }
 
-      localStorage.setItem("admin-order-notifications", JSON.stringify(merged));
+      localStorage.setItem(NOTIFICATIONS_STORAGE_KEY, JSON.stringify(merged));
       return merged;
     });
-  }, [recentOrdersData, session?.user?.role]);
-
-  const persistNotifications = (items: AdminOrderNotification[]) => {
-    setNotifications(items);
-    localStorage.setItem("admin-order-notifications", JSON.stringify(items));
-  };
+  }, [notificationsHydrated, recentOrdersData, session?.user?.role]);
 
   const markOrderAsRead = (orderId: string) => {
-    const updated = notifications.map((item) =>
-      item.orderId === orderId ? { ...item, read: true } : item
-    );
-    persistNotifications(updated);
+    setNotifications((prev) => {
+      const updated = prev.map((item) =>
+        item.orderId === orderId ? { ...item, read: true } : item
+      );
+      localStorage.setItem(NOTIFICATIONS_STORAGE_KEY, JSON.stringify(updated));
+      return updated;
+    });
   };
 
   const markAllAsRead = () => {
-    const updated = notifications.map((item) => ({ ...item, read: true }));
-    persistNotifications(updated);
+    setNotifications((prev) => {
+      const updated = prev.map((item) => ({ ...item, read: true }));
+      localStorage.setItem(NOTIFICATIONS_STORAGE_KEY, JSON.stringify(updated));
+      return updated;
+    });
   };
 
   const deleteNotification = (orderId: string) => {
-    const updated = notifications.filter((item) => item.orderId !== orderId);
-    persistNotifications(updated);
+    const dismissedIds = readDismissedNotificationIds();
+    dismissedIds.add(orderId);
+    writeDismissedNotificationIds(dismissedIds);
+
+    setNotifications((prev) => {
+      const updated = prev.filter((item) => item.orderId !== orderId);
+      localStorage.setItem(NOTIFICATIONS_STORAGE_KEY, JSON.stringify(updated));
+      return updated;
+    });
   };
 
   const deleteAllNotifications = () => {
-    persistNotifications([]);
+    setNotifications((prev) => {
+      const dismissedIds = readDismissedNotificationIds();
+      prev.forEach((item) => dismissedIds.add(item.orderId));
+      writeDismissedNotificationIds(dismissedIds);
+      localStorage.setItem(NOTIFICATIONS_STORAGE_KEY, JSON.stringify([]));
+      return [];
+    });
   };
 
   const handleSignOut = async () => {
@@ -143,21 +224,18 @@ export default function AdminNavigation() {
     };
   }, [isProfileOpen, isNotificationsOpen]);
 
-  const adminMenuItems = [
-    { href: "/admin", label: "Tableau de Bord" },
-    { href: "/admin/orders", label: "Commandes" },
-    { href: "/admin/products", label: "Produits" },
-    { href: "/admin/users", label: "Travailleurs" },
-    { href: "/admin/delivery-fees", label: "Frais de Livraison" },
-    { href: "/admin/reviews", label: "Avis" },
-  ];
+  useEffect(() => {
+    for (const item of ADMIN_MENU_ITEMS) {
+      void router.prefetch(item.href);
+    }
+  }, [router]);
 
   return (
-    <nav className="sticky top-0 z-50 border-b border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900">
+    <nav className="sticky top-0 z-50 border-b border-gray-200/80 bg-white/90 shadow-[0_1px_0_rgba(17,24,39,0.04)] backdrop-blur-md dark:border-gray-700/80 dark:bg-gray-900/90">
       <div className="mx-auto max-w-7xl px-3 sm:px-4 lg:px-6">
         <div className="flex h-16 items-center justify-between">
           {/* Logo */}
-          <Link href="/" className="group flex items-center space-x-3">
+          <Link href="/admin" className="group flex items-center gap-3">
             <div className="relative h-10 w-10 overflow-hidden rounded-full">
               <Image
                 src="/logo.png"
@@ -168,24 +246,45 @@ export default function AdminNavigation() {
               />
             </div>
             <div className="flex flex-col">
-              <h1 className="hidden text-lg font-bold text-gray-900 transition-colors group-hover:text-gray-700 sm:block lg:text-2xl dark:text-white dark:group-hover:text-gray-300">
+              <h1 className="hidden text-xl font-semibold text-gray-900 transition-colors duration-150 group-hover:text-gray-700 sm:block dark:text-white dark:group-hover:text-gray-200">
                 Rideaux Bambou
               </h1>
-              <span className="hidden text-xs text-gray-500 sm:block dark:text-gray-400">Admin</span>
+              <span className="hidden text-[11px] font-medium uppercase tracking-[0.14em] text-gray-500 sm:block dark:text-gray-400">
+                Admin
+              </span>
             </div>
           </Link>
 
           {/* Desktop Navigation */}
-          <div className="hidden items-center space-x-6 lg:flex">
-            {adminMenuItems.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className="font-medium text-gray-700 transition-colors hover:text-gray-900 dark:text-gray-300 dark:hover:text-white"
-              >
-                {item.label}
-              </Link>
-            ))}
+          <div className="hidden items-center gap-6 lg:flex">
+            {ADMIN_MENU_ITEMS.map((item) => {
+              const isActive = isAdminRouteActive(router.pathname, item.href);
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  aria-current={isActive ? "page" : undefined}
+                  className={`group relative inline-flex items-center px-1 py-2 text-[0.92rem] font-medium tracking-[0.01em] transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-900/60 focus-visible:ring-offset-2 dark:focus-visible:ring-gray-100/70 dark:focus-visible:ring-offset-gray-900 ${
+                    isActive
+                      ? "text-gray-900 dark:text-white"
+                      : "text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white"
+                  }`}
+                >
+                  <span
+                    aria-hidden="true"
+                    className={`absolute inset-x-[-0.45rem] inset-y-1 rounded-md bg-gray-900/10 transition-opacity duration-150 ${
+                      isActive ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                    } dark:bg-gray-100/10`}
+                  />
+                  <span className="relative">{item.label}</span>
+                  <span
+                    className={`absolute inset-x-0 -bottom-0.5 h-0.5 origin-center rounded-full bg-gray-900 transition-transform duration-150 ease-out dark:bg-gray-100 ${
+                      isActive ? "scale-x-100" : "scale-x-0 group-hover:scale-x-75"
+                    }`}
+                  />
+                </Link>
+              );
+            })}
           </div>
 
           {/* Right side actions */}
@@ -197,7 +296,7 @@ export default function AdminNavigation() {
                   setIsNotificationsOpen(!isNotificationsOpen);
                   setIsProfileOpen(false);
                 }}
-                className="relative rounded-lg p-2 text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
+                className="relative rounded-full border border-transparent p-2 text-gray-600 transition-all duration-150 hover:border-gray-200 hover:bg-gray-100/80 hover:text-gray-900 dark:text-gray-300 dark:hover:border-gray-700 dark:hover:bg-gray-800/80 dark:hover:text-white"
                 aria-label="Notifications"
               >
                 <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -223,7 +322,7 @@ export default function AdminNavigation() {
                     initial={{ opacity: 0, y: -10 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -10 }}
-                    className="absolute right-0 mt-2 w-[92vw] max-w-sm overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl dark:border-gray-700 dark:bg-gray-800"
+                    className="absolute right-0 mt-2 w-[92vw] max-w-sm overflow-hidden rounded-2xl border border-gray-200/80 bg-white/95 shadow-xl shadow-gray-900/10 backdrop-blur-md dark:border-gray-700/80 dark:bg-gray-800/95 dark:shadow-black/20"
                   >
                     <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3 dark:border-gray-700">
                       <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
@@ -232,7 +331,7 @@ export default function AdminNavigation() {
                       <div className="flex items-center gap-3">
                         <button
                           onClick={markAllAsRead}
-                          className="text-xs font-medium text-green-700 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300"
+                          className="text-xs font-medium text-gray-700 transition-colors hover:text-gray-900 dark:text-gray-300 dark:hover:text-white"
                         >
                           Tout marquer comme lu
                         </button>
@@ -259,10 +358,10 @@ export default function AdminNavigation() {
                               onClick={() => {
                                 markOrderAsRead(item.orderId);
                                 setIsNotificationsOpen(false);
-                                router.push("/admin/orders");
+                                void router.push(`/admin/orders?orderId=${item.orderId}`);
                               }}
                               className={`w-full border-b border-gray-100 px-4 py-3 text-left transition hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700/40 ${
-                                isUnread ? "bg-green-50/60 dark:bg-green-900/20" : ""
+                                isUnread ? "bg-gray-100/80 dark:bg-gray-700/30" : ""
                               }`}
                             >
                               <div className="flex items-start justify-between gap-3">
@@ -278,7 +377,9 @@ export default function AdminNavigation() {
                                   </p>
                                 </div>
                                 <div className="flex flex-col items-end gap-1">
-                                  {isUnread && <span className="h-2.5 w-2.5 rounded-full bg-green-600" />}
+                                  {isUnread && (
+                                    <span className="h-2.5 w-2.5 rounded-full bg-gray-900 dark:bg-gray-100" />
+                                  )}
                                   <button
                                     type="button"
                                     onClick={(e) => {
@@ -314,10 +415,10 @@ export default function AdminNavigation() {
             <div className="relative" data-profile-dropdown>
               <button
                 onClick={() => setIsProfileOpen(!isProfileOpen)}
-                className="flex items-center space-x-2 rounded-lg p-2 text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
+                className="flex items-center gap-2 rounded-full border border-transparent p-2 text-gray-600 transition-all duration-150 hover:border-gray-200 hover:bg-gray-100/80 hover:text-gray-900 dark:text-gray-300 dark:hover:border-gray-700 dark:hover:bg-gray-800/80 dark:hover:text-white"
               >
                 {session ? (
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-900 text-white dark:bg-white dark:text-gray-900">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-900/90 text-white dark:bg-gray-100 dark:text-gray-900">
                     <span className="text-sm font-medium">
                       {session.user?.firstName?.charAt(0).toUpperCase() ||
                         session.user?.name?.charAt(0).toUpperCase() ||
@@ -358,7 +459,7 @@ export default function AdminNavigation() {
                     initial={{ opacity: 0, y: -10 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -10 }}
-                    className="absolute right-0 mt-2 w-48 rounded-lg bg-white py-1 shadow-lg ring-1 ring-black ring-opacity-5 dark:bg-gray-800"
+                    className="absolute right-0 mt-2 w-52 rounded-xl border border-gray-200/80 bg-white/95 py-1 shadow-xl shadow-gray-900/10 ring-1 ring-black/5 backdrop-blur-md dark:border-gray-700/80 dark:bg-gray-800/95 dark:shadow-black/20"
                   >
                     {session ? (
                       <>
@@ -370,19 +471,18 @@ export default function AdminNavigation() {
                         </div>
                         <div className="border-t border-gray-100 dark:border-gray-700">
                           <Link
+                            href={router.pathname.startsWith("/admin") ? "/" : "/admin"}
+                            className="block px-4 py-2 text-sm font-semibold text-gray-900 transition-colors hover:bg-gray-100 dark:text-white dark:hover:bg-gray-700"
+                            onClick={() => setIsProfileOpen(false)}
+                          >
+                            {router.pathname.startsWith("/admin") ? "Site Web" : "Tableau de Bord"}
+                          </Link>
+                          <Link
                             href="/admin/settings"
                             className="block px-4 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
                             onClick={() => setIsProfileOpen(false)}
                           >
                             Paramètres
-                          </Link>
-                          {/* Smart button: Dashboard when on client site, Site Web when on admin pages */}
-                          <Link
-                            href={router.pathname.startsWith("/admin") ? "/" : "/admin"}
-                            className="block px-4 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
-                            onClick={() => setIsProfileOpen(false)}
-                          >
-                            {router.pathname.startsWith("/admin") ? "Site Web" : "Tableau de Bord"}
                           </Link>
                           <button
                             onClick={() => {
@@ -398,7 +498,7 @@ export default function AdminNavigation() {
                     ) : (
                       <div className="px-4 py-2">
                         <Link
-                          href="/login"
+                          href="/connexion"
                           className="block text-sm text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
                           onClick={() => setIsProfileOpen(false)}
                         >
@@ -414,7 +514,7 @@ export default function AdminNavigation() {
             {/* Mobile menu button */}
             <button
               onClick={toggleMenu}
-              className="rounded-lg p-2 text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800 lg:hidden"
+              className="rounded-full border border-transparent p-2 text-gray-600 transition-all duration-150 hover:border-gray-200 hover:bg-gray-100/80 hover:text-gray-900 dark:text-gray-300 dark:hover:border-gray-700 dark:hover:bg-gray-800/80 dark:hover:text-white lg:hidden"
               aria-label="Toggle mobile menu"
             >
               <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -445,40 +545,47 @@ export default function AdminNavigation() {
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: "auto" }}
               exit={{ opacity: 0, height: 0 }}
-              className="border-t border-gray-200 py-4 dark:border-gray-700 lg:hidden"
+              className="border-t border-gray-200/80 py-4 dark:border-gray-700/80 lg:hidden"
             >
               <div className="space-y-4">
                 {/* Mobile Navigation Links */}
                 <div className="space-y-2">
-                  {adminMenuItems.map((item) => (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      className="block font-medium text-gray-700 transition-colors hover:text-gray-900 dark:text-gray-300 dark:hover:text-white"
-                      onClick={() => setIsMobileMenuOpen(false)}
-                    >
-                      {item.label}
-                    </Link>
-                  ))}
+                  {ADMIN_MENU_ITEMS.map((item) => {
+                    const isActive = isAdminRouteActive(router.pathname, item.href);
+                    return (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        aria-current={isActive ? "page" : undefined}
+                        className={`block rounded-xl border px-4 py-2.5 text-[0.95rem] font-medium transition-all duration-150 ease-out ${
+                          isActive
+                            ? "border-gray-300 bg-gray-100/90 text-gray-900 shadow-sm dark:border-gray-500 dark:bg-gray-700/40 dark:text-white"
+                            : "border-transparent text-gray-700 hover:border-gray-200 hover:bg-gray-100/80 dark:text-gray-300 dark:hover:border-gray-700 dark:hover:bg-gray-800/80"
+                        }`}
+                        onClick={() => setIsMobileMenuOpen(false)}
+                      >
+                        {item.label}
+                      </Link>
+                    );
+                  })}
                 </div>
 
                 {/* Mobile Profile Actions */}
                 {session && (
                   <div className="border-t border-gray-200 px-4 pt-4 dark:border-gray-700">
                     <Link
+                      href={router.pathname.startsWith("/admin") ? "/" : "/admin"}
+                      className="block py-2 text-sm font-semibold text-gray-900 dark:text-white"
+                      onClick={() => setIsMobileMenuOpen(false)}
+                    >
+                      {router.pathname.startsWith("/admin") ? "Site Web" : "Tableau de Bord"}
+                    </Link>
+                    <Link
                       href="/admin/settings"
                       className="block py-2 text-sm text-gray-700 dark:text-gray-300"
                       onClick={() => setIsMobileMenuOpen(false)}
                     >
                       Paramètres
-                    </Link>
-                    {/* Smart button: Dashboard when on client site, Site Web when on admin pages */}
-                    <Link
-                      href={router.pathname.startsWith("/admin") ? "/" : "/admin"}
-                      className="block py-2 text-sm text-gray-700 dark:text-gray-300"
-                      onClick={() => setIsMobileMenuOpen(false)}
-                    >
-                      {router.pathname.startsWith("/admin") ? "Site Web" : "Tableau de Bord"}
                     </Link>
                     <button
                       onClick={() => {

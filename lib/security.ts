@@ -2,6 +2,7 @@ import expressRateLimit from "express-rate-limit";
 import helmet from "helmet";
 import { NextApiRequest, NextApiResponse } from "next";
 import validator from "validator";
+import { requiredEmailSchema } from "./email-validation";
 
 // Rate limiting configuration
 const createRateLimit = (windowMs: number, max: number) => {
@@ -59,7 +60,7 @@ export const sanitizeInput = (input: any): any => {
 
 // Email validation
 export const isValidEmail = (email: string): boolean => {
-  return validator.isEmail(email) && email.length <= 254;
+  return requiredEmailSchema.safeParse(email).success;
 };
 
 // Phone validation
@@ -195,11 +196,14 @@ export const userLoginSchema = {
 };
 
 // Email validation and sanitization
-export const validateAndSanitizeEmail = (email: string) => {
-  if (!isValidEmail(email)) {
+export const validateAndSanitizeEmail = (
+  email: string
+): { isValid: true; email: string } | { isValid: false; error: string } => {
+  const parsedEmail = requiredEmailSchema.safeParse(email);
+  if (!parsedEmail.success) {
     return { isValid: false, error: "Invalid email format" };
   }
-  return { isValid: true, email: sanitizeInput(email) };
+  return { isValid: true, email: parsedEmail.data };
 };
 
 // API error handling

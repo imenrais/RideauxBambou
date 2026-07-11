@@ -7,7 +7,7 @@ export default withAuth(
     const token = req.nextauth.token;
     const isAdminSurface = pathname.startsWith("/admin") || pathname.startsWith("/api/admin");
 
-    if (pathname === "/login" && token && token.role !== "admin") {
+    if (pathname === "/connexion" && token && token.role !== "admin") {
       return NextResponse.redirect(new URL("/403", req.url));
     }
 
@@ -18,22 +18,22 @@ export default withAuth(
     // Admin routes protection
     if (pathname.startsWith("/admin")) {
       if (!token) {
-        return NextResponse.redirect(new URL(`/login?callbackUrl=${pathname}`, req.url));
+        return NextResponse.rewrite(new URL("/404", req.url));
       }
 
       if (token.role !== "admin") {
-        return NextResponse.redirect(new URL("/403", req.url));
+        return NextResponse.rewrite(new URL("/404", req.url));
       }
     }
 
     // API admin routes protection
     if (pathname.startsWith("/api/admin")) {
       if (!token) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        return NextResponse.json({ error: "Not found" }, { status: 404 });
       }
 
       if (token.role !== "admin") {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+        return NextResponse.json({ error: "Not found" }, { status: 404 });
       }
     }
 
@@ -42,6 +42,7 @@ export default withAuth(
       response.headers.set("Cache-Control", "no-store");
       response.headers.set("Pragma", "no-cache");
       response.headers.set("Expires", "0");
+      response.headers.set("X-Robots-Tag", "noindex, nofollow, noarchive");
     }
 
     return response;
@@ -58,7 +59,7 @@ export default withAuth(
 
         // Allow public routes
         if (
-          pathname === "/login" ||
+          pathname === "/connexion" ||
           pathname === "/worker/login" ||
           pathname.startsWith("/api/price") ||
           pathname.startsWith("/api/installation-fee") ||
@@ -68,17 +69,21 @@ export default withAuth(
           pathname.startsWith("/api/curtain-types") ||
           pathname.startsWith("/api/curtain-models") ||
           pathname.startsWith("/api/health") ||
+          pathname.startsWith("/api/newsletter") ||
+          pathname.startsWith("/api/panneau-config") ||
+          pathname.startsWith("/api/reviews") ||
           pathname.startsWith("/api/orders") ||
           pathname.startsWith("/api/auth") ||
           pathname === "/" ||
           pathname.startsWith("/products") ||
           pathname.startsWith("/cart") ||
-          pathname.startsWith("/checkout") ||
-          pathname.startsWith("/login") ||
-          pathname.startsWith("/signup") ||
-          pathname.startsWith("/forgot-password") ||
-          pathname.startsWith("/reset-password") ||
-          pathname.startsWith("/order-success") ||
+          pathname.startsWith("/panier") ||
+          pathname.startsWith("/paiement") ||
+          pathname.startsWith("/connexion") ||
+          pathname.startsWith("/inscription") ||
+          pathname.startsWith("/mot-de-passe-oublie") ||
+          pathname.startsWith("/reinitialiser-mot-de-passe") ||
+          pathname.startsWith("/commande-reussie") ||
           pathname.startsWith("/contact") ||
           pathname.startsWith("/_next") ||
           pathname.startsWith("/logo.png")
@@ -94,5 +99,5 @@ export default withAuth(
 );
 
 export const config = {
-  matcher: ["/admin/:path*", "/api/admin/:path*", "/api/orders", "/api/users", "/login", "/worker/login"],
+  matcher: ["/admin/:path*", "/api/admin/:path*", "/api/orders", "/api/users", "/connexion", "/worker/login"],
 };

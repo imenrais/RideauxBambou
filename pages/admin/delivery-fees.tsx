@@ -1,14 +1,12 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { motion } from "framer-motion";
 import { GetServerSideProps } from "next";
-import Head from "next/head";
 import { useRouter } from "next/router";
 import { useSession } from "next-auth/react";
 import { useState, useEffect, useMemo } from "react";
 
-import AdminNavigation from "../../components/AdminNavigation";
 import BackButton from "../../components/BackButton";
-import Card from "../../components/ui/Card";
+import AdminLayout from "../../components/layout/AdminLayout";
+import Button from "../../components/ui/Button";
 import Input from "../../components/ui/Input";
 import Loading from "../../components/ui/Loading";
 import {
@@ -18,12 +16,22 @@ import {
   TableRow,
   TableHead,
   TableCell,
+  adminTableComfortableSpacingClassName,
+  adminTableShellClassName,
 } from "../../components/ui/Table";
 import { requireAdminPage } from "../../lib/admin-page-guard";
 
 interface AdminDeliveryFeesProps {
   title: string;
 }
+
+interface DeliveryFeesResponse {
+  fees: DeliveryFee[];
+  isFreeDeliveryActive: boolean;
+  restoredFromBackup?: boolean;
+}
+
+type FreeDeliveryConfirmModal = "activate" | "deactivate" | null;
 
 interface DeliveryFee {
   _id: string;
@@ -34,6 +42,9 @@ interface DeliveryFee {
   lastUpdated: string;
   updatedBy: string;
 }
+
+const ADMIN_DELIVERY_FEES_QUERY_KEY = ["admin-delivery-fees"] as const;
+const ADMIN_DELIVERY_FEES_STATS_QUERY_KEY = ["admin-delivery-fees-stats"] as const;
 
 const GOVERNORATES: Array<{ label: string; code: string }> = [
   { label: "Ariana", code: "AR" },
@@ -69,30 +80,61 @@ const normalizeGovernorate = (value: string) =>
     .toLowerCase()
     .trim();
 
+function buildFeeDraftsFromFees(fees: DeliveryFee[] | undefined): Record<string, string> {
+  const nextDrafts: Record<string, string> = {};
+  for (const governorate of GOVERNORATES) {
+    const matchedFee = fees?.find(
+      (fee) =>
+        fee.stateCode === governorate.code ||
+        normalizeGovernorate(fee.state) === normalizeGovernorate(governorate.label)
+    );
+    nextDrafts[governorate.label] = (matchedFee?.fee ?? 0).toFixed(2);
+  }
+  return nextDrafts;
+}
+
+function parseDeliveryFeesResponse(data: {
+  success?: boolean;
+  data?: DeliveryFee[];
+  meta?: { isFreeDeliveryActive?: boolean; restoredFromBackup?: boolean };
+}): DeliveryFeesResponse {
+  return {
+    fees: data.data || [],
+    isFreeDeliveryActive: Boolean(data.meta?.isFreeDeliveryActive),
+    restoredFromBackup: data.meta?.restoredFromBackup,
+  };
+}
+
 export default function AdminDeliveryFees({ title }: AdminDeliveryFeesProps) {
   const { data: session, status } = useSession();
   const router = useRouter();
   const queryClient = useQueryClient();
   const [feeDrafts, setFeeDrafts] = useState<Record<string, string>>({});
-  const [saveFeedback, setSaveFeedback] = useState<{ type: "success" | "error" | "info"; message: string } | null>(null);
+  const [confirmModal, setConfirmModal] = useState<FreeDeliveryConfirmModal>(null);
 
   // Redirect if not admin
   useEffect(() => {
     if (status === "loading") return;
     if (!session || session.user?.role !== "admin") {
-      router.push("/login");
+      router.push("/connexion");
     }
   }, [session, status, router]);
 
   // Fetch delivery fees
-  const { data: deliveryFees, isLoading } = useQuery<DeliveryFee[]>({
-    queryKey: ["admin-delivery-fees"],
+  const { data: deliveryFeesResponse, isLoading } = useQuery<DeliveryFeesResponse>({
+    queryKey: ADMIN_DELIVERY_FEES_QUERY_KEY,
     queryFn: async () => {
       const response = await fetch("/api/admin/delivery-fees");
       const data = await response.json();
-      return data.data || [];
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || "Impossible de charger les frais de livraison");
+      }
+      return parseDeliveryFeesResponse(data);
     },
   });
+
+  const deliveryFees = deliveryFeesResponse?.fees;
+  const isFreeDeliveryActive = deliveryFeesResponse?.isFreeDeliveryActive === true;
 
   const feesByGovernorate = useMemo(() => {
     return GOVERNORATES.map((governorate) => {
@@ -111,6 +153,61 @@ export default function AdminDeliveryFees({ title }: AdminDeliveryFeesProps) {
     });
   }, [deliveryFees]);
 
+  const makeAllFreeMutation = useMutation({
+    mutationFn: async () => {
+      const response = await fetch("/api/admin/delivery-fees", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ action: "make-all-free" }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || "Erreur lors de l'activation de la livraison gratuite");
+      }
+      return parseDeliveryFeesResponse(data);
+    },
+    onSuccess: (result) => {
+      queryClient.setQueryData<DeliveryFeesResponse>(ADMIN_DELIVERY_FEES_QUERY_KEY, result);
+      queryClient.invalidateQueries({ queryKey: ADMIN_DELIVERY_FEES_STATS_QUERY_KEY });
+      setFeeDrafts(buildFeeDraftsFromFees(result.fees));
+      setConfirmModal(null);
+    },
+    onError: () => {
+      setConfirmModal(null);
+    },
+  });
+
+  const restoreDeliveryFeesMutation = useMutation({
+    mutationFn: async () => {
+      const response = await fetch("/api/admin/delivery-fees", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ action: "restore-from-backup" }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || "Erreur lors de la restauration des tarifs");
+      }
+      return parseDeliveryFeesResponse(data);
+    },
+    onSuccess: (result) => {
+      queryClient.setQueryData<DeliveryFeesResponse>(ADMIN_DELIVERY_FEES_QUERY_KEY, result);
+      queryClient.invalidateQueries({ queryKey: ADMIN_DELIVERY_FEES_STATS_QUERY_KEY });
+      setFeeDrafts(buildFeeDraftsFromFees(result.fees));
+      setConfirmModal(null);
+    },
+    onError: () => {
+      setConfirmModal(null);
+    },
+  });
+
+  const isFreeDeliveryMutationPending =
+    makeAllFreeMutation.isPending || restoreDeliveryFeesMutation.isPending;
+
   // Save all edited delivery fees with one button
   const updateFeeMutation = useMutation({
     mutationFn: async (updates: Array<{ state: string; fee: number }>) => {
@@ -123,38 +220,34 @@ export default function AdminDeliveryFees({ title }: AdminDeliveryFeesProps) {
           body: JSON.stringify(update),
         });
         const data = await response.json();
-        if (!data.success) {
+        if (!response.ok || !data.success) {
           throw new Error(data.error || "Erreur de sauvegarde");
         }
       }
+
+      const response = await fetch("/api/admin/delivery-fees");
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || "Erreur lors du rechargement des frais");
+      }
+      return parseDeliveryFeesResponse(data);
     },
-    onSuccess: (_, updates) => {
-      queryClient.invalidateQueries({ queryKey: ["admin-delivery-fees"] });
-      setSaveFeedback({
-        type: "success",
-        message: `${updates.length} gouvernorat(s) enregistré(s) avec succès.`,
-      });
-    },
-    onError: (mutationError) => {
-      const message = mutationError instanceof Error ? mutationError.message : "Erreur inconnue";
-      setSaveFeedback({ type: "error", message: `Erreur: ${message}` });
+    onSuccess: (result) => {
+      queryClient.setQueryData<DeliveryFeesResponse>(ADMIN_DELIVERY_FEES_QUERY_KEY, result);
+      queryClient.invalidateQueries({ queryKey: ADMIN_DELIVERY_FEES_STATS_QUERY_KEY });
+      setFeeDrafts(buildFeeDraftsFromFees(result.fees));
     },
   });
 
   useEffect(() => {
-    if (!feesByGovernorate.length) return;
-    const nextDrafts: Record<string, string> = {};
-    for (const fee of feesByGovernorate) {
-      nextDrafts[fee.state] = fee.fee.toFixed(2);
+    if (!deliveryFees || updateFeeMutation.isPending) {
+      return;
     }
-    setFeeDrafts(nextDrafts);
-  }, [feesByGovernorate]);
+    setFeeDrafts(buildFeeDraftsFromFees(deliveryFees));
+  }, [deliveryFees, updateFeeMutation.isPending]);
 
   const handleFeeChange = (state: string, value: string) => {
     setFeeDrafts((prev) => ({ ...prev, [state]: value.replace(",", ".") }));
-    if (saveFeedback) {
-      setSaveFeedback(null);
-    }
   };
 
   const handleSaveAll = () => {
@@ -170,10 +263,6 @@ export default function AdminDeliveryFees({ title }: AdminDeliveryFeesProps) {
       const parsedFee = parseFloat(rawValue);
 
       if (isNaN(parsedFee) || parsedFee < 0) {
-        setSaveFeedback({
-          type: "error",
-          message: `Valeur invalide pour ${feeRow.state}. Entrez un nombre >= 0.`,
-        });
         correctedDrafts[feeRow.state] = feeRow.fee.toFixed(2);
         setFeeDrafts(correctedDrafts);
         return;
@@ -185,11 +274,24 @@ export default function AdminDeliveryFees({ title }: AdminDeliveryFeesProps) {
     }
 
     if (!updates.length) {
-      setSaveFeedback({ type: "info", message: "Aucun changement à enregistrer." });
       return;
     }
 
     updateFeeMutation.mutate(updates);
+  };
+
+  const handleFreeDeliveryToggle = () => {
+    if (isFreeDeliveryMutationPending || updateFeeMutation.isPending) {
+      return;
+    }
+
+    setConfirmModal(isFreeDeliveryActive ? "deactivate" : "activate");
+  };
+
+  const closeConfirmModal = () => {
+    if (!isFreeDeliveryMutationPending) {
+      setConfirmModal(null);
+    }
   };
 
   if (status === "loading") {
@@ -201,129 +303,163 @@ export default function AdminDeliveryFees({ title }: AdminDeliveryFeesProps) {
   }
 
   return (
-    <>
-      <Head>
-        <title>{title}</title>
-        <meta
-          name="description"
-          content="Gestion des frais de livraison par gouvernorat - Rideaux Bambou Admin"
-        />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <link rel="icon" href="/logo.png" />
-      </Head>
-
-      <div className="min-h-screen bg-white dark:bg-gray-900">
-        {/* Navigation */}
-        <AdminNavigation />
-
-        {/* Main Content */}
-        <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-          <div className="mb-6">
-            <BackButton href="/admin" />
-          </div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8 }}
-            className="space-y-6"
-          >
-            {/* Header */}
-            <Card>
-              <h1 className="mb-2 text-3xl font-bold text-gray-900 dark:text-white">
-                Gestion des Frais de Livraison
-              </h1>
-              <p className="text-gray-600 dark:text-gray-300">
-                Configurez les frais de livraison pour chaque gouvernorat de Tunisie
-              </p>
-            </Card>
-
-            {/* Delivery Fees Table */}
-            <Card>
-              <h2 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
-                Frais par Gouvernorat
-              </h2>
-
-              {isLoading ? (
-                <div className="flex items-center justify-center py-12">
-                  <Loading text="Chargement des frais de livraison..." />
-                </div>
-              ) : (
-                <div className="mx-auto w-full max-w-5xl overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Gouvernorat</TableHead>
-                      <TableHead>Frais (TND)</TableHead>
-                      <TableHead>Dernière Mise à Jour</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {feesByGovernorate.map((fee) => (
-                      <TableRow key={fee.state} hover>
-                        <TableCell>
-                          <div className="font-medium text-gray-900 dark:text-white">
-                            {fee.state}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center justify-center gap-2">
-                            <Input
-                              type="text"
-                              inputMode="decimal"
-                              pattern="^[0-9]+([.,][0-9]{1,2})?$"
-                              value={feeDrafts[fee.state] ?? fee.fee.toFixed(2)}
-                              onChange={(e) => handleFeeChange(fee.state, e.target.value)}
-                              className="w-20 text-center"
-                            />
-                            <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-                              TND
-                            </span>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <span className="text-sm text-gray-500 dark:text-gray-400">
-                            {fee.lastUpdated
-                              ? new Date(fee.lastUpdated).toLocaleDateString("fr-FR")
-                              : "—"}
-                          </span>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-                  <div className="mt-4 space-y-3">
-                    {saveFeedback && (
-                      <p
-                        className={`text-sm ${
-                          saveFeedback.type === "success"
-                            ? "text-green-600 dark:text-green-400"
-                            : saveFeedback.type === "error"
-                              ? "text-red-600 dark:text-red-400"
-                              : "text-gray-600 dark:text-gray-300"
-                        }`}
-                      >
-                        {saveFeedback.message}
-                      </p>
-                    )}
-                    <div className="flex w-full justify-end">
-                      <button
-                        type="button"
-                        onClick={handleSaveAll}
-                        disabled={updateFeeMutation.isPending}
-                        className="inline-flex min-w-[140px] items-center justify-center rounded-lg bg-green-600 px-5 py-2.5 text-center text-sm font-semibold text-white transition hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        {updateFeeMutation.isPending ? "Enregistrement..." : "Enregistrer"}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </Card>
-          </motion.div>
-        </main>
+    <AdminLayout
+      title={title}
+      description="Gestion des frais de livraison par gouvernorat - Rideaux Bambou Admin"
+    >
+      <div className="mb-6">
+        <BackButton href="/admin" />
       </div>
-    </>
+
+      <div className="mb-14 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+            Gestion des Frais de Livraison
+          </h1>
+          <p className="mt-2 text-gray-600 dark:text-gray-400">
+            Configurez les frais de livraison pour chaque gouvernorat de Tunisie
+          </p>
+        </div>
+        <label className="inline-flex shrink-0 cursor-pointer items-center gap-3">
+          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+            Livraison gratuite
+          </span>
+          <span
+            className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors duration-200 ${
+              isFreeDeliveryActive ? "bg-green-500" : "bg-gray-300 dark:bg-gray-600"
+            } ${isFreeDeliveryMutationPending || updateFeeMutation.isPending ? "opacity-60" : ""}`}
+          >
+            <input
+              type="checkbox"
+              checked={isFreeDeliveryActive}
+              onChange={handleFreeDeliveryToggle}
+              disabled={isFreeDeliveryMutationPending || updateFeeMutation.isPending}
+              className="sr-only"
+            />
+            <span
+              className={`inline-block h-6 w-6 transform rounded-full bg-white shadow transition-transform duration-200 ${
+                isFreeDeliveryActive ? "translate-x-5" : "translate-x-0.5"
+              }`}
+            />
+          </span>
+        </label>
+      </div>
+
+      {isLoading ? (
+        <div className="flex items-center justify-center py-12">
+          <Loading text="Chargement des frais de livraison..." />
+        </div>
+      ) : (
+        <>
+          <div className={adminTableShellClassName}>
+            <Table className={adminTableComfortableSpacingClassName}>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Gouvernorat</TableHead>
+                  <TableHead>Frais (TND)</TableHead>
+                  <TableHead>Dernière mise à jour</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {feesByGovernorate.map((fee) => (
+                  <TableRow key={fee.state}>
+                    <TableCell align="center">
+                      <div className="font-medium text-gray-900 dark:text-white">{fee.state}</div>
+                    </TableCell>
+                    <TableCell align="center">
+                      <div className="flex items-center justify-center gap-2">
+                        <Input
+                          type="text"
+                          inputMode="decimal"
+                          pattern="^[0-9]+([.,][0-9]{1,2})?$"
+                          value={feeDrafts[fee.state] ?? fee.fee.toFixed(2)}
+                          onChange={(e) => handleFeeChange(fee.state, e.target.value)}
+                          className="w-20 text-center"
+                        />
+                        <span className="text-sm text-gray-900 dark:text-white">TND</span>
+                      </div>
+                    </TableCell>
+                    <TableCell align="center">
+                      <span className="text-sm text-gray-500 dark:text-gray-400">
+                        {fee.lastUpdated
+                          ? new Date(fee.lastUpdated).toLocaleDateString("fr-FR")
+                          : "—"}
+                      </span>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+            <div className="flex justify-end border-t border-gray-200 bg-white px-4 py-3 dark:border-gray-700 dark:bg-gray-800 sm:px-6">
+              <Button
+                type="button"
+                onClick={handleSaveAll}
+                disabled={updateFeeMutation.isPending}
+                loading={updateFeeMutation.isPending}
+                className="bg-green-600 hover:bg-green-700"
+              >
+                {updateFeeMutation.isPending ? "Enregistrement..." : "Enregistrer"}
+              </Button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {confirmModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <button
+            type="button"
+            className="absolute inset-0 bg-gray-900/50 backdrop-blur-sm"
+            onClick={closeConfirmModal}
+            aria-label="Fermer la confirmation"
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="free-delivery-confirm-title"
+            className="relative w-full max-w-md rounded-2xl border border-gray-200 bg-white p-6 shadow-2xl dark:border-gray-700 dark:bg-gray-800"
+          >
+            <h3
+              id="free-delivery-confirm-title"
+              className="text-lg font-semibold text-gray-900 dark:text-white"
+            >
+              {confirmModal === "activate"
+                ? "Activer la livraison gratuite ?"
+                : "Désactiver la livraison gratuite ?"}
+            </h3>
+            <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">
+              {confirmModal === "activate"
+                ? "Tous les gouvernorats passeront à 0 TND. Les tarifs actuels seront sauvegardés avant modification."
+                : "Les tarifs de livraison seront restaurés exactement comme avant l'activation."}
+            </p>
+            <div className="mt-6 flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                onClick={closeConfirmModal}
+                disabled={isFreeDeliveryMutationPending}
+                className="inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (confirmModal === "activate") {
+                    makeAllFreeMutation.mutate();
+                    return;
+                  }
+                  restoreDeliveryFeesMutation.mutate();
+                }}
+                disabled={isFreeDeliveryMutationPending}
+                className="inline-flex items-center justify-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isFreeDeliveryMutationPending ? "Application..." : "Confirmer"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </AdminLayout>
   );
 }
 

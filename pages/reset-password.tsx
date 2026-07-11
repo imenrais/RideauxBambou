@@ -1,7 +1,6 @@
 import { motion } from "framer-motion";
 import { GetServerSideProps } from "next";
 import Image from "next/image";
-import Link from "next/link";
 import { useRouter } from "next/router";
 import { useState } from "react";
 
@@ -30,6 +29,13 @@ export default function ResetPasswordPage({ title, token }: ResetPasswordPagePro
     feedback: [] as string[],
     isValid: false,
   });
+  const handleBackNavigation = () => {
+    if (typeof window !== "undefined" && window.history.length > 1) {
+      router.back();
+      return;
+    }
+    void router.push("/");
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -75,7 +81,7 @@ export default function ResetPasswordPage({ title, token }: ResetPasswordPagePro
           text: "Votre mot de passe a été réinitialisé avec succès. Vous pouvez maintenant vous connecter.",
         });
         setTimeout(() => {
-          router.push("/login");
+          router.push("/connexion");
         }, 2000);
       } else {
         setMessage({
@@ -262,12 +268,13 @@ export default function ResetPasswordPage({ title, token }: ResetPasswordPagePro
 
                 {/* Back to Login Link */}
                 <div className="text-center">
-                  <Link
-                    href="/login"
+                  <button
+                    type="button"
+                    onClick={handleBackNavigation}
                     className="text-sm text-green-600 hover:text-green-500 dark:text-green-400 dark:hover:text-green-300"
                   >
                     Retour à la connexion
-                  </Link>
+                  </button>
                 </div>
               </form>
             </motion.div>
@@ -284,7 +291,7 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
   if (!token || typeof token !== "string") {
     return {
       redirect: {
-        destination: "/forgot-password",
+        destination: "/mot-de-passe-oublie",
         permanent: false,
       },
     };

@@ -9,6 +9,7 @@ interface StandardLayoutProps {
   description?: string;
   children: ReactNode;
   showFooter?: boolean;
+  showCartIcon?: boolean;
 }
 
 export default function StandardLayout({
@@ -16,6 +17,7 @@ export default function StandardLayout({
   description = "Rideaux Bambou - Des rideaux en bambou naturels et élégants pour votre maison",
   children,
   showFooter = true,
+  showCartIcon = true,
 }: StandardLayoutProps) {
   return (
     <>
@@ -28,7 +30,7 @@ export default function StandardLayout({
       </Head>
 
       <div className="min-h-screen bg-white dark:bg-gray-900">
-        <Navigation />
+        <Navigation showCartIcon={showCartIcon} />
 
         <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">{children}</main>
 

@@ -4,7 +4,6 @@ import Head from "next/head";
 import { SessionProvider } from "next-auth/react";
 import { useState } from "react";
 
-import { CartProvider } from "../contexts/CartContext";
 import { DarkModeProvider } from "../contexts/DarkModeContext";
 import { SimpleCartProvider } from "../contexts/SimpleCartContext";
 import { ToastProvider } from "../contexts/ToastContext";
@@ -47,13 +46,11 @@ export default function App({ Component, pageProps: { session, ...pageProps } }:
           <meta name="format-detection" content="telephone=no" />
         </Head>
         <DarkModeProvider>
-          <CartProvider>
-            <SimpleCartProvider>
-              <ToastProvider>
-                <Component {...pageProps} />
-              </ToastProvider>
-            </SimpleCartProvider>
-          </CartProvider>
+          <SimpleCartProvider>
+            <ToastProvider>
+              <Component {...pageProps} />
+            </ToastProvider>
+          </SimpleCartProvider>
         </DarkModeProvider>
       </QueryClientProvider>
     </SessionProvider>

@@ -3,6 +3,11 @@ import { prisma } from "./prisma";
 // Global installation fee storage using database
 let globalInstallationFee = 11;
 let isInitialized = false;
+let cachedInstallationFeeData: { fee: number; lastUpdated: string } | null = null;
+
+const invalidateInstallationFeeCache = () => {
+  cachedInstallationFeeData = null;
+};
 
 async function initializeFee() {
   if (isInitialized) return;
@@ -42,6 +47,7 @@ export async function setGlobalInstallationFee(
           data: { fee, updatedBy, lastUpdated: new Date() },
         });
     globalInstallationFee = feeDoc.fee;
+    invalidateInstallationFeeCache();
   } catch (error) {
     console.error("Error updating installation fee:", error);
     throw error;
@@ -49,6 +55,12 @@ export async function setGlobalInstallationFee(
 }
 
 export async function getInstallationFeeData() {
+  await initializeFee();
+
+  if (cachedInstallationFeeData) {
+    return cachedInstallationFeeData;
+  }
+
   try {
     let fee = await prisma.installationFee.findFirst();
     if (!fee) {
@@ -56,10 +68,11 @@ export async function getInstallationFeeData() {
         data: { fee: globalInstallationFee, updatedBy: "system", lastUpdated: new Date() },
       });
     }
-    return {
+    cachedInstallationFeeData = {
       fee: fee.fee,
       lastUpdated: fee.lastUpdated.toISOString(),
     };
+    return cachedInstallationFeeData;
   } catch (error) {
     console.error("Error fetching installation fee data:", error);
     return {

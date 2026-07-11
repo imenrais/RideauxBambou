@@ -7,6 +7,7 @@ import { z } from "zod";
 import Button from "../ui/Button";
 import ImageUpload from "../ui/ImageUpload";
 import Input from "../ui/Input";
+import { formFieldLabelClass } from "../../lib/form-field-styles";
 
 const productSchema = z.object({
   name: z.string().min(1, "Le nom est requis"),
@@ -63,14 +64,14 @@ export default function ProductForm({ product, onSubmit, onCancel, isLoading }: 
     >
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+          <label className={formFieldLabelClass}>
             Nom du produit *
           </label>
           <Input {...register("name")} error={errors.name?.message} className="mt-1" />
         </div>
 
         <div>
-          <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+          <label className={formFieldLabelClass}>
             Image du produit *
           </label>
           <ImageUpload
@@ -86,7 +87,7 @@ export default function ProductForm({ product, onSubmit, onCancel, isLoading }: 
           Annuler
         </Button>
         <Button type="submit" onClick={handleSubmit(onSubmit)} disabled={isLoading}>
-          {isLoading ? "Enregistrement..." : product ? "Modifier" : "Créer"}
+          {isLoading ? "Enregistrement..." : product ? "Enregistrer" : "Créer"}
         </Button>
       </div>
     </motion.div>

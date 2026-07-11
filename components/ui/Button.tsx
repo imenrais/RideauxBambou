@@ -1,5 +1,4 @@
 import { ReactNode, ButtonHTMLAttributes } from "react";
-import { motion } from "framer-motion";
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   children: ReactNode;
@@ -24,17 +23,17 @@ export default function Button({
   ...props
 }: ButtonProps) {
   const baseClasses =
-    "inline-flex items-center justify-center font-semibold transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 relative overflow-hidden";
+    "inline-flex items-center justify-center font-semibold transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60";
 
   const variantClasses = {
     primary:
-      "rounded-xl bg-gradient-to-r from-green-600 to-green-700 text-white shadow-lg hover:from-green-700 hover:to-green-800 hover:shadow-xl focus:ring-green-500/50 hover:scale-105 active:scale-95",
+      "rounded-xl bg-gradient-to-r from-green-600 to-green-700 text-white shadow-lg hover:from-green-700 hover:to-green-800 hover:shadow-xl focus:ring-green-500/50",
     secondary:
-      "rounded-xl border border-gray-200/50 bg-white/80 backdrop-blur-sm text-gray-700 shadow-sm hover:bg-white hover:shadow-md focus:ring-green-500/50 hover:scale-105 active:scale-95 dark:border-gray-600/50 dark:bg-gray-700/80 dark:text-gray-300 dark:hover:bg-gray-700",
+      "rounded-xl border border-gray-200/50 bg-white/80 backdrop-blur-sm text-gray-700 shadow-sm hover:bg-white hover:shadow-md focus:ring-green-500/50 dark:border-gray-600/50 dark:bg-gray-700/80 dark:text-gray-300 dark:hover:bg-gray-700",
     ghost:
-      "rounded-xl text-gray-700 hover:bg-gray-100/80 backdrop-blur-sm focus:ring-green-500/50 hover:scale-105 active:scale-95 dark:text-gray-300 dark:hover:bg-gray-800/80",
+      "rounded-xl text-gray-700 hover:bg-gray-100/80 backdrop-blur-sm focus:ring-green-500/50 dark:text-gray-300 dark:hover:bg-gray-800/80",
     danger:
-      "rounded-xl bg-gradient-to-r from-red-600 to-red-700 text-white shadow-lg hover:from-red-700 hover:to-red-800 hover:shadow-xl focus:ring-red-500/50 hover:scale-105 active:scale-95",
+      "rounded-xl bg-gradient-to-r from-red-600 to-red-700 text-white shadow-lg hover:from-red-700 hover:to-red-800 hover:shadow-xl focus:ring-red-500/50",
   };
 
   const sizeClasses = {
@@ -47,15 +46,9 @@ export default function Button({
   const finalClasses = `${baseClasses} ${variantClasses[variant]} ${sizeClasses[size]} ${widthClasses} ${className}`;
 
   return (
-    <motion.button
-      whileHover={{ scale: disabled || loading ? 1 : 1.02 }}
-      whileTap={{ scale: disabled || loading ? 1 : 0.98 }}
-      className={finalClasses}
-      disabled={disabled || loading}
-      {...(props as any)}
-    >
+    <button className={finalClasses} disabled={disabled || loading} {...props}>
       {loading && (
-        <svg className="mr-2 h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+        <svg className="mr-2 h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24" aria-hidden="true">
           <circle
             className="opacity-25"
             cx="12"
@@ -77,6 +70,6 @@ export default function Button({
       {children}
 
       {!loading && icon && iconPosition === "right" && <span className="ml-2">{icon}</span>}
-    </motion.button>
+    </button>
   );
 }

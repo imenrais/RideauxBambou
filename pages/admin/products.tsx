@@ -1,5 +1,4 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { motion } from "framer-motion";
 import { GetServerSideProps } from "next";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/router";
@@ -9,10 +8,12 @@ import { useState, useEffect } from "react";
 import BackButton from "../../components/BackButton";
 import AdminLayout from "../../components/layout/AdminLayout";
 import Button from "../../components/ui/Button";
-import Card from "../../components/ui/Card";
 import Loading from "../../components/ui/Loading";
+import { adminTableShellClassName } from "../../components/ui/Table";
 import { useToast } from "../../contexts/ToastContext";
 import { requireAdminPage } from "../../lib/admin-page-guard";
+import { notifyProductsUpdated } from "../../lib/product-availability-sync";
+import { PRODUCTS_QUERY_KEY } from "../../lib/products-query";
 
 const ProductTable = dynamic(() => import("../../components/admin/ProductTable"), {
   loading: () => <div className="p-4 text-center">Chargement...</div>,
@@ -30,8 +31,75 @@ interface Product {
   _id: string;
   name: string;
   image: string;
+  isAvailable: boolean;
   createdAt: string;
 }
+
+const normalizeAvailability = (value: unknown) => {
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === "false" || normalized === "0") {
+      return false;
+    }
+    if (normalized === "true" || normalized === "1") {
+      return true;
+    }
+  }
+
+  if (typeof value === "number") {
+    if (value === 0) {
+      return false;
+    }
+    if (value === 1) {
+      return true;
+    }
+  }
+
+  return true;
+};
+
+const normalizeProduct = (product: Product | Record<string, unknown>): Product => ({
+  ...(product as Product),
+  isAvailable: normalizeAvailability((product as Product).isAvailable),
+});
+
+const updateAvailabilityInCache = (
+  cachedData: Product[] | undefined,
+  id: string,
+  isAvailable: boolean
+) =>
+  Array.isArray(cachedData)
+    ? cachedData.map((product) =>
+        product._id === id
+          ? {
+              ...product,
+              isAvailable,
+            }
+          : product
+      )
+    : cachedData;
+
+const upsertProductInCache = (cachedData: Product[] | undefined, product: Product, prepend = false) => {
+  if (!Array.isArray(cachedData)) {
+    return cachedData;
+  }
+
+  const exists = cachedData.some((existingProduct) => existingProduct._id === product._id);
+  if (exists) {
+    return cachedData.map((existingProduct) =>
+      existingProduct._id === product._id ? product : existingProduct
+    );
+  }
+
+  return prepend ? [product, ...cachedData] : cachedData;
+};
+
+const ADMIN_PRODUCTS_QUERY_KEY = ["admin-products"] as const;
+const ADMIN_PRODUCTS_STATS_QUERY_KEY = ["admin-products-stats"] as const;
 
 export default function AdminProducts({ title }: AdminProductsProps) {
   const { data: session, status } = useSession();
@@ -45,7 +113,7 @@ export default function AdminProducts({ title }: AdminProductsProps) {
   useEffect(() => {
     if (status === "loading") return;
     if (!session || session.user?.role !== "admin") {
-      router.push("/login");
+      router.push("/connexion");
     }
   }, [session, status, router]);
 
@@ -65,8 +133,11 @@ export default function AdminProducts({ title }: AdminProductsProps) {
     queryFn: async () => {
       const response = await fetch("/api/admin/products");
       const data = await response.json();
-      console.log("Products data:", data);
-      return data.data;
+      if (!data.success || !Array.isArray(data.data)) {
+        return [];
+      }
+
+      return data.data.map((product: Product) => normalizeProduct(product));
     },
   });
 
@@ -90,9 +161,23 @@ export default function AdminProducts({ title }: AdminProductsProps) {
       }
       return response.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin-products"] });
-      queryClient.invalidateQueries({ queryKey: ["products"] });
+    onSuccess: (result) => {
+      const updatedProduct = result?.data ? normalizeProduct(result.data) : null;
+      const isEditing = Boolean(editingProduct);
+
+      if (updatedProduct) {
+        queryClient.setQueryData<Product[]>(ADMIN_PRODUCTS_QUERY_KEY, (oldData) =>
+          upsertProductInCache(oldData, updatedProduct, !isEditing)
+        );
+        queryClient.setQueryData<Product[]>(ADMIN_PRODUCTS_STATS_QUERY_KEY, (oldData) =>
+          upsertProductInCache(oldData, updatedProduct, !isEditing)
+        );
+      }
+
+      queryClient.invalidateQueries({ queryKey: ADMIN_PRODUCTS_QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: ADMIN_PRODUCTS_STATS_QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: PRODUCTS_QUERY_KEY });
+      notifyProductsUpdated();
       setShowModal(false);
       setEditingProduct(null);
       success(editingProduct ? "Produit modifié avec succès." : "Produit créé avec succès.");
@@ -103,26 +188,96 @@ export default function AdminProducts({ title }: AdminProductsProps) {
     },
   });
 
-  // Delete product mutation
-  const deleteMutation = useMutation({
-    mutationFn: async (id: string) => {
+  const availabilityMutation = useMutation({
+    mutationFn: async ({ id, isAvailable }: { id: string; isAvailable: boolean }) => {
       const response = await fetch(`/api/admin/products?id=${id}`, {
-        method: "DELETE",
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isAvailable }),
       });
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to delete product");
+        throw new Error(errorData.error || "Failed to update availability");
       }
-      return response.json();
+      const data = await response.json();
+      return data.data ? normalizeProduct(data.data) : null;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin-products"] });
-      queryClient.invalidateQueries({ queryKey: ["products"] });
-      success("Produit supprimé avec succès.");
+    onMutate: async ({ id, isAvailable }) => {
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: ADMIN_PRODUCTS_QUERY_KEY }),
+        queryClient.cancelQueries({ queryKey: ADMIN_PRODUCTS_STATS_QUERY_KEY }),
+        queryClient.cancelQueries({ queryKey: PRODUCTS_QUERY_KEY }),
+      ]);
+
+      const previousAdminProducts = queryClient.getQueryData<Product[]>(ADMIN_PRODUCTS_QUERY_KEY);
+      const previousAdminProductsStats = queryClient.getQueryData<Product[]>(ADMIN_PRODUCTS_STATS_QUERY_KEY);
+      const previousProducts = queryClient.getQueryData<Product[]>(PRODUCTS_QUERY_KEY);
+
+      queryClient.setQueryData<Product[]>(ADMIN_PRODUCTS_QUERY_KEY, (oldData) =>
+        updateAvailabilityInCache(oldData, id, isAvailable)
+      );
+      queryClient.setQueryData<Product[]>(ADMIN_PRODUCTS_STATS_QUERY_KEY, (oldData) =>
+        updateAvailabilityInCache(oldData, id, isAvailable)
+      );
+      queryClient.setQueryData<Product[]>(PRODUCTS_QUERY_KEY, (oldData) =>
+        updateAvailabilityInCache(oldData, id, isAvailable)
+      );
+
+      return {
+        previousAdminProducts,
+        previousAdminProductsStats,
+        previousProducts,
+      };
     },
-    onError: (mutationError) => {
+    onSuccess: (updatedProduct, variables) => {
+      if (updatedProduct) {
+        queryClient.setQueryData<Product[]>(ADMIN_PRODUCTS_QUERY_KEY, (oldData) =>
+          Array.isArray(oldData)
+            ? oldData.map((product) =>
+                product._id === updatedProduct._id ? updatedProduct : product
+              )
+            : oldData
+        );
+        queryClient.setQueryData<Product[]>(ADMIN_PRODUCTS_STATS_QUERY_KEY, (oldData) =>
+          Array.isArray(oldData)
+            ? oldData.map((product) =>
+                product._id === updatedProduct._id ? updatedProduct : product
+              )
+            : oldData
+        );
+        queryClient.setQueryData<Product[]>(PRODUCTS_QUERY_KEY, (oldData) =>
+          Array.isArray(oldData)
+            ? oldData.map((product) =>
+                product._id === updatedProduct._id ? updatedProduct : product
+              )
+            : oldData
+        );
+      }
+      success(
+        variables.isAvailable
+          ? "Produit rendu disponible."
+          : "Produit marqué hors stock."
+      );
+      notifyProductsUpdated();
+    },
+    onError: (mutationError, _variables, context) => {
+      if (context?.previousAdminProducts) {
+        queryClient.setQueryData(ADMIN_PRODUCTS_QUERY_KEY, context.previousAdminProducts);
+      }
+      if (context?.previousAdminProductsStats) {
+        queryClient.setQueryData(ADMIN_PRODUCTS_STATS_QUERY_KEY, context.previousAdminProductsStats);
+      }
+      if (context?.previousProducts) {
+        queryClient.setQueryData(PRODUCTS_QUERY_KEY, context.previousProducts);
+      }
+
       const message = mutationError instanceof Error ? mutationError.message : "Erreur inconnue";
       error(`Erreur: ${message}`);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ADMIN_PRODUCTS_QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: ADMIN_PRODUCTS_STATS_QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: PRODUCTS_QUERY_KEY });
     },
   });
 
@@ -131,8 +286,12 @@ export default function AdminProducts({ title }: AdminProductsProps) {
     setShowModal(true);
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = (_id: string) => {
     // This will be handled by the ProductTable component
+  };
+
+  const handleToggleAvailability = (id: string, isAvailable: boolean) => {
+    availabilityMutation.mutate({ id, isAvailable });
   };
 
   const handleFormSubmit = (data: any) => {
@@ -157,25 +316,30 @@ export default function AdminProducts({ title }: AdminProductsProps) {
       <div className="mb-6">
         <BackButton />
       </div>
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Gestion des Produits</h1>
-      </div>
-
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-gray-600 dark:text-gray-400">Gérez votre catalogue de produits</p>
-        <Button onClick={() => setShowModal(true)} className="bg-green-600 hover:bg-green-700">
+      <div className="mb-14 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Gestion des Produits</h1>
+          <p className="mt-2 text-gray-600 dark:text-gray-400">Gérez votre catalogue de produits</p>
+        </div>
+        <Button onClick={() => setShowModal(true)} className="shrink-0 bg-green-600 hover:bg-green-700">
           Ajouter un produit
         </Button>
       </div>
 
-      <Card padding="lg">
+      <div className={adminTableShellClassName}>
         <ProductTable
           products={Array.isArray(productsData) ? productsData : []}
-          globalPrice={globalPriceData?.pricePerM2 || 50}
+          priceSettings={{
+            pricePerM2: globalPriceData?.pricePerM2 || 50,
+            salePricePerM2: globalPriceData?.salePricePerM2,
+            isSaleActive: globalPriceData?.isSaleActive,
+          }}
           onEdit={handleEdit}
           onDelete={handleDelete}
+          onToggleAvailability={handleToggleAvailability}
+          isUpdatingAvailability={availabilityMutation.isPending}
         />
-      </Card>
+      </div>
 
       {/* Modal */}
       {showModal && (

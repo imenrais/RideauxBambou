@@ -54,7 +54,7 @@ export default function AdminReviews({ title }: AdminReviewsProps) {
   useEffect(() => {
     if (status === "loading") return;
     if (!session || session.user?.role !== "admin") {
-      router.push("/login");
+      router.push("/connexion");
     }
   }, [session, status, router]);
 
@@ -251,7 +251,12 @@ export default function AdminReviews({ title }: AdminReviewsProps) {
           </p>
         )}
         <form onSubmit={handleSubmit} className="space-y-6">
-          <ImageUpload value={form.image} onChange={(url) => setForm((prev) => ({ ...prev, image: url }))} />
+          <ImageUpload
+            value={form.image}
+            onChange={(url) => setForm((prev) => ({ ...prev, image: url }))}
+            previewFit="contain"
+            previewContainerClassName="h-72"
+          />
 
           <div className="grid grid-cols-1 gap-4">
             <Input
@@ -366,6 +371,8 @@ export default function AdminReviews({ title }: AdminReviewsProps) {
               <ImageUpload
                 value={editForm.image}
                 onChange={(url) => setEditForm((prev) => ({ ...prev, image: url }))}
+                previewFit="contain"
+                previewContainerClassName="h-72"
               />
               <Input
                 value={editForm.caption}

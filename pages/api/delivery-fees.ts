@@ -1,5 +1,6 @@
 import { NextApiRequest, NextApiResponse } from "next";
 import { getAllDeliveryFees, getDeliveryFeeByState } from "../../lib/delivery-fee-store";
+import { setPublicCacheHeaders } from "../../lib/api-cache";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method === "GET") {
@@ -22,6 +23,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       } else {
         // Get all fees
         const fees = await getAllDeliveryFees();
+        setPublicCacheHeaders(res, 300);
         return res.status(200).json({
           success: true,
           data: fees,

@@ -1,5 +1,5 @@
-import { useRouter } from "next/router";
 import { motion } from "framer-motion";
+import { useRouter } from "next/router";
 
 interface BackButtonProps {
   href?: string;
@@ -7,15 +7,16 @@ interface BackButtonProps {
   children?: React.ReactNode;
 }
 
-export default function BackButton({ href, className = "", children }: BackButtonProps) {
+export default function BackButton({ href: _href, className = "", children: _children }: BackButtonProps) {
   const router = useRouter();
 
   const handleBack = () => {
-    if (href) {
-      router.push(href);
-    } else {
+    const fallbackPath = router.pathname.startsWith("/admin") ? "/admin" : "/";
+    if (typeof window !== "undefined" && window.history.length > 1) {
       router.back();
+      return;
     }
+    router.push(fallbackPath);
   };
 
   return (

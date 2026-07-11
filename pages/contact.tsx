@@ -1,11 +1,15 @@
 import { motion } from "framer-motion";
 import { GetServerSideProps } from "next";
+import { useState } from "react";
 import { useToast } from "../contexts/ToastContext";
 
 import StandardLayout from "../components/layout/StandardLayout";
 import Button from "../components/ui/Button";
 import Card from "../components/ui/Card";
 import Input from "../components/ui/Input";
+import { getEmailValidationError, normalizeEmailValue } from "../lib/email-validation";
+import { formFieldLabelClass, formTextareaClass } from "../lib/form-field-styles";
+import { getPhoneValidationError, normalizePhoneValue } from "../lib/phone-validation";
 
 interface ContactProps {
   title: string;
@@ -13,8 +17,24 @@ interface ContactProps {
 
 export default function Contact({ title }: ContactProps) {
   const { success } = useToast();
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [emailError, setEmailError] = useState("");
+  const [phoneError, setPhoneError] = useState("");
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const normalizedEmail = normalizeEmailValue(email);
+    const normalizedPhone = normalizePhoneValue(phone);
+    const nextEmailError = getEmailValidationError(normalizedEmail, { required: true });
+    const nextPhoneError = getPhoneValidationError(normalizedPhone);
+    setEmail(normalizedEmail);
+    setPhone(normalizedPhone);
+    setEmailError(nextEmailError);
+    setPhoneError(nextPhoneError);
+    if (nextEmailError || nextPhoneError) {
+      return;
+    }
     // Handle form submission
     success("Merci pour votre message ! Nous vous contacterons bientôt.");
   };
@@ -46,50 +66,86 @@ export default function Contact({ title }: ContactProps) {
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                 <div>
-                  <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  <label className={formFieldLabelClass}>
                     Prénom
                   </label>
                   <Input type="text" name="firstName" required className="w-full" />
                 </div>
                 <div>
-                  <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  <label className={formFieldLabelClass}>
                     Nom
                   </label>
                   <Input type="text" name="lastName" required className="w-full" />
                 </div>
               </div>
               <div>
-                <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                <label className={formFieldLabelClass}>
                   Email
                 </label>
-                <Input type="email" name="email" required className="w-full" />
+                <Input
+                  type="email"
+                  name="email"
+                  value={email}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    if (emailError) {
+                      setEmailError(getEmailValidationError(e.target.value, { required: true }));
+                    }
+                  }}
+                  onBlur={() => {
+                    const normalizedEmail = normalizeEmailValue(email);
+                    setEmail(normalizedEmail);
+                    setEmailError(getEmailValidationError(normalizedEmail, { required: true }));
+                  }}
+                  error={emailError}
+                  required
+                  className="w-full"
+                />
               </div>
               <div>
-                <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                <label className={formFieldLabelClass}>
                   Téléphone
                 </label>
-                <Input type="tel" name="phone" className="w-full" />
+                <Input
+                  type="tel"
+                  name="phone"
+                  value={phone}
+                  onChange={(e) => {
+                    const normalizedPhone = normalizePhoneValue(e.target.value);
+                    setPhone(normalizedPhone);
+                    if (phoneError) {
+                      setPhoneError(getPhoneValidationError(normalizedPhone));
+                    }
+                  }}
+                  onBlur={() => setPhoneError(getPhoneValidationError(phone))}
+                  inputMode="numeric"
+                  maxLength={8}
+                  pattern="[0-9]*"
+                  error={phoneError}
+                  className="w-full"
+                />
               </div>
               <div>
-                <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                <label className={formFieldLabelClass}>
                   Sujet
                 </label>
                 <Input type="text" name="subject" required className="w-full" />
               </div>
               <div>
-                <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                <label className={formFieldLabelClass}>
                   Message
                 </label>
                 <textarea
                   name="message"
                   rows={6}
                   required
-                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                  className={formTextareaClass}
                   placeholder="Décrivez votre projet ou posez votre question..."
                 />
               </div>
               <Button
                 type="submit"
+                disabled={Boolean(emailError) || Boolean(phoneError)}
                 className="w-full bg-gray-900 hover:bg-gray-800 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100"
               >
                 Envoyer le Message
@@ -331,7 +387,7 @@ export default function Contact({ title }: ContactProps) {
                       clipRule="evenodd"
                     />
                   </svg>
-                  <span>Installation professionnelle</span>
+                  <span>Pose professionnelle</span>
                 </li>
               </ul>
             </Card>

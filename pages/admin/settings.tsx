@@ -29,7 +29,7 @@ export default function AdminSettings({ title }: AdminSettingsProps) {
   useEffect(() => {
     if (status === "loading") return;
     if (!session || session.user?.role !== "admin") {
-      void router.push("/login");
+      void router.push("/connexion");
     }
   }, [session, status, router]);
 

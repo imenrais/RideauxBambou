@@ -17,7 +17,7 @@ export async function requireAdminPage(
     const callbackUrl = encodeURIComponent(context.resolvedUrl || "/admin");
     return {
       redirect: {
-        destination: `/login?callbackUrl=${callbackUrl}`,
+        destination: `/connexion?callbackUrl=${callbackUrl}`,
         permanent: false,
       },
     };

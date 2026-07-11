@@ -2,6 +2,8 @@ import { NextApiRequest, NextApiResponse } from "next";
 import { getServerSession } from "next-auth";
 import { z } from "zod";
 
+import { requiredEmailSchema } from "../../../lib/email-validation";
+import { optionalPhoneSchema } from "../../../lib/phone-validation";
 import { prisma } from "../../../lib/prisma";
 import { authOptions } from "../auth/[...nextauth]";
 
@@ -9,8 +11,8 @@ const profileUpdateSchema = z.object({
   firstName: z.string().min(2, "First name must be at least 2 characters").optional(),
   lastName: z.string().min(2, "Last name must be at least 2 characters").optional(),
   name: z.string().min(2, "Name must be at least 2 characters").optional(),
-  email: z.string().email("Invalid email address").optional(),
-  phone: z.string().optional(),
+  email: requiredEmailSchema.optional(),
+  phone: optionalPhoneSchema.optional(),
   address: z.string().optional(),
   city: z.string().optional(),
   state: z.string().optional(),

@@ -23,12 +23,14 @@ model User {
 }
 
 model Product {
-  id        String   @id @default(cuid())
-  name      String   @unique
-  image     String
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id              String   @id @default(cuid())
+  name            String   @unique
+  image           String
+  isActive        Boolean  @default(true)
+  isAvailable     Boolean  @default(true)
+  supportsPanneau Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 }
 
 model Order {
@@ -48,12 +50,16 @@ model Order {
 }
 
 model Price {
-  id          String   @id @default(cuid())
-  pricePerM2  Float
-  lastUpdated DateTime @default(now())
-  updatedBy   String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id                String   @id @default(cuid())
+  pricePerM2        Float
+  salePricePerM2    Float?
+  isSaleActive      Boolean  @default(false)
+  panneauPrice100cm Float    @default(160)
+  panneauPrice130cm Float    @default(180)
+  lastUpdated       DateTime @default(now())
+  updatedBy         String
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 }
 
 model InstallationFee {
@@ -77,11 +83,50 @@ model DeliveryFee {
   updatedAt   DateTime @updatedAt
 }
 
+model DeliveryFeeSettings {
+  id                   String   @id @default("default")
+  isFreeDeliveryActive Boolean  @default(false)
+  feeBackup            Json?
+  lastUpdated          DateTime @default(now())
+  updatedBy            String   @default("system")
+}
+
 model Review {
   id        String   @id @default(cuid())
   image     String
   caption   String?
   order     Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model PanneauSettings {
+  id            String   @id @default("default")
+  fixedHeightCm Int      @default(220)
+  isSaleActive  Boolean  @default(false)
+  updatedBy     String   @default("system")
+  lastUpdated   DateTime @default(now())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model PanneauWidth {
+  id        String   @id @default(cuid())
+  widthCm   Int      @unique
+  label     String?
+  price     Float
+  salePrice Float?
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model PromoSubscriber {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  source    String   @default("newsletter")
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

@@ -4,6 +4,12 @@ import { prisma } from "./prisma";
 
 let cachedDeliveryFees: DeliveryFee[] | null = null;
 
+type DeliveryFeeBackupEntry = {
+  state: string;
+  stateCode: string;
+  fee: number;
+};
+
 const GOVERNORATES: Array<{ state: string; stateCode: string }> = [
   { state: "Ariana", stateCode: "AR" },
   { state: "Béja", stateCode: "BJ" },
@@ -58,44 +64,18 @@ const resolveStateInfo = (stateOrCode: string) => {
   };
 };
 
-export async function initializeDeliveryFees() {
-  const fees = await initializeStates(11, "system");
-  cachedDeliveryFees = fees;
-  console.log("Delivery fees initialized for all Tunisian states");
-}
-
-export async function getAllDeliveryFees() {
-  if (!cachedDeliveryFees) {
-    cachedDeliveryFees = await prisma.deliveryFee.findMany({
-      where: { isActive: true },
-      orderBy: { state: "asc" },
-    });
-  }
-  return cachedDeliveryFees;
-}
-
-export async function getDeliveryFeeByState(state: string) {
-  const resolved = resolveStateInfo(state);
-  return await prisma.deliveryFee.findFirst({
-    where: {
-      isActive: true,
-      OR: [
-        { state },
-        { stateCode: state },
-        { state: resolved.state },
-        { stateCode: resolved.stateCode },
-      ],
-    },
-  });
-}
-
-export async function updateDeliveryFee(state: string, fee: number, updatedBy: string) {
-  const resolved = resolveStateInfo(state);
+async function upsertDeliveryFeeAmount(
+  stateOrCode: string,
+  fee: number,
+  updatedBy: string,
+  options: { skipCacheRefresh?: boolean } = {}
+) {
+  const resolved = resolveStateInfo(stateOrCode);
   const existing = await prisma.deliveryFee.findFirst({
     where: {
       OR: [
-        { state },
-        { stateCode: state },
+        { state: stateOrCode },
+        { stateCode: stateOrCode },
         { state: resolved.state },
         { stateCode: resolved.stateCode },
       ],
@@ -124,15 +104,59 @@ export async function updateDeliveryFee(state: string, fee: number, updatedBy: s
         },
       });
 
-  // Update cache
-  if (cachedDeliveryFees) {
-    const index = cachedDeliveryFees.findIndex((f) => f.state === state || f.stateCode === state);
-    if (index !== -1) {
-      cachedDeliveryFees[index] = updatedFee;
-    } else {
-      cachedDeliveryFees.push(updatedFee);
-    }
+  if (!options.skipCacheRefresh) {
+    await refreshDeliveryFeesCache();
   }
+
+  return updatedFee;
+}
+
+export async function initializeDeliveryFees() {
+  const fees = await initializeStates(11, "system");
+  cachedDeliveryFees = fees;
+  console.log("Delivery fees initialized for all Tunisian states");
+}
+
+export async function getAllDeliveryFees() {
+  return refreshDeliveryFeesCache();
+}
+
+export async function getDeliveryFeeByState(state: string) {
+  const resolved = resolveStateInfo(state);
+  return await prisma.deliveryFee.findFirst({
+    where: {
+      isActive: true,
+      OR: [
+        { state },
+        { stateCode: state },
+        { state: resolved.state },
+        { stateCode: resolved.stateCode },
+      ],
+    },
+  });
+}
+
+export async function updateDeliveryFee(state: string, fee: number, updatedBy: string) {
+  const updatedFee = await upsertDeliveryFeeAmount(state, fee, updatedBy, { skipCacheRefresh: true });
+
+  if (fee > 0) {
+    await prisma.deliveryFeeSettings.upsert({
+      where: { id: "default" },
+      update: {
+        isFreeDeliveryActive: false,
+        updatedBy,
+        lastUpdated: new Date(),
+      },
+      create: {
+        id: "default",
+        isFreeDeliveryActive: false,
+        feeBackup: null,
+        updatedBy,
+      },
+    });
+  }
+
+  await refreshDeliveryFeesCache();
 
   return updatedFee;
 }
@@ -143,6 +167,145 @@ export async function refreshDeliveryFeesCache() {
     orderBy: { state: "asc" },
   });
   return cachedDeliveryFees;
+}
+
+export async function getDeliveryFeeSettings() {
+  const existing = await prisma.deliveryFeeSettings.findUnique({
+    where: { id: "default" },
+  });
+
+  if (existing) {
+    return existing;
+  }
+
+  return prisma.deliveryFeeSettings.create({
+    data: {
+      id: "default",
+      isFreeDeliveryActive: false,
+      feeBackup: null,
+      updatedBy: "system",
+    },
+  });
+}
+
+function buildDeliveryFeeBackup(fees: DeliveryFee[]): DeliveryFeeBackupEntry[] {
+  return GOVERNORATES.map((governorate) => {
+    const matchedFee = fees.find(
+      (fee) =>
+        fee.stateCode === governorate.stateCode ||
+        normalizeGovernorate(fee.state) === normalizeGovernorate(governorate.state)
+    );
+
+    return {
+      state: governorate.state,
+      stateCode: governorate.stateCode,
+      fee: matchedFee?.fee ?? 0,
+    };
+  });
+}
+
+function parseFeeBackup(value: unknown): DeliveryFeeBackupEntry[] | null {
+  if (!value) {
+    return null;
+  }
+
+  let parsed: unknown = value;
+  if (typeof parsed === "string") {
+    try {
+      parsed = JSON.parse(parsed);
+    } catch {
+      return null;
+    }
+  }
+
+  if (!Array.isArray(parsed) || parsed.length === 0) {
+    return null;
+  }
+
+  const entries = parsed.filter(
+    (entry): entry is DeliveryFeeBackupEntry =>
+      Boolean(entry) &&
+      typeof entry === "object" &&
+      typeof (entry as DeliveryFeeBackupEntry).stateCode === "string" &&
+      typeof (entry as DeliveryFeeBackupEntry).fee === "number"
+  );
+
+  return entries.length > 0 ? entries : null;
+}
+
+export async function makeAllDeliveryFeesFree(updatedBy: string) {
+  const currentFees = await refreshDeliveryFeesCache();
+  const backup = buildDeliveryFeeBackup(currentFees);
+
+  const settings = await prisma.deliveryFeeSettings.upsert({
+    where: { id: "default" },
+    update: {
+      isFreeDeliveryActive: true,
+      feeBackup: backup,
+      updatedBy,
+      lastUpdated: new Date(),
+    },
+    create: {
+      id: "default",
+      isFreeDeliveryActive: true,
+      feeBackup: backup,
+      updatedBy,
+    },
+  });
+
+  const savedBackup = parseFeeBackup(settings.feeBackup);
+  if (!savedBackup || savedBackup.length === 0) {
+    throw new Error("Impossible de sauvegarder les tarifs avant l'activation de la livraison gratuite.");
+  }
+
+  for (const governorate of GOVERNORATES) {
+    await upsertDeliveryFeeAmount(governorate.stateCode, 0, updatedBy, { skipCacheRefresh: true });
+  }
+
+  const fees = await refreshDeliveryFeesCache();
+
+  return { fees, settings };
+}
+
+export async function restoreDeliveryFeesFromBackup(updatedBy: string) {
+  const settings = await getDeliveryFeeSettings();
+  const backup = parseFeeBackup(settings.feeBackup);
+
+  if (!settings.isFreeDeliveryActive) {
+    const fees = await refreshDeliveryFeesCache();
+    return { fees, settings, restoredFromBackup: false };
+  }
+
+  if (!backup) {
+    const updatedSettings = await prisma.deliveryFeeSettings.update({
+      where: { id: "default" },
+      data: {
+        isFreeDeliveryActive: false,
+        updatedBy,
+        lastUpdated: new Date(),
+      },
+    });
+
+    const fees = await refreshDeliveryFeesCache();
+    return { fees, settings: updatedSettings, restoredFromBackup: false };
+  }
+
+  for (const entry of backup) {
+    await upsertDeliveryFeeAmount(entry.stateCode, entry.fee, updatedBy, { skipCacheRefresh: true });
+  }
+
+  const updatedSettings = await prisma.deliveryFeeSettings.update({
+    where: { id: "default" },
+    data: {
+      isFreeDeliveryActive: false,
+      updatedBy,
+      lastUpdated: new Date(),
+    },
+  });
+
+  const fees = await refreshDeliveryFeesCache();
+
+  return { fees, settings: updatedSettings, restoredFromBackup: true };
 }
 
 async function initializeStates(defaultFee: number = 11, updatedBy: string = "system") {

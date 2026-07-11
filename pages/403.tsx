@@ -76,7 +76,7 @@ export default function ForbiddenPage({ title }: ForbiddenPageProps) {
                   Go Home
                 </Link>
                 <Link
-                  href="/login"
+                  href="/connexion"
                   className="rounded-md bg-gray-600 px-4 py-2 text-white transition-colors hover:bg-gray-700"
                 >
                   Sign In

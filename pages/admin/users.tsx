@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { pageMainClass, pageShellClass } from "../../lib/design-system";
 import { motion } from "framer-motion";
 import { GetServerSideProps } from "next";
 import Head from "next/head";
@@ -13,8 +14,20 @@ import Card from "../../components/ui/Card";
 import Input from "../../components/ui/Input";
 import Loading from "../../components/ui/Loading";
 import PasswordInput from "../../components/ui/PasswordInput";
+import {
+  adminTableRoomySpacingClassName,
+  adminTableShellClassName,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "../../components/ui/Table";
 import { useToast } from "../../contexts/ToastContext";
 import { requireAdminPage } from "../../lib/admin-page-guard";
+import { formFieldLabelClass, formSelectClass } from "../../lib/form-field-styles";
+import { getEmailValidationError, normalizeEmailValue } from "../../lib/email-validation";
 import { checkPasswordStrength } from "../../lib/password-validation";
 
 interface AdminUsersProps {
@@ -31,7 +44,7 @@ export default function AdminUsers({ title }: AdminUsersProps) {
   const { data: session, status } = useSession();
   const router = useRouter();
   const queryClient = useQueryClient();
-  const [selectedRole, setSelectedRole] = useState("worker");
+  const [selectedRole] = useState("worker");
   const [currentPage, setCurrentPage] = useState(1);
   const [editingUser, setEditingUser] = useState<any>(null);
   const [newRole, setNewRole] = useState("");
@@ -53,13 +66,15 @@ export default function AdminUsers({ title }: AdminUsersProps) {
     role: "",
   });
   const [workerCreateError, setWorkerCreateError] = useState("");
+  const [workerCreateEmailError, setWorkerCreateEmailError] = useState("");
+  const [workerEditEmailError, setWorkerEditEmailError] = useState("");
   const { success, error } = useToast();
 
   // Redirect if not admin
   useEffect(() => {
     if (status === "loading") return;
     if (!session || session.user?.role !== "admin") {
-      router.push("/login");
+      router.push("/connexion");
     }
   }, [session, status, router]);
 
@@ -149,7 +164,7 @@ export default function AdminUsers({ title }: AdminUsersProps) {
         role: "",
       });
       setWorkerCreateError("");
-      success("Compte travailleur créé avec succès.");
+      success("Compte employé créé avec succès.");
     },
     onError: (mutationError) => {
       const message = mutationError instanceof Error ? mutationError.message : "Erreur inconnue";
@@ -190,7 +205,7 @@ export default function AdminUsers({ title }: AdminUsersProps) {
         confirmPassword: "",
         role: "",
       });
-      success("Compte travailleur mis à jour.");
+      success("Compte employé mis à jour.");
     },
     onError: (mutationError) => {
       const message = mutationError instanceof Error ? mutationError.message : "Erreur inconnue";
@@ -211,7 +226,7 @@ export default function AdminUsers({ title }: AdminUsersProps) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-users"] });
-      success("Compte travailleur supprimé avec succès.");
+      success("Compte employé supprimé avec succès.");
     },
     onError: (mutationError) => {
       const message = mutationError instanceof Error ? mutationError.message : "Erreur inconnue";
@@ -223,6 +238,15 @@ export default function AdminUsers({ title }: AdminUsersProps) {
     e.preventDefault();
     setWorkerCreateError("");
     const normalizedRole = workerForm.role.trim().toLowerCase();
+    const normalizedEmail = normalizeEmailValue(workerForm.email);
+    const emailValidationError = getEmailValidationError(normalizedEmail, { required: true });
+    setWorkerForm((prev) => ({ ...prev, email: normalizedEmail }));
+    setWorkerCreateEmailError(emailValidationError);
+    if (emailValidationError) {
+      setWorkerCreateError(emailValidationError);
+      return;
+    }
+
     if (!normalizedRole) {
       setWorkerCreateError("Le rôle est requis.");
       error("Le rôle est requis.");
@@ -243,7 +267,7 @@ export default function AdminUsers({ title }: AdminUsersProps) {
     const payload = {
       firstName: workerForm.firstName.trim(),
       lastName: workerForm.lastName.trim(),
-      email: workerForm.email.trim().toLowerCase(),
+      email: normalizedEmail,
       role: normalizedRole,
       password: workerForm.password,
     };
@@ -254,7 +278,7 @@ export default function AdminUsers({ title }: AdminUsersProps) {
 
   const handleDeleteWorker = (userId: string, userName: string) => {
     const confirmed = window.confirm(
-      `Supprimer le compte travailleur "${userName}" ? Cette action est irreversible.`
+      `Supprimer le compte employé "${userName}" ? Cette action est irréversible.`
     );
     if (!confirmed) {
       return;
@@ -273,6 +297,7 @@ export default function AdminUsers({ title }: AdminUsersProps) {
       confirmPassword: "",
       role: "",
     });
+    setWorkerEditEmailError("");
   };
 
   const handleWorkerEditSubmit = () => {
@@ -290,8 +315,14 @@ export default function AdminUsers({ title }: AdminUsersProps) {
     const payload: { firstName: string; lastName: string; email: string; role?: string; password?: string } = {
       firstName: workerEditForm.firstName.trim(),
       lastName: workerEditForm.lastName.trim(),
-      email: workerEditForm.email.trim().toLowerCase(),
+      email: normalizeEmailValue(workerEditForm.email),
     };
+    const emailValidationError = getEmailValidationError(payload.email, { required: true });
+    setWorkerEditEmailError(emailValidationError);
+    if (emailValidationError) {
+      error(emailValidationError);
+      return;
+    }
 
     const normalizedRole = workerEditForm.role.trim().toLowerCase();
     if (normalizedRole) {
@@ -320,12 +351,12 @@ export default function AdminUsers({ title }: AdminUsersProps) {
         <meta name="description" content="Manage Users - Rideaux Bambou Admin" />
       </Head>
 
-      <div className="min-h-screen bg-white dark:bg-gray-900">
+      <div className={pageShellClass}>
         {/* Navigation */}
         <AdminNavigation />
 
         {/* Main Content */}
-        <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        <main className={pageMainClass}>
           <div className="mb-6">
             <BackButton href="/admin" />
           </div>
@@ -337,13 +368,13 @@ export default function AdminUsers({ title }: AdminUsersProps) {
           >
             {/* Header */}
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Gérer les Travailleurs</h2>
+              <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Gestion des Employés</h1>
             </div>
 
             {/* Worker account creation */}
             <Card className="mx-auto w-full max-w-5xl p-4 sm:p-6">
               <h3 className="mb-2 text-lg font-semibold text-gray-900 dark:text-white">
-                Créer un compte travailleur
+                Créer un compte employé
               </h3>
               <p className="mb-4 text-sm text-gray-600 dark:text-gray-400">
                 Cette création est réservée aux employés internes.
@@ -379,7 +410,23 @@ export default function AdminUsers({ title }: AdminUsersProps) {
                   label="Email"
                   placeholder="Email professionnel"
                   value={workerForm.email}
-                  onChange={(e) => setWorkerForm((prev) => ({ ...prev, email: e.target.value }))}
+                  onChange={(e) => {
+                    const nextEmail = e.target.value;
+                    setWorkerForm((prev) => ({ ...prev, email: nextEmail }));
+                    if (workerCreateEmailError) {
+                      setWorkerCreateEmailError(
+                        getEmailValidationError(nextEmail, { required: true })
+                      );
+                    }
+                  }}
+                  onBlur={() => {
+                    const normalizedEmail = normalizeEmailValue(workerForm.email);
+                    setWorkerForm((prev) => ({ ...prev, email: normalizedEmail }));
+                    setWorkerCreateEmailError(
+                      getEmailValidationError(normalizedEmail, { required: true })
+                    );
+                  }}
+                  error={workerCreateEmailError}
                   autoComplete="off"
                   className="h-9 py-1.5 text-sm"
                   required
@@ -419,6 +466,7 @@ export default function AdminUsers({ title }: AdminUsersProps) {
                   <Button
                     type="submit"
                     loading={createWorkerMutation.isPending}
+                    disabled={createWorkerMutation.isPending || Boolean(workerCreateEmailError)}
                     className="w-full sm:min-w-[230px] sm:w-auto"
                   >
                     {createWorkerMutation.isPending ? "Création..." : "Créer compte"}
@@ -432,27 +480,8 @@ export default function AdminUsers({ title }: AdminUsersProps) {
               </form>
             </Card>
 
-            {/* Stats Cards */}
-            {usersData?.stats && (
-              <div className="grid grid-cols-1 gap-6 md:grid-cols-1">
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.8, delay: 0.1 }}
-                  className="rounded-lg bg-white p-6 text-center shadow-lg dark:bg-gray-800"
-                >
-                  <h3 className="mb-1 text-lg font-semibold text-gray-900 dark:text-white">
-                    Travailleurs
-                  </h3>
-                  <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">
-                    {workers.length}
-                  </p>
-                </motion.div>
-              </div>
-            )}
-
             {/* Users Table */}
-            <div className="overflow-hidden rounded-lg bg-white shadow-lg dark:bg-gray-800">
+            <div className={adminTableShellClassName}>
               {isLoading ? (
                 <div className="p-8 text-center">
                   <div className="mx-auto h-8 w-8 animate-spin rounded-full border-b-2 border-green-600"></div>
@@ -518,102 +547,90 @@ export default function AdminUsers({ title }: AdminUsersProps) {
                       </div>
                     ))}
                   </div>
-                  <div className="hidden overflow-x-auto md:block">
-                    <table className="w-max min-w-full table-auto divide-y divide-gray-200 [&_td]:px-3 [&_th]:px-3 [&_th]:font-semibold [&_th]:tracking-wide sm:[&_td]:px-6 sm:[&_th]:px-6 dark:divide-gray-700">
-                    <thead className="bg-gray-50 dark:bg-gray-700">
-                      <tr>
-                        <th className="whitespace-nowrap px-6 py-3 text-center text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-300">
-                          Utilisateur
-                        </th>
-                        <th className="whitespace-nowrap px-6 py-3 text-center text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-300">
-                          Email
-                        </th>
-                        <th className="whitespace-nowrap px-6 py-3 text-center text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-300">
-                          Rôle
-                        </th>
-                        <th className="whitespace-nowrap px-6 py-3 text-center text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-300">
-                          Inscrit le
-                        </th>
-                        <th className="whitespace-nowrap px-6 py-3 text-center text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-300">
-                          Actions
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-800">
-                      {workers.map((user: any) => (
-                        <tr key={user._id}>
-                          <td className="whitespace-nowrap px-6 py-4 text-center">
-                            <div className="flex items-center justify-center">
-                              <div className="h-10 w-10 flex-shrink-0">
-                                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-200 dark:bg-gray-600">
-                                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                                    {user.name.charAt(0).toUpperCase()}
-                                  </span>
+                  <div className="hidden md:block">
+                    <Table className={adminTableRoomySpacingClassName}>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Utilisateur</TableHead>
+                          <TableHead>Email</TableHead>
+                          <TableHead>Rôle</TableHead>
+                          <TableHead>Inscrit le</TableHead>
+                          <TableHead>Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {workers.map((user: any) => (
+                          <TableRow key={user._id}>
+                            <TableCell>
+                              <div className="flex items-center justify-center">
+                                <div className="h-10 w-10 flex-shrink-0">
+                                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-200 dark:bg-gray-600">
+                                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                      {user.name.charAt(0).toUpperCase()}
+                                    </span>
+                                  </div>
+                                </div>
+                                <div className="ml-4 text-left">
+                                  <div className="font-medium text-gray-900 dark:text-white">
+                                    {user.name}
+                                  </div>
+                                  <div className="text-sm text-gray-500 dark:text-gray-400">
+                                    ID: {user._id.slice(-8)}
+                                  </div>
                                 </div>
                               </div>
-                              <div className="ml-4">
-                                <div className="text-sm font-medium text-gray-900 dark:text-white">
-                                  {user.name}
-                                </div>
-                                <div className="text-sm text-gray-500 dark:text-gray-400">
-                                  ID: {user._id.slice(-8)}
-                                </div>
+                            </TableCell>
+                            <TableCell>{user.email}</TableCell>
+                            <TableCell>
+                              <span
+                                className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${roleColors[user.role as keyof typeof roleColors]}`}
+                              >
+                                {user.role.toUpperCase()}
+                              </span>
+                            </TableCell>
+                            <TableCell className="text-gray-500 dark:text-gray-400">
+                              {new Date(user.createdAt).toLocaleDateString()}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex flex-wrap items-center justify-center gap-2">
+                                {user._id !== session.user?.id && (
+                                  <Button
+                                    onClick={() => {
+                                      setEditingUser(user);
+                                      setNewRole(user.role);
+                                    }}
+                                    variant="ghost"
+                                    size="sm"
+                                  >
+                                    Changer le Rôle
+                                  </Button>
+                                )}
+                                {user.role === "worker" && (
+                                  <>
+                                    <Button
+                                      onClick={() => handleOpenWorkerEdit(user)}
+                                      variant="secondary"
+                                      size="sm"
+                                    >
+                                      Modifier
+                                    </Button>
+                                    <Button
+                                      onClick={() => handleDeleteWorker(user._id, user.name)}
+                                      variant="danger"
+                                      size="sm"
+                                      disabled={deleteWorkerMutation.isPending}
+                                      loading={deleteWorkerMutation.isPending}
+                                    >
+                                      Supprimer
+                                    </Button>
+                                  </>
+                                )}
                               </div>
-                            </div>
-                          </td>
-                          <td className="whitespace-nowrap px-6 py-4 text-center text-sm text-gray-900 dark:text-white">
-                            {user.email}
-                          </td>
-                          <td className="whitespace-nowrap px-6 py-4 text-center">
-                            <span
-                              className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${roleColors[user.role as keyof typeof roleColors]}`}
-                            >
-                              {user.role.toUpperCase()}
-                            </span>
-                          </td>
-                          <td className="whitespace-nowrap px-6 py-4 text-center text-sm text-gray-500 dark:text-gray-400">
-                            {new Date(user.createdAt).toLocaleDateString()}
-                          </td>
-                          <td className="whitespace-nowrap px-6 py-4 text-center text-sm font-medium">
-                            <div className="flex items-center justify-center gap-2">
-                              {user._id !== session.user?.id && (
-                                <Button
-                                  onClick={() => {
-                                    setEditingUser(user);
-                                    setNewRole(user.role);
-                                  }}
-                                  variant="ghost"
-                                  size="sm"
-                                >
-                                  Changer le Rôle
-                                </Button>
-                              )}
-                              {user.role === "worker" && (
-                                <>
-                                  <Button
-                                    onClick={() => handleOpenWorkerEdit(user)}
-                                    variant="secondary"
-                                    size="sm"
-                                  >
-                                    Modifier
-                                  </Button>
-                                  <Button
-                                    onClick={() => handleDeleteWorker(user._id, user.name)}
-                                    variant="danger"
-                                    size="sm"
-                                    disabled={deleteWorkerMutation.isPending}
-                                    loading={deleteWorkerMutation.isPending}
-                                  >
-                                    Supprimer
-                                  </Button>
-                                </>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                    </table>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
                   </div>
                 </>
               )}
@@ -689,7 +706,7 @@ export default function AdminUsers({ title }: AdminUsersProps) {
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-3">
             <div className="w-full max-w-md rounded-lg bg-white p-5 dark:bg-gray-800 sm:p-6">
               <h3 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
-                Changer le Rôle de l'Utilisateur
+                Changer le Rôle de l&apos;Utilisateur
               </h3>
 
               <div className="space-y-4">
@@ -701,16 +718,16 @@ export default function AdminUsers({ title }: AdminUsersProps) {
                 </div>
 
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  <label className={formFieldLabelClass}>
                     Nouveau Rôle
                   </label>
                   <select
                     value={newRole}
                     onChange={(e) => setNewRole(e.target.value)}
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-transparent focus:ring-2 focus:ring-green-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                    className={formSelectClass}
                   >
                     <option value="user">Utilisateur</option>
-                    <option value="worker">Travailleur</option>
+                    <option value="worker">Employé</option>
                     <option value="admin">Administrateur</option>
                   </select>
                 </div>
@@ -737,7 +754,7 @@ export default function AdminUsers({ title }: AdminUsersProps) {
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-3">
             <div className="w-full max-w-md rounded-lg bg-white p-5 dark:bg-gray-800 sm:p-6">
               <h3 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
-                Modifier le compte travailleur
+                Modifier le compte employé
               </h3>
 
               <div className="space-y-4">
@@ -769,9 +786,21 @@ export default function AdminUsers({ title }: AdminUsersProps) {
                   label="Email"
                   placeholder="Email"
                   value={workerEditForm.email}
-                  onChange={(e) =>
-                    setWorkerEditForm((prev) => ({ ...prev, email: e.target.value }))
-                  }
+                  onChange={(e) => {
+                    const nextEmail = e.target.value;
+                    setWorkerEditForm((prev) => ({ ...prev, email: nextEmail }));
+                    if (workerEditEmailError) {
+                      setWorkerEditEmailError(getEmailValidationError(nextEmail, { required: true }));
+                    }
+                  }}
+                  onBlur={() => {
+                    const normalizedEmail = normalizeEmailValue(workerEditForm.email);
+                    setWorkerEditForm((prev) => ({ ...prev, email: normalizedEmail }));
+                    setWorkerEditEmailError(
+                      getEmailValidationError(normalizedEmail, { required: true })
+                    );
+                  }}
+                  error={workerEditEmailError}
                   autoComplete="off"
                   className="h-9 max-w-sm py-1.5 text-sm"
                 />
@@ -818,7 +847,7 @@ export default function AdminUsers({ title }: AdminUsersProps) {
                   </Button>
                   <Button
                     onClick={handleWorkerEditSubmit}
-                    disabled={updateWorkerMutation.isPending}
+                    disabled={updateWorkerMutation.isPending || Boolean(workerEditEmailError)}
                     loading={updateWorkerMutation.isPending}
                   >
                     {updateWorkerMutation.isPending ? "Mise à jour..." : "Enregistrer"}
@@ -834,4 +863,4 @@ export default function AdminUsers({ title }: AdminUsersProps) {
 }
 
 export const getServerSideProps: GetServerSideProps = async (context) =>
-  requireAdminPage(context, "Gérer les Utilisateurs - Rideaux Bambou Admin");
+  requireAdminPage(context, "Gestion des Employés - Rideaux Bambou Admin");

@@ -7,6 +7,8 @@ import { useState } from "react";
 import BackButton from "../components/BackButton";
 import StandardLayout from "../components/layout/StandardLayout";
 import Input from "../components/ui/Input";
+import { authCardClass, authContentClass } from "../lib/design-system";
+import { getEmailValidationError, normalizeEmailValue } from "../lib/email-validation";
 
 interface ForgotPasswordPageProps {
   title: string;
@@ -16,6 +18,7 @@ export default function ForgotPasswordPage({ title }: ForgotPasswordPageProps) {
   const [email, setEmail] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const [emailError, setEmailError] = useState("");
   const [success, setSuccess] = useState(false);
   const [resetUrl, setResetUrl] = useState("");
 
@@ -26,13 +29,22 @@ export default function ForgotPasswordPage({ title }: ForgotPasswordPageProps) {
     setSuccess(false);
     setResetUrl("");
 
+    const normalizedEmail = normalizeEmailValue(email);
+    const validationError = getEmailValidationError(normalizedEmail, { required: true });
+    setEmail(normalizedEmail);
+    setEmailError(validationError);
+    if (validationError) {
+      setIsLoading(false);
+      return;
+    }
+
     try {
       const response = await fetch("/api/auth/forgot-password", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email: normalizedEmail }),
       });
 
       const data = await response.json();
@@ -55,10 +67,10 @@ export default function ForgotPasswordPage({ title }: ForgotPasswordPageProps) {
 
   return (
     <StandardLayout title={title} description="Réinitialiser votre mot de passe">
-      <div className="-mx-4 -my-8 min-h-screen bg-white px-4 py-8 dark:bg-gray-900">
+      <div className={authContentClass}>
         {/* Back Button and Main Content */}
         <div className="px-4 py-6 sm:px-6 sm:py-8">
-          <BackButton href="/login" />
+          <BackButton href="/connexion" />
 
           {/* Main Content */}
           <main className="mx-auto w-full max-w-md px-0 pb-12 sm:px-6">
@@ -66,7 +78,7 @@ export default function ForgotPasswordPage({ title }: ForgotPasswordPageProps) {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.8, delay: 0.2 }}
-              className="rounded-3xl border border-gray-200/50 bg-white/80 p-6 shadow-2xl ring-1 ring-gray-200/20 backdrop-blur-sm sm:p-8 dark:border-gray-700/50 dark:bg-gray-800/80 dark:ring-gray-700/20"
+              className={authCardClass}
             >
               {/* Header */}
               <div className="mb-8 text-center">
@@ -156,14 +168,25 @@ export default function ForgotPasswordPage({ title }: ForgotPasswordPageProps) {
                   label="Adresse email"
                   placeholder="votre@email.com"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    if (emailError) {
+                      setEmailError(getEmailValidationError(e.target.value, { required: true }));
+                    }
+                  }}
+                  onBlur={() => {
+                    const normalizedEmail = normalizeEmailValue(email);
+                    setEmail(normalizedEmail);
+                    setEmailError(getEmailValidationError(normalizedEmail, { required: true }));
+                  }}
+                  error={emailError}
                   required
                   autoComplete="email"
                 />
 
                 <motion.button
                   type="submit"
-                  disabled={isLoading}
+                  disabled={isLoading || Boolean(emailError)}
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                   className="w-full rounded-lg bg-gradient-to-r from-green-600 to-green-700 px-4 py-3 font-medium text-white transition-all duration-200 hover:from-green-700 hover:to-green-800 disabled:cursor-not-allowed disabled:opacity-50"
@@ -202,7 +225,7 @@ export default function ForgotPasswordPage({ title }: ForgotPasswordPageProps) {
                 <p className="text-gray-600 dark:text-gray-400">
                   Vous avez votre mot de passe?{" "}
                   <Link
-                    href="/login"
+                    href="/connexion"
                     className="text-green-600 hover:underline dark:text-green-400"
                   >
                     Se connecter

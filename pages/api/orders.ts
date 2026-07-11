@@ -1,10 +1,13 @@
+import { Prisma } from "@prisma/client";
 import { NextApiRequest, NextApiResponse } from "next";
 import { z } from "zod";
-import { Prisma } from "@prisma/client";
 
 import { requireAuth } from "../../lib/auth-helpers";
 import { getAllDeliveryFees } from "../../lib/delivery-fee-store";
 import { sendAdminOrderNotificationEmail, sendOrderConfirmationEmail } from "../../lib/email";
+import { optionalEmailSchema } from "../../lib/email-validation";
+import { subscribePromoEmail } from "../../lib/promo-subscriber-store";
+import { requiredPhoneSchema } from "../../lib/phone-validation";
 import { prisma } from "../../lib/prisma";
 
 // Validation schema for cart checkout
@@ -29,8 +32,8 @@ const createOrderSchema = z.object({
   customerInfo: z.object({
     firstName: z.string().min(2, "First name must be at least 2 characters"),
     lastName: z.string().min(2, "Last name must be at least 2 characters"),
-    email: z.union([z.string().email("Invalid email"), z.literal("")]).optional(),
-    phone: z.string().min(8, "Phone must be at least 8 characters"),
+    email: optionalEmailSchema.optional(),
+    phone: requiredPhoneSchema,
     address: z.string().min(10, "Address must be at least 10 characters"),
     city: z.string().min(2, "City must be at least 2 characters"),
     state: z.string().min(2, "State must be at least 2 characters"),
@@ -39,7 +42,7 @@ const createOrderSchema = z.object({
   }),
   totalAmount: z.number().min(0, "Total amount must be positive"),
   deliveryFee: z.number().min(0, "Delivery fee must be positive"),
-  installationFee: z.number().min(0, "Installation fee must be positive"),
+  installationFee: z.number().min(0, "Les frais de pose doivent être positifs"),
   wantsInstallation: z.boolean(),
 });
 
@@ -91,7 +94,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       const { items, customerInfo, totalAmount, deliveryFee, installationFee, wantsInstallation } =
         validationResult.data;
-      const customerEmail = customerInfo.email?.trim() || "";
+      const customerEmail = customerInfo.email || "";
+
+      const productIds = Array.from(new Set(items.map((item) => item.curtainTypeId)));
+      const validProducts = await prisma.product.findMany({
+        where: {
+          id: { in: productIds },
+          isActive: true,
+          isAvailable: true,
+        },
+        select: { id: true },
+      });
+      const validProductIds = new Set(validProducts.map((product) => product.id));
+      const unavailableItem = items.find((item) => !validProductIds.has(item.curtainTypeId));
+
+      if (unavailableItem) {
+        return res.status(400).json({
+          success: false,
+          error: "Un des produits sélectionnés est hors stock ou indisponible.",
+        });
+      }
 
       const deliveryFees = await getAllDeliveryFees();
       const normalizedState = normalizeGovernorate(customerInfo.state);
@@ -134,61 +156,70 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         data: orderPayload,
       });
 
+      if (customerEmail) {
+        try {
+          await subscribePromoEmail(customerEmail, "order");
+        } catch (subscribeError) {
+          console.error("Promo subscription error:", subscribeError);
+        }
+      }
+
       let customerEmailSent = false;
 
-      // Send customer confirmation + admin notification emails
-      try {
-        const adminUsers = await prisma.user.findMany({
-          where: { role: "admin" },
-          select: { email: true },
-        });
-        const adminRecipients = adminUsers
-          .map((adminUser) => adminUser.email?.trim())
-          .filter((email): email is string => Boolean(email));
+      void (async () => {
+        try {
+          const adminUsers = await prisma.user.findMany({
+            where: { role: "admin" },
+            select: { email: true },
+          });
+          const adminRecipients = adminUsers
+            .map((adminUser) => adminUser.email?.trim())
+            .filter((email): email is string => Boolean(email));
 
-        const orderData = {
-          orderId: createdOrder.id,
-          items: items.map((item) => ({
-            name: item.curtainTypeName,
-            quantity: 1,
-            price: item.totalCost,
-            dimensions: `${item.width}cm x ${item.height}cm`,
-          })),
-          installationFee: resolvedInstallationFee,
-          deliveryFee: resolvedDeliveryFee,
-          wantsInstallation,
-          totalAmount: resolvedTotalAmount,
-          shippingAddress: {
-            street: customerInfo.address,
-            city: customerInfo.city,
-            postalCode: customerInfo.postalCode,
-            country: "Tunisie",
-          },
-          orderDate: new Date().toISOString(),
-        };
+          const orderData = {
+            orderId: createdOrder.id,
+            items: items.map((item) => ({
+              name: item.curtainTypeName,
+              quantity: 1,
+              price: item.totalCost,
+              dimensions: `${item.width}cm x ${item.height}cm`,
+            })),
+            installationFee: resolvedInstallationFee,
+            deliveryFee: resolvedDeliveryFee,
+            wantsInstallation,
+            totalAmount: resolvedTotalAmount,
+            shippingAddress: {
+              street: customerInfo.address,
+              city: customerInfo.city,
+              postalCode: customerInfo.postalCode,
+              country: "Tunisie",
+            },
+            orderDate: new Date().toISOString(),
+          };
 
-        if (customerEmail) {
-          const customerEmailResult = await sendOrderConfirmationEmail(
-            customerEmail,
-            `${customerInfo.firstName} ${customerInfo.lastName}`,
-            orderData
-          );
-          customerEmailSent = customerEmailResult.success;
+          if (customerEmail) {
+            const customerEmailResult = await sendOrderConfirmationEmail(
+              customerEmail,
+              `${customerInfo.firstName} ${customerInfo.lastName}`,
+              orderData
+            );
+            customerEmailSent = customerEmailResult.success;
+          }
+
+          await sendAdminOrderNotificationEmail({
+            orderId: createdOrder.id,
+            customerName: `${customerInfo.firstName} ${customerInfo.lastName}`,
+            customerEmail: customerInfo.email || "Non renseigné",
+            customerPhone: customerInfo.phone,
+            totalAmount: resolvedTotalAmount,
+            itemCount: items.length,
+            createdAt: new Date().toISOString(),
+            recipients: adminRecipients,
+          });
+        } catch (emailError) {
+          console.error("Order email notification error:", emailError);
         }
-
-        await sendAdminOrderNotificationEmail({
-          orderId: createdOrder.id,
-          customerName: `${customerInfo.firstName} ${customerInfo.lastName}`,
-          customerEmail: customerInfo.email || "Non renseigné",
-          customerPhone: customerInfo.phone,
-          totalAmount: resolvedTotalAmount,
-          itemCount: items.length,
-          createdAt: new Date().toISOString(),
-          recipients: adminRecipients,
-        });
-      } catch (emailError) {
-        console.error("Order email notification error:", emailError);
-      }
+      })();
 
       return res.status(201).json({
         success: true,

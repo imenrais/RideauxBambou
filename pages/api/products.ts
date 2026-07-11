@@ -1,11 +1,40 @@
 import { NextApiRequest, NextApiResponse } from "next";
+
 import { prisma } from "../../lib/prisma";
+import { setPublicCacheHeaders } from "../../lib/api-cache";
 
 interface ProductResponse {
   success: boolean;
   data?: any[];
   error?: string;
 }
+
+const normalizeAvailability = (value: unknown) => {
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === "false" || normalized === "0") {
+      return false;
+    }
+    if (normalized === "true" || normalized === "1") {
+      return true;
+    }
+  }
+
+  if (typeof value === "number") {
+    if (value === 0) {
+      return false;
+    }
+    if (value === 1) {
+      return true;
+    }
+  }
+
+  return true;
+};
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse<ProductResponse>) {
   if (req.method !== "GET") {
@@ -19,6 +48,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     const products = await prisma.product.findMany({
       where: { isActive: true },
       orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        name: true,
+        image: true,
+        isAvailable: true,
+        supportsPanneau: true,
+        createdAt: true,
+      },
     });
 
     // Transform the data to match the expected format
@@ -26,8 +63,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       _id: product.id,
       name: product.name,
       image: product.image,
+      isAvailable: normalizeAvailability(product.isAvailable),
+      supportsPanneau: product.supportsPanneau === true,
       createdAt: product.createdAt,
     }));
+
+    setPublicCacheHeaders(res, 60);
 
     return res.status(200).json({
       success: true,

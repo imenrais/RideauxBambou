@@ -4,16 +4,23 @@ import {
   getAllDeliveryFees,
   updateDeliveryFee,
   refreshDeliveryFeesCache,
+  makeAllDeliveryFeesFree,
+  restoreDeliveryFeesFromBackup,
+  getDeliveryFeeSettings,
 } from "../../../lib/delivery-fee-store";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method === "GET") {
     return requireAdmin(async (_req: NextApiRequest, res: NextApiResponse, _user) => {
       try {
-        const fees = await getAllDeliveryFees();
+        const [fees, settings] = await Promise.all([getAllDeliveryFees(), getDeliveryFeeSettings()]);
         return res.status(200).json({
           success: true,
           data: fees,
+          meta: {
+            isFreeDeliveryActive: settings.isFreeDeliveryActive,
+            hasBackup: Array.isArray(settings.feeBackup) && settings.feeBackup.length > 0,
+          },
         });
       } catch (error) {
         console.error("Error fetching delivery fees:", error);
@@ -38,10 +45,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
 
         const updatedFee = await updateDeliveryFee(state, fee, user.email);
+        const settings = await getDeliveryFeeSettings();
 
         return res.status(200).json({
           success: true,
           data: updatedFee,
+          meta: {
+            isFreeDeliveryActive: settings.isFreeDeliveryActive,
+          },
         });
       } catch (error) {
         console.error("Error updating delivery fee:", error);
@@ -67,15 +78,48 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           });
         }
 
+        if (action === "make-all-free") {
+          const result = await makeAllDeliveryFeesFree(user.email);
+          return res.status(200).json({
+            success: true,
+            data: result.fees,
+            meta: {
+              isFreeDeliveryActive: result.settings.isFreeDeliveryActive,
+              hasBackup: Array.isArray(result.settings.feeBackup) && result.settings.feeBackup.length > 0,
+            },
+            message: "All delivery fees set to free",
+          });
+        }
+
+        if (action === "restore-from-backup") {
+          const result = await restoreDeliveryFeesFromBackup(user.email);
+          const hasBackup =
+            Array.isArray(result.settings.feeBackup) && result.settings.feeBackup.length > 0;
+          return res.status(200).json({
+            success: true,
+            data: result.fees,
+            meta: {
+              isFreeDeliveryActive: result.settings.isFreeDeliveryActive,
+              hasBackup,
+              restoredFromBackup: result.restoredFromBackup,
+            },
+            message: result.restoredFromBackup
+              ? "Delivery fees restored from backup"
+              : "Free delivery deactivated without backup restore",
+          });
+        }
+
         return res.status(400).json({
           success: false,
           error: "Invalid action",
         });
       } catch (error) {
         console.error("Error refreshing delivery fees:", error);
+        const message =
+          error instanceof Error ? error.message : "Failed to refresh delivery fees";
         return res.status(500).json({
           success: false,
-          error: "Failed to refresh delivery fees",
+          error: message,
         });
       }
     })(req, res);

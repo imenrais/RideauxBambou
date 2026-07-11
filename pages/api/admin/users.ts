@@ -1,15 +1,15 @@
 import { NextApiRequest, NextApiResponse } from "next";
-import validator from "validator";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
 import { requireAdmin } from "../../../lib/auth-helpers";
+import { optionalEmailSchema, requiredEmailSchema } from "../../../lib/email-validation";
 import { strongPasswordSchema } from "../../../lib/password-validation";
 import { prisma } from "../../../lib/prisma";
 
 const createWorkerSchema = z.object({
   firstName: z.string().min(2, "Le prénom doit contenir au moins 2 caractères"),
   lastName: z.string().min(2, "Le nom doit contenir au moins 2 caractères"),
-  email: z.string().email("Email invalide"),
+  email: requiredEmailSchema,
   role: z
     .string()
     .min(1, "Le rôle est requis")
@@ -26,7 +26,7 @@ const updateUserSchema = z
       .optional(),
     firstName: z.string().min(2, "Le prénom doit contenir au moins 2 caractères").optional(),
     lastName: z.string().min(2, "Le nom doit contenir au moins 2 caractères").optional(),
-    email: z.string().email("Email invalide").optional(),
+    email: optionalEmailSchema.optional(),
     password: strongPasswordSchema.optional(),
   })
   .refine((data) => Object.keys(data).length > 0, {
@@ -46,15 +46,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
 
         const { firstName, lastName, email, role, password } = validationResult.data;
-        const sanitizedEmail = validator.normalizeEmail(email);
-        if (!sanitizedEmail) {
-          return res.status(400).json({
-            success: false,
-            error: "Email invalide",
-          });
-        }
 
-        const existingUser = await prisma.user.findUnique({ where: { email: sanitizedEmail } });
+        const existingUser = await prisma.user.findUnique({ where: { email } });
         if (existingUser) {
           return res.status(400).json({
             success: false,
@@ -68,7 +61,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             firstName: firstName.trim(),
             lastName: lastName.trim(),
             name: `${firstName.trim()} ${lastName.trim()}`,
-            email: sanitizedEmail,
+            email,
             password: hashedPassword,
             role,
           },
@@ -233,16 +226,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           }
 
           if (email !== undefined) {
-            const sanitizedEmail = validator.normalizeEmail(email);
-            if (!sanitizedEmail) {
-              return res.status(400).json({
-                success: false,
-                error: "Email invalide",
-              });
-            }
             const emailConflict = await prisma.user.findFirst({
               where: {
-                email: sanitizedEmail,
+                email,
                 id: { not: id },
               },
             });
@@ -252,7 +238,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 error: "Un compte avec cet email existe déjà",
               });
             }
-            updateData.email = sanitizedEmail;
+            updateData.email = email;
           }
 
           if (password !== undefined) {

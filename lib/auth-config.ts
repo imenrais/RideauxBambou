@@ -10,6 +10,7 @@ import {
   isCredentialLocked,
   recordCredentialFailure,
 } from "./auth-throttle";
+import { requiredEmailSchema } from "./email-validation";
 import { prisma } from "./prisma";
 import { logAuditEvent } from "./security-audit";
 
@@ -50,7 +51,11 @@ export const authOptions: NextAuthOptions = {
           return null;
         }
 
-        const normalizedEmail = credentials.email.toLowerCase().trim();
+        const emailValidation = requiredEmailSchema.safeParse(credentials.email);
+        if (!emailValidation.success) {
+          return null;
+        }
+        const normalizedEmail = emailValidation.data;
         const portal = String(credentials.portal || "").toLowerCase();
         const ip = getRequestIpFromHeaders((_req as any)?.headers);
 
@@ -354,7 +359,7 @@ export const authOptions: NextAuthOptions = {
     },
   },
   pages: {
-    signIn: "/login",
+    signIn: "/connexion",
   },
   secret: nextAuthSecret || "dev-only-nextauth-secret",
 };

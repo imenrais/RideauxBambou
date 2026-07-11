@@ -1,6 +1,12 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 
+import {
+  formFieldClass,
+  formFieldErrorClass,
+  formFieldLabelClass,
+} from "../../lib/form-field-styles";
+
 interface PasswordInputProps {
   id: string;
   name: string;
@@ -33,10 +39,7 @@ export default function PasswordInput({
   return (
     <div className="relative">
       {label && (
-        <label
-          htmlFor={id}
-          className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300"
-        >
+        <label htmlFor={id} className={formFieldLabelClass}>
           {label}
         </label>
       )}
@@ -49,7 +52,7 @@ export default function PasswordInput({
           value={value}
           onChange={onChange}
           required={required}
-          className={`w-full rounded-lg border border-gray-300 bg-white px-3 py-2 pr-10 text-gray-900 placeholder:text-gray-400 focus:border-transparent focus:ring-2 focus:ring-green-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder:text-gray-500 ${error ? "border-red-500 dark:border-red-400" : ""} ${className}`}
+          className={`${formFieldClass} pr-10 ${error ? formFieldErrorClass : ""} ${className}`.trim()}
         />
         <button
           type="button"

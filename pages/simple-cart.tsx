@@ -1,12 +1,16 @@
-import Head from "next/head";
-import Link from "next/link";
 import { motion } from "framer-motion";
-import { useSimpleCart } from "../contexts/SimpleCartContext";
-import Navigation from "../components/Navigation";
-import Footer from "../components/Footer";
-import BackButton from "../components/BackButton";
-import Loading from "../components/ui/Loading";
+import Head from "next/head";
 import Image from "next/image";
+import Link from "next/link";
+import { useMemo } from "react";
+
+import BackButton from "../components/BackButton";
+import Footer from "../components/Footer";
+import Navigation from "../components/Navigation";
+import Loading from "../components/ui/Loading";
+import { useSimpleCart } from "../contexts/SimpleCartContext";
+import { usePublicProductsQuery } from "../lib/products-query";
+import { OUT_OF_STOCK_CLIENT_MESSAGE } from "../lib/product-availability-sync";
 
 export default function SimpleCartPage() {
   const {
@@ -19,6 +23,23 @@ export default function SimpleCartPage() {
     getTotalPrice,
     isLoading,
   } = useSimpleCart();
+
+  const { data: productsData } = usePublicProductsQuery();
+
+  const availableProductIds = useMemo(
+    () =>
+      new Set(
+        (Array.isArray(productsData) ? productsData : [])
+          .filter((product) => product.isAvailable)
+          .map((product) => product._id)
+      ),
+    [productsData]
+  );
+  const unavailableItems = useMemo(
+    () => items.filter((item) => !availableProductIds.has(item.productId)),
+    [items, availableProductIds]
+  );
+  const hasUnavailableItems = unavailableItems.length > 0;
 
   const handleRemoveItem = (itemId: string) => {
     removeItem(itemId);
@@ -33,7 +54,7 @@ export default function SimpleCartPage() {
   };
 
   const handleCheckout = () => {
-    window.location.href = "/checkout";
+    window.location.href = "/paiement";
   };
 
   const formatPrice = (price: number) => {
@@ -80,6 +101,12 @@ export default function SimpleCartPage() {
                 </p>
               )}
             </motion.div>
+
+            {hasUnavailableItems && (
+              <div className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-900/20 dark:text-red-300">
+                Certains articles sont en {OUT_OF_STOCK_CLIENT_MESSAGE.toLowerCase()}. Retirez-les ou remplacez-les avant de continuer vers le paiement.
+              </div>
+            )}
 
             {items.length === 0 ? (
               /* Empty Cart */
@@ -145,8 +172,13 @@ export default function SimpleCartPage() {
                                   Dimensions: {item.width}cm × {item.height}cm
                                 </p>
                                 <p>Surface: {item.calculation.area} m²</p>
-                                <p>Prix unitaire: {formatPrice(item.calculation.total)}</p>
+                                <p>Prix: {formatPrice(item.calculation.total)}</p>
                                 <p>Quantité: {item.quantity}</p>
+                                {!availableProductIds.has(item.productId) && (
+                                  <p className="font-medium text-red-600 dark:text-red-400">
+                                    {OUT_OF_STOCK_CLIENT_MESSAGE}
+                                  </p>
+                                )}
                                 <p className="font-semibold text-green-600 dark:text-green-400">
                                   {formatPrice(item.calculation.total * item.quantity)}
                                 </p>
@@ -175,7 +207,7 @@ export default function SimpleCartPage() {
                                   />
                                 </svg>
                               </button>
-                              <span className="w-8 text-center text-sm font-medium">
+                              <span className="flex h-8 w-8 items-center justify-center rounded-md border border-gray-300 text-center text-sm font-medium dark:border-gray-600 dark:text-white">
                                 {item.quantity}
                               </span>
                               <button
@@ -273,7 +305,8 @@ export default function SimpleCartPage() {
 
                     <button
                       onClick={handleCheckout}
-                      className="w-full rounded-lg bg-gradient-to-r from-green-600 to-green-700 px-4 py-3 font-medium text-white transition-all hover:from-green-700 hover:to-green-800 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+                      disabled={hasUnavailableItems}
+                      className="w-full rounded-lg bg-gradient-to-r from-green-600 to-green-700 px-4 py-3 font-medium text-white transition-all hover:from-green-700 hover:to-green-800 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       Commander
                     </button>

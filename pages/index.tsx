@@ -1,16 +1,21 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { GetServerSideProps } from "next";
 import Head from "next/head";
 import Image from "next/image";
 import { useRouter } from "next/router";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 import Footer from "../components/Footer";
 import Navigation from "../components/Navigation";
 import Button from "../components/ui/Button";
 import Card from "../components/ui/Card";
+import { getEmailValidationError, normalizeEmailValue } from "../lib/email-validation";
+import { formFieldClass } from "../lib/form-field-styles";
+import { usePublicProductsQuery } from "../lib/products-query";
+import { subscribeToPriceSettingsUpdates } from "../lib/price-sync";
 import { NAV_SECTIONS, scrollToSection } from "../lib/scroll-nav";
+import PriceDisplay from "../components/ui/PriceDisplay";
 
 interface HomeProps {
   title: string;
@@ -26,10 +31,16 @@ interface PublicProduct {
   _id: string;
   name: string;
   image: string;
+  isAvailable: boolean;
 }
 
 export default function Home({ title }: HomeProps) {
   const router = useRouter();
+  const queryClient = useQueryClient();
+  const [newsletterEmail, setNewsletterEmail] = useState("");
+  const [newsletterEmailError, setNewsletterEmailError] = useState("");
+  const [newsletterStatus, setNewsletterStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
+  const [newsletterMessage, setNewsletterMessage] = useState("");
 
   useEffect(() => {
     const scrollFromHash = () => {
@@ -66,29 +77,45 @@ export default function Home({ title }: HomeProps) {
     },
   });
 
-  const { data: productsData } = useQuery({
-    queryKey: ["products-home"],
-    queryFn: async () => {
-      const response = await fetch("/api/products");
-      const data = await response.json();
-      return data.success ? (data.data as PublicProduct[]) : [];
-    },
-  });
+  const { data: productsData } = usePublicProductsQuery();
 
   const { data: globalPriceData } = useQuery({
     queryKey: ["global-price-home"],
     queryFn: async () => {
       const response = await fetch("/api/price");
       const data = await response.json();
-      return data.success ? (data.data as { pricePerM2: number }) : { pricePerM2: 50 };
+      return data.success
+        ? data.data
+        : {
+            pricePerM2: 50,
+            salePricePerM2: null,
+            isSaleActive: false,
+            effectivePricePerM2: 50,
+          };
     },
   });
 
+  useEffect(() => {
+    return subscribeToPriceSettingsUpdates((payload) => {
+      if (payload.storePrice) {
+        queryClient.setQueryData(["global-price-home"], (current: Record<string, unknown> | undefined) => ({
+          ...(current || {}),
+          ...payload.storePrice,
+        }));
+      } else {
+        void queryClient.invalidateQueries({ queryKey: ["global-price-home"] });
+      }
+    });
+  }, [queryClient]);
+
   const products = Array.isArray(productsData) ? productsData : [];
-  const globalPrice = Number(globalPriceData?.pricePerM2 ?? 50);
+  const listPrice = Number(globalPriceData?.pricePerM2 ?? 50);
   const reviewImages = Array.isArray(reviewImagesData) ? reviewImagesData : [];
 
   const handleBuyNow = (product: PublicProduct) => {
+    if (!product.isAvailable) {
+      return;
+    }
     void router.push({
       pathname: "/configurer",
       query: {
@@ -129,7 +156,7 @@ export default function Home({ title }: HomeProps) {
                 className="px-8 py-12"
               >
                 <h1 className="mb-6 text-4xl font-bold text-gray-900 dark:text-white lg:text-5xl">
-                  Décorez Votre Espace de Rêve Avec Notre Collection d'Exception
+                  Décorez Votre Espace de Rêve Avec Notre Collection d&apos;Exception
                 </h1>
                 <p className="mb-8 text-lg text-gray-600 dark:text-gray-300">
                   Explorez nos collections soigneusement sélectionnées pour découvrir les pièces
@@ -154,6 +181,7 @@ export default function Home({ title }: HomeProps) {
                     src="/14.jpeg"
                     alt="Rideaux Bambou Collection"
                     fill
+                    sizes="(max-width: 1024px) 100vw, 50vw"
                     className="rounded-lg object-cover"
                     priority
                   />
@@ -189,7 +217,7 @@ export default function Home({ title }: HomeProps) {
                 >
                   <Card
                     padding="none"
-                    className="group overflow-hidden transition-transform hover:scale-105"
+                    className={`group overflow-hidden transition-transform ${item.isAvailable ? "hover:scale-105" : ""}`}
                   >
                     <div className="p-4">
                       <div className="relative mb-4 h-64 overflow-hidden rounded-lg bg-gray-200 dark:bg-gray-600">
@@ -197,18 +225,29 @@ export default function Home({ title }: HomeProps) {
                           src={item.image || "/14.jpeg"}
                           alt={item.name}
                           fill
-                          className="object-cover transition-transform group-hover:scale-110"
+                          sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                          className={`object-cover transition-transform ${item.isAvailable ? "group-hover:scale-110" : "grayscale"}`}
                         />
+                        {!item.isAvailable && (
+                          <div className="absolute inset-0 flex items-center justify-center bg-gray-900/35">
+                            <span className="rounded-full bg-white/95 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-red-700 shadow-sm dark:bg-gray-900/95 dark:text-red-300">
+                              Hors stock
+                            </span>
+                          </div>
+                        )}
                       </div>
                       <div>
                         <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{item.name}</h3>
-                        <p className="text-lg font-bold text-gray-900 dark:text-white">
-                          {globalPrice.toFixed(2)} TND/m²
-                        </p>
+                        <PriceDisplay
+                          pricePerM2={listPrice}
+                          salePricePerM2={globalPriceData?.salePricePerM2}
+                          isSaleActive={globalPriceData?.isSaleActive === true}
+                        />
                         <div className="mt-4">
                           <button
                             onClick={() => handleBuyNow(item)}
-                            className="w-full rounded-lg bg-gray-900 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-gray-800 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-200"
+                            disabled={!item.isAvailable}
+                            className="w-full rounded-lg bg-gray-900 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-gray-800 disabled:cursor-not-allowed disabled:bg-gray-400 disabled:text-gray-100 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-200 dark:disabled:bg-gray-600 dark:disabled:text-gray-300"
                           >
                             Acheter maintenant
                           </button>
@@ -243,7 +282,7 @@ export default function Home({ title }: HomeProps) {
           >
             <h2 className="mb-4 text-3xl font-bold text-gray-900 dark:text-white">À Propos</h2>
             <p className="mx-auto mb-10 max-w-2xl text-base text-gray-600 dark:text-gray-300 sm:text-lg">
-              L'alliance parfaite entre lumière naturelle, confort thermique et élégance artisanale.
+              L&apos;alliance parfaite entre lumière naturelle, confort thermique et élégance artisanale.
             </p>
             <Card className="mx-auto max-w-5xl overflow-hidden border-0 bg-gradient-to-br from-amber-50 via-white to-green-50 p-0 shadow-xl dark:from-gray-800 dark:via-gray-800 dark:to-gray-900">
               <div className="grid grid-cols-1 gap-0 lg:grid-cols-5">
@@ -327,6 +366,7 @@ export default function Home({ title }: HomeProps) {
                             src={review.image}
                             alt="Capture d'ecran d'avis client"
                             fill
+                            sizes="(max-width: 768px) 100vw, 25vw"
                             className="object-cover"
                           />
                         </div>
@@ -343,7 +383,7 @@ export default function Home({ title }: HomeProps) {
             ) : (
               <Card className="mx-auto max-w-2xl p-8 text-center">
                 <p className="text-gray-600 dark:text-gray-300">
-                  Les avis images seront affiches ici des qu'ils sont ajoutes par l'admin.
+                  Les avis images seront affiches ici des qu&apos;ils sont ajoutes par l&apos;admin.
                 </p>
               </Card>
             )}
@@ -375,16 +415,90 @@ export default function Home({ title }: HomeProps) {
                   Abonnez-vous à notre newsletter pour être le premier à recevoir nos offres
                   exclusives. Découvrez les tendances et décorez votre espace de rêve avec nous.
                 </p>
-                <div className="mx-auto flex max-w-md flex-col gap-4 sm:flex-row">
+                <form
+                  className="mx-auto flex w-full max-w-md flex-col gap-4 sm:flex-row"
+                  onSubmit={async (event) => {
+                      event.preventDefault();
+                      const normalizedEmail = normalizeEmailValue(newsletterEmail);
+                      setNewsletterEmail(normalizedEmail);
+                      const validationError = getEmailValidationError(normalizedEmail, {
+                        required: true,
+                      });
+                      setNewsletterEmailError(validationError);
+                      if (validationError) {
+                        return;
+                      }
+
+                      setNewsletterStatus("loading");
+                      setNewsletterMessage("");
+
+                      try {
+                        const response = await fetch("/api/newsletter", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ email: normalizedEmail }),
+                        });
+                        const data = await response.json();
+
+                        if (!response.ok || !data.success) {
+                          throw new Error(data.error || "Inscription impossible.");
+                        }
+
+                        setNewsletterStatus("success");
+                        setNewsletterMessage(
+                          "Merci ! Vous serez informé(e) de nos prochaines promotions."
+                        );
+                        setNewsletterEmail("");
+                      } catch (subscribeError) {
+                        setNewsletterStatus("error");
+                        setNewsletterMessage(
+                          subscribeError instanceof Error
+                            ? subscribeError.message
+                            : "Inscription impossible."
+                        );
+                      }
+                    }}
+                  >
                   <input
                     type="email"
                     placeholder="Entrez votre email"
-                    className="flex-1 rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-900 placeholder-gray-500 focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400"
+                    value={newsletterEmail}
+                    onChange={(e) => {
+                      const nextEmail = e.target.value;
+                      setNewsletterEmail(nextEmail);
+                      if (newsletterEmailError) {
+                        setNewsletterEmailError(getEmailValidationError(nextEmail, { required: true }));
+                      }
+                    }}
+                    onBlur={() => {
+                      const normalizedEmail = normalizeEmailValue(newsletterEmail);
+                      setNewsletterEmail(normalizedEmail);
+                      setNewsletterEmailError(
+                        getEmailValidationError(normalizedEmail, { required: true })
+                      );
+                    }}
+                    className={`flex-1 ${formFieldClass}`}
                   />
-                  <Button className="bg-white px-8 py-3 font-semibold text-gray-900 hover:bg-gray-100">
-                    S'abonner
+                  <Button
+                    type="submit"
+                    disabled={Boolean(newsletterEmailError) || newsletterStatus === "loading"}
+                    className="bg-white px-8 py-3 font-semibold text-gray-900 hover:bg-gray-100 disabled:opacity-60"
+                  >
+                    {newsletterStatus === "loading" ? "Inscription..." : "S'abonner"}
                   </Button>
-                </div>
+                </form>
+                {newsletterEmailError && (
+                  <p className="mt-2 text-sm text-red-200">{newsletterEmailError}</p>
+                )}
+                {newsletterMessage && (
+                  <p
+                    className={`mt-2 text-sm ${
+                      newsletterStatus === "success" ? "text-green-200" : "text-red-200"
+                    }`}
+                  >
+                    {newsletterMessage}
+                  </p>
+                )}
               </div>
             </Card>
           </motion.div>

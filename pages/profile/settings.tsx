@@ -12,6 +12,13 @@ import Card from "../../components/ui/Card";
 import Input from "../../components/ui/Input";
 import Loading from "../../components/ui/Loading";
 import { useToast } from "../../contexts/ToastContext";
+import { getEmailValidationError, normalizeEmailValue } from "../../lib/email-validation";
+import { formFieldLabelClass, formSelectClass, formSelectDisabledClass } from "../../lib/form-field-styles";
+import { getPhoneValidationError, normalizePhoneValue } from "../../lib/phone-validation";
+import {
+  getCitiesForGovernorate,
+  resolveGovernorateName,
+} from "../../lib/tunisia-locations";
 
 interface UserSettingsProps {
   title: string;
@@ -796,12 +803,14 @@ export default function UserSettings({ title }: UserSettingsProps) {
     state: "",
     postalCode: "",
   });
+  const [emailError, setEmailError] = useState("");
+  const [phoneError, setPhoneError] = useState("");
 
   // Redirect if not authenticated
   useEffect(() => {
     if (status === "loading") return;
     if (!session) {
-      router.push("/login?callbackUrl=/profile/settings");
+      router.push("/connexion?callbackUrl=/profile/settings");
       return;
     }
     if (session.user?.role === "worker") {
@@ -858,15 +867,17 @@ export default function UserSettings({ title }: UserSettingsProps) {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
+    const nextValue = name === "phone" ? normalizePhoneValue(value) : value;
     setFormData((prev) => {
       const newData = {
         ...prev,
-        [name]: value,
+        [name]: nextValue,
       };
       // Reset delegation and city when governorate changes
       if (name === "state") {
         newData.delegation = "";
         newData.city = "";
+        newData.state = resolveGovernorateName(nextValue);
       }
       // Reset city when delegation changes
       if (name === "delegation") {
@@ -874,21 +885,40 @@ export default function UserSettings({ title }: UserSettingsProps) {
       }
       return newData;
     });
+
+    if (name === "email" && emailError) {
+      setEmailError(getEmailValidationError(nextValue, { required: true }));
+    }
+    if (name === "phone" && phoneError) {
+      setPhoneError(getPhoneValidationError(nextValue));
+    }
   };
 
   // Get delegations for the selected governorate
   const availableDelegations = formData.state ? GOVERNORATE_DELEGATIONS[formData.state] || [] : [];
   // Get cities for the selected governorate
-  const availableCities = formData.state ? GOVERNORATE_CITIES[formData.state] || [] : [];
+  const availableCities = formData.state ? getCitiesForGovernorate(formData.state) : [];
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const normalizedEmail = normalizeEmailValue(formData.email);
+    const normalizedPhone = normalizePhoneValue(formData.phone);
+    const nextEmailError = getEmailValidationError(normalizedEmail, { required: true });
+    const nextPhoneError = getPhoneValidationError(normalizedPhone);
+    setEmailError(nextEmailError);
+    setPhoneError(nextPhoneError);
+    if (nextEmailError || nextPhoneError) {
+      return;
+    }
     // Combine firstName and lastName into full name
     const fullName = `${formData.firstName} ${formData.lastName}`.trim();
     const dataToSubmit = {
       ...formData,
+      email: normalizedEmail,
+      phone: normalizedPhone,
       name: fullName,
     };
+    setFormData((prev) => ({ ...prev, email: normalizedEmail, phone: normalizedPhone }));
     updateProfileMutation.mutate(dataToSubmit);
   };
 
@@ -939,7 +969,7 @@ export default function UserSettings({ title }: UserSettingsProps) {
               <form onSubmit={handleSubmit} className="space-y-6">
                 <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                   <div>
-                    <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    <label className={formFieldLabelClass}>
                       Prénom
                     </label>
                     <Input
@@ -951,7 +981,7 @@ export default function UserSettings({ title }: UserSettingsProps) {
                     />
                   </div>
                   <div>
-                    <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    <label className={formFieldLabelClass}>
                       Nom
                     </label>
                     <Input
@@ -963,7 +993,7 @@ export default function UserSettings({ title }: UserSettingsProps) {
                     />
                   </div>
                   <div>
-                    <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    <label className={formFieldLabelClass}>
                       Adresse Email
                     </label>
                     <Input
@@ -971,11 +1001,17 @@ export default function UserSettings({ title }: UserSettingsProps) {
                       name="email"
                       value={formData.email}
                       onChange={handleInputChange}
+                      onBlur={() => {
+                        const normalizedEmail = normalizeEmailValue(formData.email);
+                        setFormData((prev) => ({ ...prev, email: normalizedEmail }));
+                        setEmailError(getEmailValidationError(normalizedEmail, { required: true }));
+                      }}
+                      error={emailError}
                       required
                     />
                   </div>
                   <div>
-                    <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    <label className={formFieldLabelClass}>
                       Numéro de Téléphone
                     </label>
                     <Input
@@ -983,17 +1019,22 @@ export default function UserSettings({ title }: UserSettingsProps) {
                       name="phone"
                       value={formData.phone}
                       onChange={handleInputChange}
+                      onBlur={() => setPhoneError(getPhoneValidationError(formData.phone))}
+                      inputMode="numeric"
+                      maxLength={8}
+                      pattern="[0-9]*"
+                      error={phoneError}
                     />
                   </div>
                   <div>
-                    <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    <label className={formFieldLabelClass}>
                       Gouvernorat
                     </label>
                     <select
                       name="state"
                       value={formData.state}
                       onChange={handleInputChange}
-                      className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                      className={formSelectClass}
                     >
                       <option value="">Sélectionnez un gouvernorat</option>
                       {TUNISIAN_GOVERNORATES.map((governorate) => (
@@ -1004,7 +1045,7 @@ export default function UserSettings({ title }: UserSettingsProps) {
                     </select>
                   </div>
                   <div>
-                    <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    <label className={formFieldLabelClass}>
                       Délégation
                     </label>
                     <select
@@ -1012,7 +1053,7 @@ export default function UserSettings({ title }: UserSettingsProps) {
                       value={formData.delegation}
                       onChange={handleInputChange}
                       disabled={!formData.state}
-                      className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:disabled:bg-gray-800 dark:disabled:text-gray-400"
+                      className={formSelectDisabledClass}
                     >
                       <option value="">
                         {formData.state ? "Sélectionnez une délégation" : "Sélectionnez d'abord un gouvernorat"}
@@ -1025,15 +1066,15 @@ export default function UserSettings({ title }: UserSettingsProps) {
                     </select>
                   </div>
                   <div>
-                    <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    <label className={formFieldLabelClass}>
                       Ville
                     </label>
                     <select
                       name="city"
                       value={formData.city}
                       onChange={handleInputChange}
-                      disabled={!formData.state}
-                      className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:disabled:bg-gray-800 dark:disabled:text-gray-400"
+                      disabled={!formData.state || availableCities.length === 0}
+                      className={formSelectDisabledClass}
                     >
                       <option value="">
                         {formData.state ? "Sélectionnez une ville" : "Sélectionnez d'abord un gouvernorat"}
@@ -1046,7 +1087,7 @@ export default function UserSettings({ title }: UserSettingsProps) {
                     </select>
                   </div>
                   <div>
-                    <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    <label className={formFieldLabelClass}>
                       Code Postal
                     </label>
                     <div className="max-w-xs">
@@ -1060,7 +1101,7 @@ export default function UserSettings({ title }: UserSettingsProps) {
                   </div>
                 </div>
                 <div>
-                  <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  <label className={formFieldLabelClass}>
                     Adresse
                   </label>
                   <div className="max-w-2xl">
@@ -1076,6 +1117,7 @@ export default function UserSettings({ title }: UserSettingsProps) {
                   <Button
                     type="submit"
                     loading={updateProfileMutation.isPending}
+                    disabled={updateProfileMutation.isPending || Boolean(emailError) || Boolean(phoneError)}
                     className="bg-gray-900 hover:bg-gray-800 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100"
                   >
                     Sauvegarder les Modifications

@@ -1,6 +1,7 @@
-import { useState, useRef, useCallback } from "react";
 import { motion } from "framer-motion";
 import Image from "next/image";
+import { useEffect, useRef, useState } from "react";
+
 import { useToast } from "../../contexts/ToastContext";
 
 interface ImageUploadProps {
@@ -8,14 +9,39 @@ interface ImageUploadProps {
   onChange: (url: string) => void;
   error?: string;
   className?: string;
+  previewFit?: "cover" | "contain";
+  previewContainerClassName?: string;
 }
 
-export default function ImageUpload({ value, onChange, error, className = "" }: ImageUploadProps) {
+export default function ImageUpload({
+  value,
+  onChange,
+  error,
+  className = "",
+  previewFit = "cover",
+  previewContainerClassName = "h-48",
+}: ImageUploadProps) {
   const [isUploading, setIsUploading] = useState(false);
   const [preview, setPreview] = useState<string | null>(value || null);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [localPreviewUrl, setLocalPreviewUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { error: showError, warning } = useToast();
+
+  useEffect(() => {
+    if (!value) {
+      setPreview(null);
+      if (localPreviewUrl) {
+        URL.revokeObjectURL(localPreviewUrl);
+        setLocalPreviewUrl(null);
+      }
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+      return;
+    }
+    setPreview(value);
+  }, [value, localPreviewUrl]);
 
   const processFile = async (file: File) => {
     // Validate file type
@@ -31,6 +57,13 @@ export default function ImageUpload({ value, onChange, error, className = "" }: 
     }
 
     setIsUploading(true);
+
+    if (localPreviewUrl) {
+      URL.revokeObjectURL(localPreviewUrl);
+    }
+    const objectPreviewUrl = URL.createObjectURL(file);
+    setLocalPreviewUrl(objectPreviewUrl);
+    setPreview(objectPreviewUrl);
 
     try {
       // Create FormData
@@ -51,6 +84,10 @@ export default function ImageUpload({ value, onChange, error, className = "" }: 
 
       if (data.success) {
         const imageUrl = data.url;
+        if (objectPreviewUrl) {
+          URL.revokeObjectURL(objectPreviewUrl);
+          setLocalPreviewUrl(null);
+        }
         setPreview(imageUrl);
         onChange(imageUrl);
       } else {
@@ -58,9 +95,17 @@ export default function ImageUpload({ value, onChange, error, className = "" }: 
       }
     } catch (error) {
       console.error("Upload error:", error);
+      if (objectPreviewUrl) {
+        URL.revokeObjectURL(objectPreviewUrl);
+        setLocalPreviewUrl(null);
+      }
+      setPreview(value || null);
       showError("Erreur lors du téléchargement de l'image. Veuillez réessayer.");
     } finally {
       setIsUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
     }
   };
 
@@ -75,6 +120,10 @@ export default function ImageUpload({ value, onChange, error, className = "" }: 
   };
 
   const handleRemove = () => {
+    if (localPreviewUrl) {
+      URL.revokeObjectURL(localPreviewUrl);
+      setLocalPreviewUrl(null);
+    }
     setPreview(null);
     onChange("");
     if (fileInputRef.current) {
@@ -82,19 +131,19 @@ export default function ImageUpload({ value, onChange, error, className = "" }: 
     }
   };
 
-  const handleDragOver = useCallback((e: React.DragEvent) => {
+  const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
     setIsDragOver(true);
-  }, []);
+  };
 
-  const handleDragLeave = useCallback((e: React.DragEvent) => {
+  const handleDragLeave = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
     setIsDragOver(false);
-  }, []);
+  };
 
-  const handleDrop = useCallback(async (e: React.DragEvent) => {
+  const handleDrop = async (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
     setIsDragOver(false);
@@ -103,7 +152,9 @@ export default function ImageUpload({ value, onChange, error, className = "" }: 
     if (files && files.length > 0) {
       await processFile(files[0]);
     }
-  }, []);
+  };
+
+  const previewObjectFitClass = previewFit === "contain" ? "object-contain" : "object-cover";
 
   return (
     <div className={`space-y-2 ${className}`}>
@@ -117,8 +168,10 @@ export default function ImageUpload({ value, onChange, error, className = "" }: 
 
       {preview ? (
         <div className="group relative">
-          <div className="relative h-48 w-full overflow-hidden rounded-lg border border-gray-300 dark:border-gray-600">
-            <Image src={preview} alt="Preview" fill className="object-cover" />
+          <div
+            className={`relative w-full overflow-hidden rounded-lg border border-gray-300 bg-gray-100 dark:border-gray-600 dark:bg-gray-700 ${previewContainerClassName}`}
+          >
+            <Image src={preview} alt="Preview" fill className={previewObjectFitClass} />
             <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-0 transition-all duration-200 group-hover:bg-opacity-30">
               <button
                 type="button"
@@ -136,7 +189,7 @@ export default function ImageUpload({ value, onChange, error, className = "" }: 
               </button>
             </div>
           </div>
-          <p className="text-center text-xs text-gray-500">Cliquez sur l'image pour la supprimer</p>
+          <p className="text-center text-xs text-gray-500">Cliquez sur l&apos;image pour la supprimer</p>
         </div>
       ) : (
         <motion.div
@@ -146,7 +199,7 @@ export default function ImageUpload({ value, onChange, error, className = "" }: 
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
-          className={`relative flex h-48 w-full cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed transition-colors ${
+          className={`relative flex w-full cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed transition-colors ${previewContainerClassName} ${
             isDragOver
               ? "border-blue-400 bg-blue-50 dark:border-blue-500 dark:bg-blue-900/20"
               : "border-gray-300 hover:border-gray-400 dark:border-gray-600 dark:hover:border-gray-500"
@@ -176,7 +229,7 @@ export default function ImageUpload({ value, onChange, error, className = "" }: 
                 <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
                   {isDragOver ? "Déposez l'image ici" : "Cliquez ou glissez-déposez une image"}
                 </p>
-                <p className="text-xs text-gray-500">PNG, JPG, JPEG jusqu'à 5MB</p>
+                <p className="text-xs text-gray-500">PNG, JPG, JPEG jusqu&apos;à 5MB</p>
               </div>
             </div>
           )}
