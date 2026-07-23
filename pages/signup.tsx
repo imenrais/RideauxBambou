@@ -159,7 +159,7 @@ export default function SignupPage({ title }: SignupPageProps) {
   if (success) {
     return (
       <StandardLayout title="Inscription Réussie - Rideaux Bambou">
-        <div className="-mx-4 -my-8 min-h-screen bg-white px-4 py-8 dark:bg-gray-900">
+        <div className="-mx-4 -my-8 min-h-screen bg-gray-100 px-4 py-8 dark:bg-gray-900">
           {/* Back Button */}
           <div className="px-6 py-8">
             <BackButton href="/" />
@@ -179,7 +179,7 @@ export default function SignupPage({ title }: SignupPageProps) {
               <p className="mb-6 text-gray-600 dark:text-gray-400">
                 Votre compte a été créé avec succès. Vous allez être connecté automatiquement...
               </p>
-              <div className="mx-auto h-8 w-8 animate-spin rounded-full border-b-2 border-green-600"></div>
+              <div className="mx-auto h-8 w-8 animate-spin rounded-full border-b-2 border-gray-900 dark:border-white"></div>
             </motion.div>
           </main>
         </div>
@@ -189,7 +189,7 @@ export default function SignupPage({ title }: SignupPageProps) {
 
   return (
     <StandardLayout title={title} description="Inscription - Rideaux Bambou">
-      <div className="-mx-4 -my-8 min-h-screen bg-white px-4 py-8 dark:bg-gray-900">
+      <div className="-mx-4 -my-8 min-h-screen bg-gray-100 px-4 py-8 dark:bg-gray-900">
         {/* Back Button and Main Content */}
         <div className="px-4 py-6 sm:px-6 sm:py-8">
           <div className="space-y-6">
@@ -205,7 +205,7 @@ export default function SignupPage({ title }: SignupPageProps) {
               >
                 <div className="mb-8 text-center">
                   <img
-                    src="/logo.png"
+                    src="/images/logo.png"
                     alt="Rideaux Bambou"
                     className="mx-auto mb-4 h-12 w-12 object-contain"
                   />
@@ -416,7 +416,7 @@ export default function SignupPage({ title }: SignupPageProps) {
                     Déjà un compte?{" "}
                     <Link
                       href="/connexion"
-                      className="font-medium text-green-600 transition-colors hover:text-green-700 dark:text-green-400 dark:hover:text-green-300"
+                      className="font-medium text-gray-900 transition-colors hover:text-gray-700 dark:text-gray-100 dark:hover:text-white"
                     >
                       Se connecter
                     </Link>

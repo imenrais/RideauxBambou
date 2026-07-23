@@ -1,4 +1,3 @@
-import { useQuery } from "@tanstack/react-query";
 import Head from "next/head";
 import Image from "next/image";
 import { useRouter } from "next/router";
@@ -6,6 +5,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import Footer from "../components/Footer";
 import Navigation from "../components/Navigation";
+import StorePanelBreakdown, {
+  StorePanelQuantityHint,
+} from "../components/StorePanelBreakdown";
 import Button from "../components/ui/Button";
 import Card from "../components/ui/Card";
 import PriceDisplay from "../components/ui/PriceDisplay";
@@ -20,6 +22,10 @@ import {
 } from "../lib/form-field-styles";
 import { usePublicProductsQuery } from "../lib/products-query";
 import { OUT_OF_STOCK_CLIENT_MESSAGE } from "../lib/product-availability-sync";
+import {
+  getStorePanelCountFromWidth,
+  getStorePanelMeasurements,
+} from "../lib/store-panel-count";
 
 interface Product {
   _id: string;
@@ -29,8 +35,6 @@ interface Product {
   supportsPanneau?: boolean;
 }
 
-const STORE_WIDTH_MAX = 210;
-
 export default function ConfigurerProduitPage() {
   const router = useRouter();
   const { addItem, calculatePrice, storePriceSettings, panneauConfig, pricesLoaded } = useSimpleCart();
@@ -39,28 +43,13 @@ export default function ConfigurerProduitPage() {
   const [height, setHeight] = useState<number | "">("");
   const [curtainType, setCurtainType] = useState<"panneau" | "store">("panneau");
   const [quantity, setQuantity] = useState(1);
-  const [wantsInstallation, setWantsInstallation] = useState<boolean | null>(null);
   const [selectedProductId, setSelectedProductId] = useState("");
   const hasInitializedSelectionRef = useRef(false);
+  const lastAppliedQueryProductIdRef = useRef<string | null>(null);
+  const pendingUrlSelectionRef = useRef<{ id: string; type: "panneau" | "store" } | null>(null);
   const [priceCalculation, setPriceCalculation] = useState({ area: 0, pricePerM2: 0, total: 0 });
-  const [storeWidthError, setStoreWidthError] = useState("");
 
   const { data: productsData, isLoading: isProductsLoading } = usePublicProductsQuery();
-
-  const { data: installationFeeData } = useQuery({
-    queryKey: ["installation-fee-configurer"],
-    queryFn: async () => {
-      try {
-        const response = await fetch("/api/installation-fee");
-        const data = await response.json();
-        return data.success ? data.data : { fee: 11 };
-      } catch {
-        return { fee: 11 };
-      }
-    },
-    staleTime: 5 * 60 * 1000,
-    refetchOnWindowFocus: false,
-  });
 
   const products = useMemo(() => (Array.isArray(productsData) ? productsData : []), [productsData]);
   const storeProducts = products;
@@ -89,7 +78,7 @@ export default function ConfigurerProduitPage() {
     typeof router.query.productId === "string" ? router.query.productId : "";
 
   useEffect(() => {
-    if (!router.isReady || isProductsLoading || hasInitializedSelectionRef.current) {
+    if (!router.isReady || isProductsLoading) {
       return;
     }
 
@@ -101,10 +90,22 @@ export default function ConfigurerProduitPage() {
       ? products.find((product) => product._id === queryProductId)
       : undefined;
 
-    if (queryProduct) {
-      setCurtainType(queryProduct.supportsPanneau === true ? "panneau" : "store");
+    // Apply URL productId once per value so home clicks open the right reference.
+    if (queryProduct && queryProductId !== lastAppliedQueryProductIdRef.current) {
+      const nextType = queryProduct.supportsPanneau === true ? "panneau" : "store";
+      pendingUrlSelectionRef.current = { id: queryProduct._id, type: nextType };
+      setCurtainType(nextType);
       setSelectedProductId(queryProduct._id);
-    } else if (availablePanneauProducts.length > 0) {
+      lastAppliedQueryProductIdRef.current = queryProductId;
+      hasInitializedSelectionRef.current = true;
+      return;
+    }
+
+    if (hasInitializedSelectionRef.current) {
+      return;
+    }
+
+    if (availablePanneauProducts.length > 0) {
       setCurtainType("panneau");
       setSelectedProductId(availablePanneauProducts[0]._id);
     } else if (availableStoreProducts.length > 0) {
@@ -130,6 +131,22 @@ export default function ConfigurerProduitPage() {
       return;
     }
 
+    // Finish applying a URL selection once curtain type has caught up (avoids the
+    // race that used to force the first panneau reference on every click).
+    if (pendingUrlSelectionRef.current) {
+      const pending = pendingUrlSelectionRef.current;
+      if (curtainType !== pending.type) {
+        return;
+      }
+      pendingUrlSelectionRef.current = null;
+      if (productsForCurtainType.some((product) => product._id === pending.id)) {
+        if (selectedProductId !== pending.id) {
+          setSelectedProductId(pending.id);
+        }
+        return;
+      }
+    }
+
     if (!productsForCurtainType.length) {
       if (selectedProductId) {
         setSelectedProductId("");
@@ -144,8 +161,8 @@ export default function ConfigurerProduitPage() {
       return;
     }
 
+    // Prefer the URL product when it belongs to the current curtain type.
     if (
-      curtainType === "store" &&
       queryProductId &&
       productsForCurtainType.some((product) => product._id === queryProductId)
     ) {
@@ -153,6 +170,8 @@ export default function ConfigurerProduitPage() {
       return;
     }
 
+    // Curtain type changed (e.g. store → panneau): pick a valid reference so the
+    // product image does not go blank.
     const fallbackProduct =
       availableProductsForCurtainType[0] ?? productsForCurtainType[0] ?? null;
     setSelectedProductId(fallbackProduct?._id ?? "");
@@ -177,7 +196,7 @@ export default function ConfigurerProduitPage() {
     return {
       productId: selectedProduct._id,
       productName: selectedProduct.name,
-      productImage: selectedProduct.image || "/14.jpeg",
+      productImage: selectedProduct.image || "/images/14.jpeg",
       isAvailable: selectedProduct.isAvailable !== false,
     };
   }, [selectedProduct]);
@@ -201,7 +220,7 @@ export default function ConfigurerProduitPage() {
       setWidth((prevWidth) =>
         typeof prevWidth === "number" && panneauWidthValues.has(prevWidth) ? prevWidth : ""
       );
-      setStoreWidthError("");
+      setQuantity(1);
       return;
     }
 
@@ -212,6 +231,17 @@ export default function ConfigurerProduitPage() {
       typeof prevWidth === "number" && panneauWidthValues.has(prevWidth) ? "" : prevWidth
     );
   }, [curtainType, panneauConfig.fixedHeightCm, panneauWidthValues]);
+
+  useEffect(() => {
+    if (curtainType !== "store") {
+      return;
+    }
+    if (width === "" || width <= 0) {
+      setQuantity(1);
+      return;
+    }
+    setQuantity(getStorePanelCountFromWidth(width));
+  }, [curtainType, width]);
 
   useEffect(() => {
     if (width === "" || height === "" || width <= 0 || height <= 0) {
@@ -236,9 +266,6 @@ export default function ConfigurerProduitPage() {
     if (height === "") {
       return;
     }
-    if (curtainType === "store" && width > STORE_WIDTH_MAX) {
-      return;
-    }
     if (
       curtainType === "panneau" &&
       !availablePanneauProducts.some((p) => p._id === selectedProductId)
@@ -256,16 +283,18 @@ export default function ConfigurerProduitPage() {
       curtainType,
     });
 
-    void router.push({
-      pathname: "/paiement",
-      query: { install: wantsInstallation ? "yes" : "no" },
-    });
+    void router.push("/paiement");
   };
 
   const formatPrice = (price: number) =>
     new Intl.NumberFormat("fr-FR", { style: "currency", currency: "TND" }).format(price);
 
-  const isStoreWidthInvalid = curtainType === "store" && typeof width === "number" && width > STORE_WIDTH_MAX;
+  const storePanelMeasurements = useMemo(() => {
+    if (curtainType !== "store" || width === "" || height === "" || width <= 0 || height <= 0) {
+      return [];
+    }
+    return getStorePanelMeasurements(width, height);
+  }, [curtainType, width, height]);
 
   return (
     <>
@@ -274,7 +303,7 @@ export default function ConfigurerProduitPage() {
         <meta name="description" content="Configurez vos mesures avant la commande" />
       </Head>
 
-      <div className="min-h-screen bg-white dark:bg-gray-900">
+      <div className="min-h-screen bg-gray-100 dark:bg-gray-900">
         <Navigation />
 
         <main className="mx-auto grid max-w-5xl grid-cols-1 gap-4 px-4 py-6 sm:gap-6 sm:py-10 lg:grid-cols-2">
@@ -292,12 +321,12 @@ export default function ConfigurerProduitPage() {
                         src={product.productImage}
                         alt={product.productName}
                         fill
-                        className={`object-cover ${product.isAvailable ? "" : "grayscale"}`}
+                        className="object-cover"
                       />
                       {!product.isAvailable && (
-                        <div className="absolute inset-0 flex items-center justify-center bg-gray-900/40 px-4 text-center">
-                          <span className="rounded-full bg-white/95 px-4 py-2 text-sm font-semibold text-red-700 shadow-sm dark:bg-gray-900/95 dark:text-red-300">
-                            {OUT_OF_STOCK_CLIENT_MESSAGE}
+                        <div className="absolute inset-0 flex items-center justify-center bg-gray-900/35">
+                          <span className="rounded-full bg-white/95 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-red-700 shadow-sm dark:bg-gray-900/95 dark:text-red-300">
+                            Hors stock
                           </span>
                         </div>
                       )}
@@ -435,13 +464,11 @@ export default function ConfigurerProduitPage() {
                         <input
                           type="number"
                           min={1}
-                          max={STORE_WIDTH_MAX}
                           value={width}
                           onChange={(e) => {
                             const raw = e.target.value;
                             if (raw === "") {
                               setWidth("");
-                              setStoreWidthError("");
                               return;
                             }
                             const parsed = Number(raw);
@@ -449,29 +476,10 @@ export default function ConfigurerProduitPage() {
                               return;
                             }
                             setWidth(parsed);
-                            if (parsed > STORE_WIDTH_MAX) {
-                              setStoreWidthError(
-                                `La largeur ne peut pas dépasser ${STORE_WIDTH_MAX} cm.`
-                              );
-                            } else {
-                              setStoreWidthError("");
-                            }
                           }}
                           className={formNumberFieldClass}
                           required
                         />
-                      )}
-                      {curtainType !== "panneau" && (
-                        <>
-                          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                            Largeur maximale: {STORE_WIDTH_MAX} cm.
-                          </p>
-                          {storeWidthError && (
-                            <p className="mt-1 text-xs font-medium text-red-600 dark:text-red-400">
-                              {storeWidthError}
-                            </p>
-                          )}
-                        </>
                       )}
                       {curtainType === "panneau" && panneauConfig.widths.length > 0 && (
                         <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
@@ -522,55 +530,14 @@ export default function ConfigurerProduitPage() {
 
                   <div>
                     <label className={formFieldLabelClass}>
-                      Pose
-                    </label>
-                    <div className="flex flex-wrap gap-4">
-                      <label className="flex items-center gap-2 text-gray-700 dark:text-gray-200">
-                        <input
-                          type="radio"
-                          name="pose"
-                          checked={wantsInstallation === true}
-                          onChange={() => setWantsInstallation(true)}
-                          className="sr-only"
-                        />
-                        <span className="flex h-4 w-4 items-center justify-center rounded-full border border-gray-300 bg-white">
-                          <span
-                            className={`h-2 w-2 rounded-full bg-black transition-opacity ${
-                              wantsInstallation === true ? "opacity-100" : "opacity-0"
-                            }`}
-                          />
-                        </span>
-                        <span className="text-sm">Oui</span>
-                      </label>
-                      <label className="flex items-center gap-2 text-gray-700 dark:text-gray-200">
-                        <input
-                          type="radio"
-                          name="pose"
-                          checked={wantsInstallation === false}
-                          onChange={() => setWantsInstallation(false)}
-                          className="sr-only"
-                        />
-                        <span className="flex h-4 w-4 items-center justify-center rounded-full border border-gray-300 bg-white">
-                          <span
-                            className={`h-2 w-2 rounded-full bg-black transition-opacity ${
-                              wantsInstallation === false ? "opacity-100" : "opacity-0"
-                            }`}
-                          />
-                        </span>
-                        <span className="text-sm">Non</span>
-                      </label>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className={formFieldLabelClass}>
                       Quantite
                     </label>
                     <div className="flex flex-wrap items-center justify-start gap-1.5">
                       <button
                         type="button"
                         onClick={() => setQuantity((prev) => Math.max(1, prev - 1))}
-                        className="flex h-8 w-8 items-center justify-center rounded-md border border-gray-300 text-base font-medium text-gray-700 transition-colors hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+                        disabled={curtainType === "store"}
+                        className="flex h-8 w-8 items-center justify-center rounded-md border border-gray-300 text-base font-medium text-gray-700 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
                       >
                         -
                       </button>
@@ -583,12 +550,22 @@ export default function ConfigurerProduitPage() {
                       <button
                         type="button"
                         onClick={() => setQuantity((prev) => Math.min(10, prev + 1))}
-                        className="flex h-8 w-8 items-center justify-center rounded-md border border-gray-300 text-base font-medium text-gray-700 transition-colors hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+                        disabled={curtainType === "store"}
+                        className="flex h-8 w-8 items-center justify-center rounded-md border border-gray-300 text-base font-medium text-gray-700 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
                       >
                         +
                       </button>
                     </div>
+                    {curtainType === "store" && storePanelMeasurements.length === 0 && (
+                      <StorePanelQuantityHint />
+                    )}
                   </div>
+
+                  {curtainType === "store" && storePanelMeasurements.length > 0 && (
+                    <StorePanelBreakdown
+                      panels={storePanelMeasurements}
+                    />
+                  )}
 
                   <div className="rounded-lg bg-gray-50 p-4 dark:bg-gray-700">
                     <div className="space-y-1 text-sm text-gray-600 dark:text-gray-300">
@@ -632,18 +609,13 @@ export default function ConfigurerProduitPage() {
                           )}
                         </span>
                       </div>
-                      {wantsInstallation === true && (
-                        <div className="flex justify-between text-sm">
-                          <span>Frais de pose</span>
-                          <span>{formatPrice(installationFeeData?.fee || 11)}</span>
-                        </div>
-                      )}
                       <div className="flex justify-between font-semibold text-gray-900 dark:text-white">
                         <span>Total</span>
                         <span>
                           {formatPrice(
-                            priceCalculation.total * quantity +
-                              (wantsInstallation ? installationFeeData?.fee || 11 : 0)
+                            curtainType === "store"
+                              ? priceCalculation.total
+                              : priceCalculation.total * quantity
                           )}
                         </span>
                       </div>
@@ -654,13 +626,11 @@ export default function ConfigurerProduitPage() {
                     <Button
                       type="submit"
                       disabled={
-                        wantsInstallation === null ||
-                        isStoreWidthInvalid ||
                         height === "" ||
                         !product ||
                         !product.isAvailable
                       }
-                      className="w-full bg-green-600 hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="w-full bg-gray-900 hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100"
                     >
                       {product && !product.isAvailable
                         ? OUT_OF_STOCK_CLIENT_MESSAGE

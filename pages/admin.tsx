@@ -1,6 +1,4 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { motion } from "framer-motion";
-import { GetServerSideProps } from "next";
 import dynamic from "next/dynamic";
 import Head from "next/head";
 import { useRouter } from "next/router";
@@ -12,27 +10,48 @@ import Button from "../components/ui/Button";
 import Card from "../components/ui/Card";
 import Input from "../components/ui/Input";
 import Loading from "../components/ui/Loading";
+import PriceDisplay from "../components/ui/PriceDisplay";
 import { useToast } from "../contexts/ToastContext";
-import { requireAdminPage } from "../lib/admin-page-guard";
-import { formatPanneauCardLabel, getEffectivePanneauWidthPrice, type PanneauConfig } from "../lib/panneau-types";
+import {
+  formatPanneauCardLabel,
+  getEffectivePanneauWidthPrice,
+  type PanneauConfig,
+  type PanneauWidthConfig,
+} from "../lib/panneau-types";
 import {
   adminTableBodyClassName,
   adminTableHeadTextClassName,
   adminTableHeaderClassName,
-  adminTableShellInsetClassName,
 } from "../components/ui/Table";
 import { notifyPriceSettingsUpdated, buildStorePriceSyncPayload } from "../lib/price-sync";
 import { formFieldClass } from "../lib/form-field-styles";
+import { notifyProductsUpdated } from "../lib/product-availability-sync";
+import { PRODUCTS_QUERY_KEY } from "../lib/products-query";
+
+const PAGE_TITLE = "Tableau de Bord Admin - Rideaux Bambou";
 
 const DashboardCharts = dynamic(() => import("../components/admin/DashboardCharts"), {
   loading: () => <div className="p-4 text-center">Chargement des graphiques...</div>,
 });
 
-interface PanneauWidthDraft {
-  widthCm: string;
-  price: string;
-  salePrice: string;
-}
+type PanneauPromoDrafts = Record<string, string>;
+
+const emptyPanneauPromoDrafts = (
+  widths: Array<{ widthCm: number }>
+): PanneauPromoDrafts =>
+  Object.fromEntries(widths.map((width) => [String(width.widthCm), ""]));
+
+const mapWidthsToPromoDrafts = (
+  widths: Array<{ widthCm: number; salePrice?: number | null }>
+): PanneauPromoDrafts =>
+  Object.fromEntries(
+    widths.map((width) => [
+      String(width.widthCm),
+      typeof width.salePrice === "number"
+        ? Number(width.salePrice.toFixed(2)).toString()
+        : "",
+    ])
+  );
 
 interface AdminProduct {
   _id: string;
@@ -41,11 +60,7 @@ interface AdminProduct {
   isActive?: boolean;
 }
 
-interface AdminDashboardProps {
-  title: string;
-}
-
-export default function AdminDashboard({ title }: AdminDashboardProps) {
+export default function AdminDashboard() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -54,7 +69,10 @@ export default function AdminDashboard({ title }: AdminDashboardProps) {
   const [isSaleActive, setIsSaleActive] = useState(false);
   const [isPanneauSaleActive, setIsPanneauSaleActive] = useState(false);
   const [fixedPanneauHeight, setFixedPanneauHeight] = useState("");
-  const [panneauWidthDrafts, setPanneauWidthDrafts] = useState<PanneauWidthDraft[]>([]);
+  const [panneauPromoDrafts, setPanneauPromoDrafts] = useState<PanneauPromoDrafts>({});
+  const [editingPanneauWidthCm, setEditingPanneauWidthCm] = useState<number | null>(null);
+  const [editPanneauWidthCm, setEditPanneauWidthCm] = useState("");
+  const [editPanneauWidthPrice, setEditPanneauWidthPrice] = useState("");
   const [newPanneauWidthCm, setNewPanneauWidthCm] = useState("");
   const [newPanneauWidthPrice, setNewPanneauWidthPrice] = useState("");
   const [isAddingPanneauWidth, setIsAddingPanneauWidth] = useState(false);
@@ -123,7 +141,9 @@ export default function AdminDashboard({ title }: AdminDashboardProps) {
     );
     setIsSaleActive(Boolean(priceData.isSaleActive));
     setNewSalePrice(
-      typeof priceData.salePricePerM2 === "number" ? priceData.salePricePerM2.toString() : ""
+      typeof priceData.salePricePerM2 === "number"
+        ? Number(priceData.salePricePerM2.toFixed(2)).toString()
+        : ""
     );
   }, [priceData]);
 
@@ -149,21 +169,12 @@ export default function AdminDashboard({ title }: AdminDashboardProps) {
         ? panneauConfigData.fixedHeightCm.toString()
         : ""
     );
-    setPanneauWidthDrafts(
-      Array.isArray(panneauConfigData.widths)
-        ? panneauConfigData.widths.map(
-            (width: {
-              widthCm: number;
-              price: number;
-              salePrice?: number | null;
-            }) => ({
-              widthCm: width.widthCm.toString(),
-              price: width.price.toString(),
-              salePrice:
-                typeof width.salePrice === "number" ? width.salePrice.toString() : "",
-            })
-          )
-        : []
+    const widths = Array.isArray(panneauConfigData.widths) ? panneauConfigData.widths : [];
+    // Like m²: only show saved promo values when the sale is active.
+    setPanneauPromoDrafts(
+      panneauConfigData.isSaleActive === true
+        ? mapWidthsToPromoDrafts(widths)
+        : emptyPanneauPromoDrafts(widths)
     );
   }, [panneauConfigData]);
 
@@ -232,7 +243,7 @@ export default function AdminDashboard({ title }: AdminDashboardProps) {
       setIsSaleActive(Boolean(updatedPrice.isSaleActive));
       setNewSalePrice(
         typeof updatedPrice.salePricePerM2 === "number"
-          ? updatedPrice.salePricePerM2.toString()
+          ? Number(updatedPrice.salePricePerM2.toFixed(2)).toString()
           : ""
       );
       pushPriceUpdates(updatedPrice);
@@ -248,49 +259,120 @@ export default function AdminDashboard({ title }: AdminDashboardProps) {
     },
   });
 
-  const updatePanneauMutation = useMutation({
-    mutationFn: async ({
-      fixedHeightCm,
-      widths,
-      isSaleActive: nextSaleActive,
-    }: {
-      fixedHeightCm: number;
-      widths: Array<{
-        widthCm: number;
-        price: number;
-        label?: string | null;
-        salePrice?: number | null;
-      }>;
-      isSaleActive: boolean;
+  const applyPanneauConfigUpdate = (
+    updatedConfig: PanneauConfig,
+    successMessage: string
+  ) => {
+    queryClient.setQueryData(["admin-panneau-config"], updatedConfig);
+    setFixedPanneauHeight(
+      typeof updatedConfig.fixedHeightCm === "number"
+        ? updatedConfig.fixedHeightCm.toString()
+        : ""
+    );
+    const widths = Array.isArray(updatedConfig.widths) ? updatedConfig.widths : [];
+    setPanneauPromoDrafts((previous) => {
+      const next: PanneauPromoDrafts = {};
+      for (const width of widths) {
+        const key = String(width.widthCm);
+        next[key] = Object.prototype.hasOwnProperty.call(previous, key) ? previous[key] : "";
+      }
+      return next;
+    });
+    const currentPrice = queryClient.getQueryData<{
+      pricePerM2: number;
+      salePricePerM2?: number | null;
+      isSaleActive?: boolean;
+      effectivePricePerM2?: number;
+    }>(["admin-price"]);
+    if (currentPrice) {
+      pushPriceUpdates(currentPrice, updatedConfig);
+    } else {
+      notifyPriceSettingsUpdated({ panneauConfig: updatedConfig });
+    }
+    success(successMessage);
+  };
+
+  const updatePanneauHeightMutation = useMutation({
+    mutationFn: async (fixedHeightCm: number) => {
+      const response = await fetch("/api/admin/panneau-config", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ fixedHeightCm }),
+      });
+      const data = await response.json();
+      if (!data.success) {
+        throw new Error(data.error);
+      }
+      return data.data as PanneauConfig;
+    },
+    onSuccess: (updatedConfig) => {
+      applyPanneauConfigUpdate(updatedConfig, "Hauteur fixe mise à jour.");
+    },
+    onError: (mutationError) => {
+      const message = mutationError instanceof Error ? mutationError.message : "Erreur inconnue";
+      error(`Erreur: ${message}`);
+    },
+  });
+
+  const upsertPanneauWidthMutation = useMutation({
+    mutationFn: async (payload: {
+      widthCm: number;
+      price: number;
+      previousWidthCm?: number;
     }) => {
       const response = await fetch("/api/admin/panneau-config", {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ fixedHeightCm, widths, isSaleActive: nextSaleActive }),
+        body: JSON.stringify({ width: payload }),
       });
       const data = await response.json();
       if (!data.success) {
         throw new Error(data.error);
       }
-      return data.data;
+      return data.data as PanneauConfig;
+    },
+    onSuccess: (updatedConfig, variables) => {
+      applyPanneauConfigUpdate(
+        updatedConfig,
+        typeof variables.previousWidthCm === "number"
+          ? "Largeur panneau mise à jour."
+          : "Largeur panneau ajoutée."
+      );
+      setEditingPanneauWidthCm(null);
+      setEditPanneauWidthCm("");
+      setEditPanneauWidthPrice("");
+      setNewPanneauWidthCm("");
+      setNewPanneauWidthPrice("");
+      setIsAddingPanneauWidth(false);
+    },
+    onError: (mutationError) => {
+      const message = mutationError instanceof Error ? mutationError.message : "Erreur inconnue";
+      error(`Erreur: ${message}`);
+    },
+  });
+
+  const deletePanneauWidthMutation = useMutation({
+    mutationFn: async (widthCm: number) => {
+      const response = await fetch("/api/admin/panneau-config", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ deleteWidthCm: widthCm }),
+      });
+      const data = await response.json();
+      if (!data.success) {
+        throw new Error(data.error);
+      }
+      return data.data as PanneauConfig;
     },
     onSuccess: (updatedConfig) => {
-      queryClient.setQueryData(["admin-panneau-config"], updatedConfig);
-      setIsPanneauSaleActive(Boolean(updatedConfig.isSaleActive));
-      const currentPrice = queryClient.getQueryData<{
-        pricePerM2: number;
-        salePricePerM2?: number | null;
-        isSaleActive?: boolean;
-        effectivePricePerM2?: number;
-      }>(["admin-price"]);
-      if (currentPrice) {
-        pushPriceUpdates(currentPrice, updatedConfig);
-      } else {
-        notifyPriceSettingsUpdated({ panneauConfig: updatedConfig });
-      }
-      success("Configuration panneau mise à jour avec succès.");
+      applyPanneauConfigUpdate(updatedConfig, "Largeur panneau supprimée.");
+      setEditingPanneauWidthCm(null);
     },
     onError: (mutationError) => {
       const message = mutationError instanceof Error ? mutationError.message : "Erreur inconnue";
@@ -317,11 +399,51 @@ export default function AdminDashboard({ title }: AdminDashboardProps) {
       if (!data.success) {
         throw new Error(data.error);
       }
-      return data.data;
+      return data.data as PanneauConfig;
+    },
+    onMutate: async ({ promoWidths, isSaleActive: nextSaleActive }) => {
+      await queryClient.cancelQueries({ queryKey: ["admin-panneau-config"] });
+      const previousConfig = queryClient.getQueryData<PanneauConfig>(["admin-panneau-config"]);
+
+      if (previousConfig && Array.isArray(previousConfig.widths)) {
+        const saleByWidth = new Map(
+          promoWidths.map((entry) => [entry.widthCm, entry.salePrice] as const)
+        );
+        const optimisticConfig: PanneauConfig = {
+          ...previousConfig,
+          isSaleActive: nextSaleActive,
+          lastUpdated: new Date().toISOString(),
+          widths: previousConfig.widths.map((width) => ({
+            ...width,
+            salePrice: saleByWidth.has(width.widthCm)
+              ? (saleByWidth.get(width.widthCm) ?? null)
+              : (width.salePrice ?? null),
+          })),
+        };
+
+        queryClient.setQueryData(["admin-panneau-config"], optimisticConfig);
+        setIsPanneauSaleActive(nextSaleActive);
+
+        const currentPrice = queryClient.getQueryData<{
+          pricePerM2: number;
+          salePricePerM2?: number | null;
+          isSaleActive?: boolean;
+          effectivePricePerM2?: number;
+        }>(["admin-price"]);
+        if (currentPrice) {
+          pushPriceUpdates(currentPrice, optimisticConfig);
+        } else {
+          notifyPriceSettingsUpdated({ panneauConfig: optimisticConfig });
+        }
+      }
+
+      return { previousConfig };
     },
     onSuccess: (updatedConfig) => {
       queryClient.setQueryData(["admin-panneau-config"], updatedConfig);
       setIsPanneauSaleActive(Boolean(updatedConfig.isSaleActive));
+      const widths = Array.isArray(updatedConfig.widths) ? updatedConfig.widths : [];
+      setPanneauPromoDrafts(mapWidthsToPromoDrafts(widths));
       const currentPrice = queryClient.getQueryData<{
         pricePerM2: number;
         salePricePerM2?: number | null;
@@ -339,7 +461,11 @@ export default function AdminDashboard({ title }: AdminDashboardProps) {
           : "Promotion panneau désactivée."
       );
     },
-    onError: (mutationError) => {
+    onError: (mutationError, _variables, context) => {
+      if (context?.previousConfig) {
+        queryClient.setQueryData(["admin-panneau-config"], context.previousConfig);
+        setIsPanneauSaleActive(Boolean(context.previousConfig.isSaleActive));
+      }
       const message = mutationError instanceof Error ? mutationError.message : "Erreur inconnue";
       error(`Erreur: ${message}`);
     },
@@ -358,11 +484,43 @@ export default function AdminDashboard({ title }: AdminDashboardProps) {
       if (!data.success) {
         throw new Error(data.error);
       }
-      return data.data;
+      return data.data as PanneauConfig;
+    },
+    onMutate: async (nextSaleActive) => {
+      await queryClient.cancelQueries({ queryKey: ["admin-panneau-config"] });
+      const previousConfig = queryClient.getQueryData<PanneauConfig>(["admin-panneau-config"]);
+
+      if (previousConfig) {
+        const optimisticConfig: PanneauConfig = {
+          ...previousConfig,
+          isSaleActive: nextSaleActive,
+          lastUpdated: new Date().toISOString(),
+        };
+        queryClient.setQueryData(["admin-panneau-config"], optimisticConfig);
+        setIsPanneauSaleActive(nextSaleActive);
+        if (!nextSaleActive) {
+          setPanneauPromoDrafts(emptyPanneauPromoDrafts(previousConfig.widths ?? []));
+        }
+
+        const currentPrice = queryClient.getQueryData<{
+          pricePerM2: number;
+          salePricePerM2?: number | null;
+          isSaleActive?: boolean;
+          effectivePricePerM2?: number;
+        }>(["admin-price"]);
+        if (currentPrice) {
+          pushPriceUpdates(currentPrice, optimisticConfig);
+        } else {
+          notifyPriceSettingsUpdated({ panneauConfig: optimisticConfig });
+        }
+      }
+
+      return { previousConfig };
     },
     onSuccess: (updatedConfig) => {
       queryClient.setQueryData(["admin-panneau-config"], updatedConfig);
       setIsPanneauSaleActive(Boolean(updatedConfig.isSaleActive));
+      setPanneauPromoDrafts(emptyPanneauPromoDrafts(updatedConfig.widths ?? []));
       const currentPrice = queryClient.getQueryData<{
         pricePerM2: number;
         salePricePerM2?: number | null;
@@ -376,10 +534,20 @@ export default function AdminDashboard({ title }: AdminDashboardProps) {
       }
       success("Promotion panneau désactivée.");
     },
-    onError: (mutationError) => {
+    onError: (mutationError, _nextSaleActive, context) => {
+      if (context?.previousConfig) {
+        queryClient.setQueryData(["admin-panneau-config"], context.previousConfig);
+        setIsPanneauSaleActive(Boolean(context.previousConfig.isSaleActive));
+        setPanneauPromoDrafts(
+          context.previousConfig.isSaleActive === true
+            ? mapWidthsToPromoDrafts(context.previousConfig.widths ?? [])
+            : emptyPanneauPromoDrafts(context.previousConfig.widths ?? [])
+        );
+      } else {
+        setIsPanneauSaleActive(true);
+      }
       const message = mutationError instanceof Error ? mutationError.message : "Erreur inconnue";
       error(`Erreur: ${message}`);
-      setIsPanneauSaleActive(true);
     },
   });
 
@@ -402,13 +570,88 @@ export default function AdminDashboard({ title }: AdminDashboardProps) {
       if (!data.success) {
         throw new Error(data.error);
       }
-      return data.data;
+      return data.data as AdminProduct;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin-products-panneau"] });
-      success("Références panneau mises à jour.");
+    onMutate: async ({ productId, supportsPanneau }) => {
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: ["admin-products-panneau"] }),
+        queryClient.cancelQueries({ queryKey: PRODUCTS_QUERY_KEY }),
+      ]);
+
+      const previousAdminProducts = queryClient.getQueryData<AdminProduct[]>([
+        "admin-products-panneau",
+      ]);
+      const previousProducts = queryClient.getQueryData(PRODUCTS_QUERY_KEY);
+
+      const patchSupportsPanneau = <T extends { _id?: string; id?: string; supportsPanneau?: boolean }>(
+        products: T[] | undefined
+      ): T[] | undefined => {
+        if (!Array.isArray(products)) {
+          return products;
+        }
+        return products.map((product) =>
+          product._id === productId || product.id === productId
+            ? { ...product, supportsPanneau }
+            : product
+        );
+      };
+
+      queryClient.setQueryData(["admin-products-panneau"], (current: AdminProduct[] | undefined) =>
+        patchSupportsPanneau(current)
+      );
+      queryClient.setQueryData(PRODUCTS_QUERY_KEY, (current: unknown) =>
+        patchSupportsPanneau(current as AdminProduct[] | undefined)
+      );
+
+      return { previousAdminProducts, previousProducts };
     },
-    onError: (mutationError) => {
+    onSuccess: (updatedProduct, variables) => {
+      if (updatedProduct) {
+        queryClient.setQueryData(
+          ["admin-products-panneau"],
+          (current: AdminProduct[] | undefined) =>
+            Array.isArray(current)
+              ? current.map((product) =>
+                  product._id === updatedProduct._id || product._id === variables.productId
+                    ? {
+                        ...product,
+                        ...updatedProduct,
+                        _id: updatedProduct._id || variables.productId,
+                        supportsPanneau: updatedProduct.supportsPanneau === true,
+                      }
+                    : product
+                )
+              : current
+        );
+        queryClient.setQueryData(PRODUCTS_QUERY_KEY, (current: AdminProduct[] | undefined) =>
+          Array.isArray(current)
+            ? current.map((product) =>
+                product._id === updatedProduct._id || product._id === variables.productId
+                  ? {
+                      ...product,
+                      ...updatedProduct,
+                      _id: updatedProduct._id || variables.productId,
+                      supportsPanneau: updatedProduct.supportsPanneau === true,
+                    }
+                  : product
+              )
+            : current
+        );
+      }
+      notifyProductsUpdated();
+      success(
+        variables.supportsPanneau
+          ? "Référence ajoutée à l'option panneau."
+          : "Référence retirée de l'option panneau."
+      );
+    },
+    onError: (mutationError, _variables, context) => {
+      if (context?.previousAdminProducts) {
+        queryClient.setQueryData(["admin-products-panneau"], context.previousAdminProducts);
+      }
+      if (context?.previousProducts) {
+        queryClient.setQueryData(PRODUCTS_QUERY_KEY, context.previousProducts);
+      }
       const message = mutationError instanceof Error ? mutationError.message : "Erreur inconnue";
       error(`Erreur: ${message}`);
     },
@@ -495,7 +738,7 @@ export default function AdminDashboard({ title }: AdminDashboardProps) {
       return;
     }
 
-    const salePrice = parseFloat(newSalePrice);
+    const salePrice = parseFloat(newSalePrice.trim().replace(",", "."));
     if (isNaN(salePrice) || salePrice <= 0) {
       warning("Veuillez entrer un prix promotionnel valide.");
       return;
@@ -503,13 +746,14 @@ export default function AdminDashboard({ title }: AdminDashboardProps) {
 
     const cataloguePrice = priceData?.pricePerM2 ?? parseFloat(newPrice);
     if (!isNaN(cataloguePrice) && salePrice >= cataloguePrice) {
+      warning("Le prix promotionnel doit être inférieur au prix catalogue.");
       return;
     }
 
     updateSaleMutation.mutate({ salePricePerM2: salePrice, isSaleActive: true });
   };
 
-  const handlePanneauUpdate = (e: React.FormEvent) => {
+  const handlePanneauHeightUpdate = (e: React.FormEvent) => {
     e.preventDefault();
     const fixedHeight = parseFloat(fixedPanneauHeight);
 
@@ -518,106 +762,68 @@ export default function AdminDashboard({ title }: AdminDashboardProps) {
       return;
     }
 
-    if (panneauWidthDrafts.length === 0) {
-      warning("Ajoutez au moins une largeur panneau.");
-      return;
-    }
-
-    const widths: Array<{
-      widthCm: number;
-      price: number;
-      salePrice: number | null;
-    }> = [];
-
-    for (let index = 0; index < panneauWidthDrafts.length; index += 1) {
-      const draft = panneauWidthDrafts[index];
-      const widthCm = parseFloat(draft.widthCm);
-      const price = parseFloat(draft.price.replace(",", "."));
-      const salePriceRaw = draft.salePrice.trim();
-      const salePrice =
-        salePriceRaw === "" ? null : parseFloat(salePriceRaw.replace(",", "."));
-
-      if (isNaN(widthCm) || widthCm <= 0 || isNaN(price) || price <= 0) {
-        warning(`Ligne ${index + 1}: largeur et prix doivent être valides.`);
-        return;
-      }
-
-      if (
-        salePrice !== null &&
-        (isNaN(salePrice) || salePrice <= 0 || (isPanneauSaleActive && salePrice >= price))
-      ) {
-        warning(`Ligne ${index + 1}: prix promotionnel invalide.`);
-        return;
-      }
-
-      widths.push({
-        widthCm: Math.round(widthCm),
-        price,
-        salePrice,
-      });
-    }
-
-    const uniqueWidths = new Set(widths.map((width) => width.widthCm));
-    if (uniqueWidths.size !== widths.length) {
-      warning("Chaque largeur panneau doit être unique.");
-      return;
-    }
-
-    updatePanneauMutation.mutate({
-      fixedHeightCm: Math.round(fixedHeight),
-      widths,
-      isSaleActive: isPanneauSaleActive,
-    });
+    updatePanneauHeightMutation.mutate(Math.round(fixedHeight));
   };
 
   const handlePanneauSaleToggle = (nextActive: boolean) => {
-    if (!nextActive && panneauConfigData?.isSaleActive) {
+    if (!nextActive && panneauConfigData?.isSaleActive === true) {
       setIsPanneauSaleActive(false);
-      updatePanneauSaleToggleMutation.mutate(false);
+      setPanneauPromoDrafts(emptyPanneauPromoDrafts(panneauConfigData.widths ?? []));
+      updatePanneauSaleToggleMutation.mutate(false, {
+        onError: () => setIsPanneauSaleActive(true),
+      });
       return;
     }
 
     setIsPanneauSaleActive(nextActive);
+    // Keep fields empty until the user types (same idea as m² when inactive / freshly activated).
+    setPanneauPromoDrafts(emptyPanneauPromoDrafts(panneauConfigData?.widths ?? []));
   };
 
   const handlePanneauSaleUpdate = (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!isPanneauSaleActive) {
-      updatePanneauSaleToggleMutation.mutate(false);
+      return;
+    }
+
+    const savedWidths = Array.isArray(panneauConfigData?.widths) ? panneauConfigData.widths : [];
+    if (savedWidths.length === 0) {
+      warning("Ajoutez d'abord une largeur panneau.");
       return;
     }
 
     const promoWidths: Array<{ widthCm: number; salePrice: number | null }> = [];
+    let hasAtLeastOnePromoPrice = false;
 
-    for (let index = 0; index < panneauWidthDrafts.length; index += 1) {
-      const draft = panneauWidthDrafts[index];
-      const widthCm = parseFloat(draft.widthCm);
-      const cataloguePrice = parseFloat(draft.price.replace(",", "."));
-      const salePriceRaw = draft.salePrice.trim();
-
-      if (isNaN(widthCm) || widthCm <= 0) {
-        warning(`Ligne ${index + 1}: largeur invalide.`);
-        return;
-      }
+    for (const savedWidth of savedWidths) {
+      const salePriceRaw = (panneauPromoDrafts[String(savedWidth.widthCm)] ?? "").trim();
 
       if (salePriceRaw === "") {
-        promoWidths.push({ widthCm: Math.round(widthCm), salePrice: null });
+        promoWidths.push({ widthCm: savedWidth.widthCm, salePrice: null });
         continue;
       }
 
       const salePrice = parseFloat(salePriceRaw.replace(",", "."));
       if (isNaN(salePrice) || salePrice <= 0) {
-        warning(`Ligne ${index + 1}: prix promotionnel invalide.`);
+        warning(`Prix promotionnel invalide pour ${savedWidth.widthCm} cm.`);
         return;
       }
 
-      if (!isNaN(cataloguePrice) && salePrice >= cataloguePrice) {
-        warning(`Ligne ${index + 1}: le prix promo doit être inférieur au prix catalogue.`);
+      if (salePrice >= savedWidth.price) {
+        warning(
+          `Le prix promo pour ${savedWidth.widthCm} cm doit être inférieur au prix catalogue.`
+        );
         return;
       }
 
-      promoWidths.push({ widthCm: Math.round(widthCm), salePrice });
+      hasAtLeastOnePromoPrice = true;
+      promoWidths.push({ widthCm: savedWidth.widthCm, salePrice });
+    }
+
+    if (!hasAtLeastOnePromoPrice) {
+      warning("Saisissez au moins un prix promotionnel avant d'enregistrer.");
+      return;
     }
 
     updatePanneauPromoMutation.mutate({
@@ -626,7 +832,15 @@ export default function AdminDashboard({ title }: AdminDashboardProps) {
     });
   };
 
+  const savedPanneauWidths: PanneauWidthConfig[] = Array.isArray(panneauConfigData?.widths)
+    ? panneauConfigData.widths
+    : [];
+
   const handleAddPanneauWidth = () => {
+    if (upsertPanneauWidthMutation.isPending) {
+      return;
+    }
+
     const widthCm = parseFloat(newPanneauWidthCm);
     const price = parseFloat(newPanneauWidthPrice.replace(",", "."));
 
@@ -635,23 +849,16 @@ export default function AdminDashboard({ title }: AdminDashboardProps) {
       return;
     }
 
-    const roundedWidth = Math.round(widthCm).toString();
-    if (panneauWidthDrafts.some((draft) => draft.widthCm === roundedWidth)) {
+    const roundedWidth = Math.round(widthCm);
+    if (savedPanneauWidths.some((width) => width.widthCm === roundedWidth)) {
       warning("Cette largeur existe déjà.");
       return;
     }
 
-    setPanneauWidthDrafts((previous) => [
-      ...previous,
-      {
-        widthCm: roundedWidth,
-        price: price.toString(),
-        salePrice: "",
-      },
-    ]);
-    setNewPanneauWidthCm("");
-    setNewPanneauWidthPrice("");
-    setIsAddingPanneauWidth(false);
+    upsertPanneauWidthMutation.mutate({
+      widthCm: roundedWidth,
+      price,
+    });
   };
 
   const handleCancelAddPanneauWidth = () => {
@@ -661,6 +868,7 @@ export default function AdminDashboard({ title }: AdminDashboardProps) {
   };
 
   const handleOpenAddPanneauWidth = () => {
+    setEditingPanneauWidthCm(null);
     setNewPanneauWidthCm("");
     setNewPanneauWidthPrice("");
     setIsAddingPanneauWidth(true);
@@ -673,8 +881,60 @@ export default function AdminDashboard({ title }: AdminDashboardProps) {
     }
   };
 
-  const handleRemovePanneauWidth = (index: number) => {
-    setPanneauWidthDrafts((previous) => previous.filter((_, draftIndex) => draftIndex !== index));
+  const handleStartEditPanneauWidth = (width: { widthCm: number; price: number }) => {
+    setIsAddingPanneauWidth(false);
+    setEditingPanneauWidthCm(width.widthCm);
+    setEditPanneauWidthCm(width.widthCm.toString());
+    setEditPanneauWidthPrice(width.price.toString());
+  };
+
+  const handleCancelEditPanneauWidth = () => {
+    setEditingPanneauWidthCm(null);
+    setEditPanneauWidthCm("");
+    setEditPanneauWidthPrice("");
+  };
+
+  const handleSaveEditPanneauWidth = () => {
+    if (editingPanneauWidthCm === null || upsertPanneauWidthMutation.isPending) {
+      return;
+    }
+
+    const widthCm = parseFloat(editPanneauWidthCm);
+    const price = parseFloat(editPanneauWidthPrice.replace(",", "."));
+
+    if (isNaN(widthCm) || widthCm <= 0 || isNaN(price) || price <= 0) {
+      warning("Veuillez entrer une largeur et un prix valides.");
+      return;
+    }
+
+    const roundedWidth = Math.round(widthCm);
+    if (
+      roundedWidth !== editingPanneauWidthCm &&
+      savedPanneauWidths.some((width) => width.widthCm === roundedWidth)
+    ) {
+      warning("Cette largeur existe déjà.");
+      return;
+    }
+
+    upsertPanneauWidthMutation.mutate({
+      widthCm: roundedWidth,
+      price,
+      previousWidthCm: editingPanneauWidthCm,
+    });
+  };
+
+  const handleEditPanneauWidthKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      handleSaveEditPanneauWidth();
+    }
+  };
+
+  const handleRemovePanneauWidth = (widthCm: number) => {
+    if (deletePanneauWidthMutation.isPending) {
+      return;
+    }
+    deletePanneauWidthMutation.mutate(widthCm);
   };
 
   const handleTogglePanneauReference = (productId: string, supportsPanneau: boolean) => {
@@ -700,7 +960,7 @@ export default function AdminDashboard({ title }: AdminDashboardProps) {
   }
 
   const storeListPrice = priceData?.pricePerM2 ?? 0;
-  const parsedSalePrice = parseFloat(newSalePrice);
+  const parsedSalePrice = parseFloat(newSalePrice.trim().replace(",", "."));
   const salePriceError =
     isSaleActive &&
     newSalePrice.trim() !== "" &&
@@ -715,28 +975,75 @@ export default function AdminDashboard({ title }: AdminDashboardProps) {
     parsedSalePrice > 0 &&
     parsedSalePrice < storeListPrice;
   const savedSalePrice =
-    typeof priceData?.salePricePerM2 === "number" ? priceData.salePricePerM2 : null;
+    typeof priceData?.salePricePerM2 === "number"
+      ? Number(priceData.salePricePerM2.toFixed(2))
+      : null;
+  const draftSalePrice = hasDraftSalePrice ? Number(parsedSalePrice.toFixed(2)) : null;
+  const hasUnsavedStoreSale =
+    isSaleActive &&
+    draftSalePrice !== null &&
+    !Boolean(salePriceError) &&
+    (priceData?.isSaleActive !== true || draftSalePrice !== savedSalePrice);
   const activeSalePrice = hasDraftSalePrice
     ? parsedSalePrice
     : priceData?.isSaleActive === true
       ? savedSalePrice
       : null;
   const isStoreOnSale = activeSalePrice !== null;
-  const storeEffectivePrice = isStoreOnSale ? activeSalePrice : storeListPrice;
-  const hasPanneauPromoError = panneauWidthDrafts.some((draft) => {
-    if (!isPanneauSaleActive || draft.salePrice.trim() === "") {
-      return false;
+  const hasPanneauPromoError = (panneauConfigData?.widths ?? []).some(
+    (width: { widthCm: number; price: number }) => {
+      if (!isPanneauSaleActive) {
+        return false;
+      }
+
+      const saleValue = (panneauPromoDrafts[String(width.widthCm)] ?? "").trim();
+      if (saleValue === "") {
+        return false;
+      }
+
+      const salePrice = parseFloat(saleValue.replace(",", "."));
+      return !Number.isNaN(salePrice) && salePrice >= width.price;
     }
+  );
+  const hasValidPanneauPromoDraft = (panneauConfigData?.widths ?? []).some(
+    (width: { widthCm: number; price: number }) => {
+      const saleValue = (panneauPromoDrafts[String(width.widthCm)] ?? "").trim();
+      if (saleValue === "") {
+        return false;
+      }
 
-    const cataloguePrice = parseFloat(draft.price.replace(",", "."));
-    const salePrice = parseFloat(draft.salePrice.replace(",", "."));
+      const salePrice = parseFloat(saleValue.replace(",", "."));
+      return (
+        !Number.isNaN(salePrice) &&
+        salePrice > 0 &&
+        salePrice < width.price
+      );
+    }
+  );
+  const hasUnsavedPanneauPromo =
+    isPanneauSaleActive &&
+    hasValidPanneauPromoDraft &&
+    !hasPanneauPromoError &&
+    ((panneauConfigData?.isSaleActive !== true) ||
+      (panneauConfigData?.widths ?? []).some(
+        (width: { widthCm: number; salePrice?: number | null }) => {
+          const draftRaw = (panneauPromoDrafts[String(width.widthCm)] ?? "").trim();
+          const draftPrice =
+            draftRaw === ""
+              ? null
+              : Number(parseFloat(draftRaw.replace(",", ".")).toFixed(2));
+          const savedPrice =
+            typeof width.salePrice === "number"
+              ? Number(width.salePrice.toFixed(2))
+              : null;
 
-    return (
-      !Number.isNaN(cataloguePrice) &&
-      !Number.isNaN(salePrice) &&
-      salePrice >= cataloguePrice
-    );
-  });
+          if (draftPrice === null && savedPrice === null) {
+            return false;
+          }
+
+          return draftPrice !== savedPrice;
+        }
+      ));
   const formatLastUpdated = (value?: string) =>
     value
       ? new Date(value).toLocaleString("fr-FR", {
@@ -747,17 +1054,28 @@ export default function AdminDashboard({ title }: AdminDashboardProps) {
           minute: "2-digit",
         })
       : null;
-  const panneauWidthGridClass = isPanneauSaleActive
-    ? "md:grid-cols-[auto_auto_auto_2.75rem]"
-    : "md:grid-cols-[auto_auto_2.75rem]";
-  const panneauWidthAddGridClass = isPanneauSaleActive
-    ? "md:grid-cols-[auto_auto_auto_5.5rem]"
-    : "md:grid-cols-[auto_auto_5.5rem]";
-  const panneauCellInputClass = formFieldClass;
+  const panneauTableShellClassName =
+    "w-full max-w-full overflow-hidden rounded-lg bg-white dark:bg-gray-800";
+  const panneauWidthGridClass =
+    "md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_6.5rem]";
+  const panneauWidthCellClass = "flex min-w-0 items-center justify-center";
+  const panneauWidthActionsClass = "flex items-center justify-center gap-1";
+  const panneauCellInputClass = `${formFieldClass} text-center`;
+  const isPanneauPromoSaved = panneauConfigData?.isSaleActive === true;
+  const canSavePanneauPromo =
+    hasUnsavedPanneauPromo &&
+    !updatePanneauPromoMutation.isPending &&
+    !updatePanneauSaleToggleMutation.isPending;
+  const canSaveStoreSale =
+    hasUnsavedStoreSale && !updateSaleMutation.isPending;
+  const panneauReferenceCheckboxBoxClass =
+    "flex h-5 w-5 shrink-0 items-center justify-center rounded-md border-2 border-gray-300 bg-white shadow-sm transition-all duration-200 peer-checked:border-amber-500 peer-checked:bg-gradient-to-br peer-checked:from-amber-400 peer-checked:to-amber-500 peer-checked:shadow-md peer-focus-visible:ring-2 peer-focus-visible:ring-amber-500/40 peer-disabled:cursor-not-allowed peer-disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:peer-checked:border-amber-400 dark:peer-checked:from-amber-500 dark:peer-checked:to-amber-600";
   const panneauPlusButtonClass =
     "flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-amber-300 bg-white text-lg font-medium text-amber-700 transition-colors hover:bg-amber-100 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-300 dark:hover:bg-amber-900/50";
   const panneauConfirmButtonClass =
-    "flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-green-300 bg-white text-green-700 transition-colors hover:bg-green-100 dark:border-green-700 dark:bg-green-950/40 dark:text-green-300 dark:hover:bg-green-900/50";
+    "flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-green-300 bg-white text-green-700 transition-colors hover:bg-green-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-green-700 dark:bg-green-950/40 dark:text-green-300 dark:hover:bg-green-900/50";
+  const panneauEditButtonClass =
+    "flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-600 transition-colors hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700";
   const canConfirmNewPanneauWidth =
     isAddingPanneauWidth &&
     newPanneauWidthCm.trim() !== "" &&
@@ -765,27 +1083,60 @@ export default function AdminDashboard({ title }: AdminDashboardProps) {
     !Number.isNaN(parseFloat(newPanneauWidthCm)) &&
     parseFloat(newPanneauWidthCm) > 0 &&
     !Number.isNaN(parseFloat(newPanneauWidthPrice.replace(",", "."))) &&
-    parseFloat(newPanneauWidthPrice.replace(",", ".")) > 0;
+    parseFloat(newPanneauWidthPrice.replace(",", ".")) > 0 &&
+    !upsertPanneauWidthMutation.isPending;
+  const canConfirmEditPanneauWidth =
+    editingPanneauWidthCm !== null &&
+    editPanneauWidthCm.trim() !== "" &&
+    editPanneauWidthPrice.trim() !== "" &&
+    !Number.isNaN(parseFloat(editPanneauWidthCm)) &&
+    parseFloat(editPanneauWidthCm) > 0 &&
+    !Number.isNaN(parseFloat(editPanneauWidthPrice.replace(",", "."))) &&
+    parseFloat(editPanneauWidthPrice.replace(",", ".")) > 0 &&
+    !upsertPanneauWidthMutation.isPending;
+  const CheckIcon = (
+    <svg
+      className="h-5 w-5"
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={2.5}
+      aria-hidden="true"
+    >
+      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+    </svg>
+  );
+  const EditIcon = (
+    <svg
+      className="h-4 w-4"
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={2}
+      aria-hidden="true"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M16.862 3.487a2.1 2.1 0 113 3L8.25 18.1 4 19.25l1.15-4.25 11.712-11.513z"
+      />
+    </svg>
+  );
 
   return (
     <>
       <Head>
-        <title>{title}</title>
+        <title>{PAGE_TITLE}</title>
         <meta name="description" content="Tableau de bord administrateur - Rideaux Bambou" />
       </Head>
 
-      <div className="min-h-screen bg-white dark:bg-gray-900">
+      <div className="min-h-screen bg-gray-100 dark:bg-gray-900">
         {/* Navigation */}
         <AdminNavigation />
 
         {/* Main Content */}
         <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8 }}
-            className="space-y-8"
-          >
+          <div className="space-y-8">
             {/* Unified management section */}
             <Card className="overflow-hidden border-0 bg-gradient-to-br from-slate-50 via-white to-slate-100 p-0 shadow-xl dark:from-gray-800 dark:via-gray-800 dark:to-gray-900">
               <div className="border-b border-gray-200 bg-white/70 px-6 py-6 dark:border-gray-700 dark:bg-gray-900/40">
@@ -816,14 +1167,14 @@ export default function AdminDashboard({ title }: AdminDashboardProps) {
                       <p className="mt-1 text-sm text-gray-500">…</p>
                     ) : (
                       <div className="mt-1">
-                        <p className="text-lg font-semibold text-gray-900 dark:text-white">
-                          {storeEffectivePrice.toFixed(2)} TND/m²
-                        </p>
-                        {isStoreOnSale && (
-                          <span className="mt-1.5 inline-flex items-center rounded-full border border-green-200 bg-white px-3 py-1 text-xs font-medium text-green-800 dark:border-green-800 dark:bg-green-950/40 dark:text-green-200">
-                            Promo · {activeSalePrice!.toFixed(2)} TND/m²
-                          </span>
-                        )}
+                        <PriceDisplay
+                          pricePerM2={storeListPrice}
+                          salePricePerM2={activeSalePrice}
+                          isSaleActive={isStoreOnSale}
+                          suffix=" TND/m²"
+                          listClassName="text-sm text-gray-500 line-through dark:text-gray-400"
+                          saleClassName="text-lg font-semibold text-green-600 dark:text-green-400"
+                        />
                       </div>
                     )}
                   </div>
@@ -858,14 +1209,14 @@ export default function AdminDashboard({ title }: AdminDashboardProps) {
                         <p className="mt-1 text-sm text-gray-500">…</p>
                       ) : (
                         <div className="mt-1">
-                          <p className="text-lg font-semibold text-gray-900 dark:text-white">
-                            {effectivePrice.toFixed(2)} TND
-                          </p>
-                          {onPromo && (
-                            <span className="mt-1.5 inline-flex items-center rounded-full border border-amber-200 bg-white px-3 py-1 text-xs font-medium text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
-                              Promo · {effectivePrice.toFixed(2)} TND
-                            </span>
-                          )}
+                          <PriceDisplay
+                            pricePerM2={width.price}
+                            salePricePerM2={width.salePrice ?? null}
+                            isSaleActive={onPromo}
+                            suffix=" TND"
+                            listClassName="text-sm text-gray-500 line-through dark:text-gray-400"
+                            saleClassName="text-lg font-semibold text-amber-700 dark:text-amber-300"
+                          />
                         </div>
                       )}
                     </div>
@@ -921,14 +1272,15 @@ export default function AdminDashboard({ title }: AdminDashboardProps) {
                             <p className="mt-2 text-sm text-gray-500">Chargement...</p>
                           ) : (
                             <div className="mt-2">
-                              <p className="text-2xl font-semibold text-gray-900 dark:text-white">
-                                {storeListPrice.toFixed(2)} TND/m²
-                              </p>
-                              {isStoreOnSale && (
-                                <span className="mt-2 inline-flex items-center rounded-full border border-green-200 bg-white px-3 py-1 text-xs font-medium text-green-800 dark:border-green-800 dark:bg-green-950/40 dark:text-green-200">
-                                  Promo · {activeSalePrice!.toFixed(2)} TND/m²
-                                </span>
-                              )}
+                              <PriceDisplay
+                                pricePerM2={storeListPrice}
+                                salePricePerM2={activeSalePrice}
+                                isSaleActive={isStoreOnSale}
+                                suffix=" TND/m²"
+                                className="text-2xl font-semibold"
+                                listClassName="text-lg text-gray-500 line-through dark:text-gray-400"
+                                saleClassName="text-2xl font-semibold text-green-600 dark:text-green-400"
+                              />
                             </div>
                           )}
                       </div>
@@ -988,11 +1340,10 @@ export default function AdminDashboard({ title }: AdminDashboardProps) {
                             {isSaleActive ? "Active" : "Inactive"}
                           </label>
                         </div>
-                        <form onSubmit={handleSaleUpdate} className="space-y-4">
+                        <form onSubmit={handleSaleUpdate} noValidate className="space-y-4">
                           <Input
                             type="text"
                             inputMode="decimal"
-                            pattern="^[0-9]+([.,][0-9]{1,2})?$"
                             value={newSalePrice}
                             onChange={(e) => setNewSalePrice(e.target.value.replace(",", "."))}
                             placeholder="Ex: 60"
@@ -1004,9 +1355,7 @@ export default function AdminDashboard({ title }: AdminDashboardProps) {
                             type="submit"
                             size="sm"
                             variant="secondary"
-                            disabled={
-                              updateSaleMutation.isPending || !isSaleActive || Boolean(salePriceError)
-                            }
+                            disabled={!canSaveStoreSale || Boolean(salePriceError)}
                           >
                             Enregistrer la promotion
                           </Button>
@@ -1084,7 +1433,7 @@ export default function AdminDashboard({ title }: AdminDashboardProps) {
                       <div className="flex shrink-0 flex-col items-end gap-1">
                         <span
                           className={`inline-flex items-center rounded-full border border-amber-200 bg-white px-3 py-1 text-xs font-medium text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200 ${
-                            isPanneauSaleActive ? "" : "invisible"
+                            isPanneauPromoSaved ? "" : "invisible"
                           }`}
                         >
                           Promotion active
@@ -1134,14 +1483,16 @@ export default function AdminDashboard({ title }: AdminDashboardProps) {
                                 <p className="text-xs font-medium tracking-wide text-amber-700/80 dark:text-amber-300/80">
                                   {formatPanneauCardLabel(width.widthCm)}
                                 </p>
-                                <p className="mt-2 text-lg font-semibold text-gray-900 dark:text-white">
-                                  {width.price.toFixed(2)} TND
-                                </p>
-                                {onPromo && (
-                                  <span className="mt-2 inline-flex items-center rounded-full border border-amber-200 bg-white px-3 py-1 text-xs font-medium text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
-                                    Promo · {effectivePrice.toFixed(2)} TND
-                                  </span>
-                                )}
+                                <div className="mt-2">
+                                  <PriceDisplay
+                                    pricePerM2={width.price}
+                                    salePricePerM2={width.salePrice ?? null}
+                                    isSaleActive={onPromo}
+                                    suffix=" TND"
+                                    listClassName="text-sm text-gray-500 line-through dark:text-gray-400"
+                                    saleClassName="text-lg font-semibold text-amber-700 dark:text-amber-300"
+                                  />
+                                </div>
                               </div>
                               );
                             }
@@ -1162,12 +1513,13 @@ export default function AdminDashboard({ title }: AdminDashboardProps) {
                               </p>
                             </div>
                             <span className="shrink-0 rounded-full bg-white px-2.5 py-1 text-xs font-medium text-gray-600 ring-1 ring-gray-200 dark:bg-gray-900 dark:text-gray-300 dark:ring-gray-700">
-                              {panneauWidthDrafts.length} modèle{panneauWidthDrafts.length > 1 ? "s" : ""}
+                              {savedPanneauWidths.length} modèle
+                              {savedPanneauWidths.length > 1 ? "s" : ""}
                             </span>
                           </div>
 
-                          <form onSubmit={handlePanneauUpdate} className="space-y-5">
-                            <div className="max-w-xs">
+                          <div className="space-y-5">
+                            <form onSubmit={handlePanneauHeightUpdate} className="max-w-md">
                               <Input
                                 label="Hauteur fixe (cm)"
                                 type="text"
@@ -1179,206 +1531,202 @@ export default function AdminDashboard({ title }: AdminDashboardProps) {
                                 }
                                 placeholder="220"
                                 className="text-sm"
+                                endAction={
+                                  <Button
+                                    type="submit"
+                                    size="sm"
+                                    disabled={updatePanneauHeightMutation.isPending}
+                                  >
+                                    Mettre à jour
+                                  </Button>
+                                }
                               />
-                            </div>
+                            </form>
 
-                            <div className={adminTableShellInsetClassName}>
+                            <div className={panneauTableShellClassName}>
                               <div
                                 className={`hidden w-full gap-3 ${adminTableHeaderClassName} px-3 py-3 sm:px-4 md:grid ${panneauWidthGridClass}`}
                               >
-                                <span className={`text-center ${adminTableHeadTextClassName}`}>Largeur (cm)</span>
-                                <span className={`text-center ${adminTableHeadTextClassName}`}>Prix catalogue</span>
-                                {isPanneauSaleActive && (
-                                  <span className={`text-center ${adminTableHeadTextClassName}`}>Prix promo</span>
-                                )}
-                                <span className="sr-only">Action</span>
+                                <span className={`${panneauWidthCellClass} ${adminTableHeadTextClassName}`}>
+                                  Largeur (cm)
+                                </span>
+                                <span className={`${panneauWidthCellClass} ${adminTableHeadTextClassName}`}>
+                                  Prix catalogue
+                                </span>
+                                <span className={`${panneauWidthCellClass} ${adminTableHeadTextClassName}`}>
+                                  Action
+                                </span>
                               </div>
 
-                              {panneauWidthDrafts.length === 0 && !isAddingPanneauWidth ? (
+                              {savedPanneauWidths.length === 0 && !isAddingPanneauWidth ? (
                                 <p className="px-3 py-4 text-center text-sm text-gray-500 sm:px-4 dark:text-gray-400">
                                   Aucune largeur configurée.
                                 </p>
-                              ) : panneauWidthDrafts.length > 0 ? (
+                              ) : savedPanneauWidths.length > 0 ? (
                                 <div className={`w-full ${adminTableBodyClassName}`}>
-                                  {panneauWidthDrafts.map((draft, index) => (
-                                    <div
-                                      key={`${draft.widthCm}-${index}`}
-                                      className={`grid w-full grid-cols-1 items-center gap-3 px-3 py-4 sm:px-4 md:grid ${panneauWidthGridClass}`}
-                                    >
-                                      <input
-                                        type="text"
-                                        inputMode="numeric"
-                                        value={draft.widthCm}
-                                        onChange={(e) =>
-                                          setPanneauWidthDrafts((previous) =>
-                                            previous.map((entry, entryIndex) =>
-                                              entryIndex === index
-                                                ? { ...entry, widthCm: e.target.value }
-                                                : entry
-                                            )
-                                          )
-                                        }
-                                        className={panneauCellInputClass}
-                                      />
-                                      <input
-                                        type="text"
-                                        inputMode="decimal"
-                                        value={draft.price}
-                                        onChange={(e) =>
-                                          setPanneauWidthDrafts((previous) =>
-                                            previous.map((entry, entryIndex) =>
-                                              entryIndex === index
-                                                ? {
-                                                    ...entry,
-                                                    price: e.target.value.replace(",", "."),
-                                                  }
-                                                : entry
-                                            )
-                                          )
-                                        }
-                                        className={panneauCellInputClass}
-                                      />
-                                      {isPanneauSaleActive && (
-                                        <div>
-                                          <input
-                                            type="text"
-                                            inputMode="decimal"
-                                            value={draft.salePrice}
-                                            onChange={(e) =>
-                                              setPanneauWidthDrafts((previous) =>
-                                                previous.map((entry, entryIndex) =>
-                                                  entryIndex === index
-                                                    ? {
-                                                        ...entry,
-                                                        salePrice: e.target.value.replace(",", "."),
-                                                      }
-                                                    : entry
-                                                )
-                                              )
-                                            }
-                                            className={`${panneauCellInputClass} ${
-                                              draft.salePrice.trim() !== "" &&
-                                              !Number.isNaN(parseFloat(draft.price)) &&
-                                              !Number.isNaN(parseFloat(draft.salePrice)) &&
-                                              parseFloat(draft.salePrice) >= parseFloat(draft.price)
-                                                ? "border-red-500 focus:border-red-500 focus:ring-red-500/20"
-                                                : ""
-                                            }`}
-                                          />
-                                          {draft.salePrice.trim() !== "" &&
-                                            !Number.isNaN(parseFloat(draft.price)) &&
-                                            !Number.isNaN(parseFloat(draft.salePrice)) &&
-                                            parseFloat(draft.salePrice) >= parseFloat(draft.price) && (
-                                              <p className="mt-1 text-xs text-red-500 md:hidden">
-                                                Doit être inférieur au catalogue
-                                              </p>
-                                            )}
-                                        </div>
-                                      )}
-                                      <button
-                                        type="button"
-                                        onClick={() => handleRemovePanneauWidth(index)}
-                                        className="flex h-10 w-10 items-center justify-center self-center rounded-lg text-lg leading-none text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/30 dark:hover:text-red-400"
-                                        aria-label="Retirer cette largeur"
+                                  {savedPanneauWidths.map((width) => {
+                                    const isEditing = editingPanneauWidthCm === width.widthCm;
+
+                                    return (
+                                      <div
+                                        key={width.id}
+                                        className={`grid w-full grid-cols-1 items-center gap-3 px-3 py-4 sm:px-4 md:grid ${panneauWidthGridClass}`}
                                       >
-                                        ×
-                                      </button>
-                                    </div>
-                                  ))}
+                                        {isEditing ? (
+                                          <>
+                                            <div className={panneauWidthCellClass}>
+                                              <input
+                                                type="text"
+                                                inputMode="numeric"
+                                                value={editPanneauWidthCm}
+                                                onChange={(e) =>
+                                                  setEditPanneauWidthCm(e.target.value)
+                                                }
+                                                onKeyDown={handleEditPanneauWidthKeyDown}
+                                                autoFocus
+                                                className={panneauCellInputClass}
+                                              />
+                                            </div>
+                                            <div className={panneauWidthCellClass}>
+                                              <input
+                                                type="text"
+                                                inputMode="decimal"
+                                                value={editPanneauWidthPrice}
+                                                onChange={(e) =>
+                                                  setEditPanneauWidthPrice(
+                                                    e.target.value.replace(",", ".")
+                                                  )
+                                                }
+                                                onKeyDown={handleEditPanneauWidthKeyDown}
+                                                className={panneauCellInputClass}
+                                              />
+                                            </div>
+                                            <div className={panneauWidthActionsClass}>
+                                              <button
+                                                type="button"
+                                                onClick={handleSaveEditPanneauWidth}
+                                                disabled={!canConfirmEditPanneauWidth}
+                                                className={panneauConfirmButtonClass}
+                                                aria-label="Enregistrer la largeur"
+                                              >
+                                                {CheckIcon}
+                                              </button>
+                                              <button
+                                                type="button"
+                                                onClick={handleCancelEditPanneauWidth}
+                                                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-lg leading-none text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/30 dark:hover:text-red-400"
+                                                aria-label="Annuler"
+                                              >
+                                                ×
+                                              </button>
+                                            </div>
+                                          </>
+                                        ) : (
+                                          <>
+                                            <p
+                                              className={`${panneauWidthCellClass} text-sm font-medium text-gray-900 dark:text-white`}
+                                            >
+                                              {width.widthCm}
+                                            </p>
+                                            <p
+                                              className={`${panneauWidthCellClass} text-sm font-medium text-gray-900 dark:text-white`}
+                                            >
+                                              {width.price.toFixed(2)} TND
+                                            </p>
+                                            <div className={panneauWidthActionsClass}>
+                                              <button
+                                                type="button"
+                                                onClick={() => handleStartEditPanneauWidth(width)}
+                                                className={panneauEditButtonClass}
+                                                aria-label="Modifier cette largeur"
+                                              >
+                                                {EditIcon}
+                                              </button>
+                                              <button
+                                                type="button"
+                                                onClick={() =>
+                                                  handleRemovePanneauWidth(width.widthCm)
+                                                }
+                                                disabled={deletePanneauWidthMutation.isPending}
+                                                className="flex h-10 w-10 items-center justify-center rounded-lg text-lg leading-none text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-red-950/30 dark:hover:text-red-400"
+                                                aria-label="Retirer cette largeur"
+                                              >
+                                                ×
+                                              </button>
+                                            </div>
+                                          </>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
                                 </div>
                               ) : null}
 
                               {isAddingPanneauWidth ? (
-                              <div
-                                className={`grid w-full grid-cols-1 items-center gap-3 border-t border-gray-200 bg-white px-3 py-4 sm:px-4 dark:border-gray-700 dark:bg-gray-800 md:grid ${panneauWidthAddGridClass}`}
-                              >
-                                <input
-                                  type="text"
-                                  inputMode="numeric"
-                                  value={newPanneauWidthCm}
-                                  onChange={(e) => setNewPanneauWidthCm(e.target.value)}
-                                  onKeyDown={handleAddPanneauWidthKeyDown}
-                                  autoFocus
-                                  className={panneauCellInputClass}
-                                />
-                                <input
-                                  type="text"
-                                  inputMode="decimal"
-                                  value={newPanneauWidthPrice}
-                                  onChange={(e) =>
-                                    setNewPanneauWidthPrice(e.target.value.replace(",", "."))
-                                  }
-                                  onKeyDown={handleAddPanneauWidthKeyDown}
-                                  className={panneauCellInputClass}
-                                />
-                                {isPanneauSaleActive && <span aria-hidden="true" />}
-                                <div className="flex shrink-0 items-center justify-end gap-1 self-center">
-                                  {canConfirmNewPanneauWidth ? (
+                                <div
+                                  className={`grid w-full grid-cols-1 items-center gap-3 border-t border-gray-200 bg-white px-3 py-4 sm:px-4 dark:border-gray-700 dark:bg-gray-800 md:grid ${panneauWidthGridClass}`}
+                                >
+                                  <div className={panneauWidthCellClass}>
+                                    <input
+                                      type="text"
+                                      inputMode="numeric"
+                                      value={newPanneauWidthCm}
+                                      onChange={(e) => setNewPanneauWidthCm(e.target.value)}
+                                      onKeyDown={handleAddPanneauWidthKeyDown}
+                                      autoFocus
+                                      className={panneauCellInputClass}
+                                    />
+                                  </div>
+                                  <div className={panneauWidthCellClass}>
+                                    <input
+                                      type="text"
+                                      inputMode="decimal"
+                                      value={newPanneauWidthPrice}
+                                      onChange={(e) =>
+                                        setNewPanneauWidthPrice(e.target.value.replace(",", "."))
+                                      }
+                                      onKeyDown={handleAddPanneauWidthKeyDown}
+                                      className={panneauCellInputClass}
+                                    />
+                                  </div>
+                                  <div className={panneauWidthActionsClass}>
                                     <button
                                       type="button"
                                       onClick={handleAddPanneauWidth}
-                                      className={panneauConfirmButtonClass}
-                                      aria-label="Confirmer l'ajout"
+                                      disabled={!canConfirmNewPanneauWidth}
+                                      className={
+                                        canConfirmNewPanneauWidth
+                                          ? panneauConfirmButtonClass
+                                          : panneauPlusButtonClass
+                                      }
+                                      aria-label="Enregistrer la nouvelle largeur"
                                     >
-                                      <svg
-                                        className="h-5 w-5"
-                                        fill="none"
-                                        viewBox="0 0 24 24"
-                                        stroke="currentColor"
-                                        strokeWidth={2.5}
-                                        aria-hidden="true"
-                                      >
-                                        <path
-                                          strokeLinecap="round"
-                                          strokeLinejoin="round"
-                                          d="M5 13l4 4L19 7"
-                                        />
-                                      </svg>
+                                      {canConfirmNewPanneauWidth ? CheckIcon : "+"}
                                     </button>
-                                  ) : (
                                     <button
                                       type="button"
-                                      onClick={handleAddPanneauWidth}
-                                      className={panneauPlusButtonClass}
-                                      aria-label="Ajouter la largeur"
+                                      onClick={handleCancelAddPanneauWidth}
+                                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-lg leading-none text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/30 dark:hover:text-red-400"
+                                      aria-label="Annuler"
                                     >
-                                      +
+                                      ×
                                     </button>
-                                  )}
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="flex w-full justify-end border-t border-gray-200 bg-white px-3 py-4 sm:px-4 dark:border-gray-700 dark:bg-gray-800">
                                   <button
                                     type="button"
-                                    onClick={handleCancelAddPanneauWidth}
-                                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-lg leading-none text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/30 dark:hover:text-red-400"
-                                    aria-label="Annuler"
+                                    onClick={handleOpenAddPanneauWidth}
+                                    className={panneauPlusButtonClass}
+                                    aria-label="Ajouter un modèle"
                                   >
-                                    ×
+                                    +
                                   </button>
                                 </div>
-                              </div>
-                              ) : (
-                              <div className="flex w-full justify-end border-t border-gray-200 bg-white px-3 py-4 sm:px-4 dark:border-gray-700 dark:bg-gray-800">
-                                <button
-                                  type="button"
-                                  onClick={handleOpenAddPanneauWidth}
-                                  className={panneauPlusButtonClass}
-                                  aria-label="Ajouter un modèle"
-                                >
-                                  +
-                                </button>
-                              </div>
                               )}
                             </div>
-
-                            <div className="flex justify-end">
-                              <Button
-                                type="submit"
-                                size="sm"
-                                disabled={updatePanneauMutation.isPending}
-                              >
-                                Enregistrer la configuration
-                              </Button>
-                            </div>
-                          </form>
+                          </div>
                         </div>
                       </div>
 
@@ -1389,6 +1737,9 @@ export default function AdminDashboard({ title }: AdminDashboardProps) {
                               <h5 className="text-base font-semibold text-gray-900 dark:text-white">
                                 Promotion
                               </h5>
+                              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                                Les prix promo se sauvegardent uniquement ici.
+                              </p>
                             </div>
                             <label className="inline-flex cursor-pointer items-center gap-2.5 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700">
                               <span
@@ -1413,17 +1764,70 @@ export default function AdminDashboard({ title }: AdminDashboardProps) {
                               {isPanneauSaleActive ? "Active" : "Inactive"}
                             </label>
                           </div>
-                          <form onSubmit={handlePanneauSaleUpdate} className="flex justify-start">
+
+                          <form onSubmit={handlePanneauSaleUpdate} className="space-y-4">
+                            {(panneauConfigData?.widths ?? []).length === 0 ? (
+                              <p className="text-sm text-gray-500 dark:text-gray-400">
+                                Ajoutez d&apos;abord une largeur panneau.
+                              </p>
+                            ) : (
+                              <div className="space-y-3">
+                                {(panneauConfigData?.widths ?? []).map(
+                                  (width: {
+                                    widthCm: number;
+                                    price: number;
+                                    salePrice?: number | null;
+                                  }) => {
+                                    const promoKey = String(width.widthCm);
+                                    const saleValue = panneauPromoDrafts[promoKey] ?? "";
+                                    const saleNumber = parseFloat(saleValue.replace(",", "."));
+                                    const hasSaleError =
+                                      isPanneauSaleActive &&
+                                      saleValue.trim() !== "" &&
+                                      !Number.isNaN(saleNumber) &&
+                                      saleNumber >= width.price;
+
+                                    return (
+                                      <div
+                                        key={width.widthCm}
+                                        className="grid grid-cols-1 items-center gap-2 sm:grid-cols-[minmax(0,1fr)_8rem]"
+                                      >
+                                        <div className="min-w-0">
+                                          <p className="text-sm font-medium text-gray-800 dark:text-gray-200">
+                                            {formatPanneauCardLabel(width.widthCm)}
+                                          </p>
+                                        </div>
+                                        <input
+                                          type="text"
+                                          inputMode="decimal"
+                                          value={saleValue}
+                                          onChange={(e) => {
+                                            const nextSale = e.target.value.replace(",", ".");
+                                            setPanneauPromoDrafts((previous) => ({
+                                              ...previous,
+                                              [promoKey]: nextSale,
+                                            }));
+                                          }}
+                                          placeholder="Ex: 140"
+                                          disabled={!isPanneauSaleActive}
+                                          className={`${panneauCellInputClass} ${
+                                            hasSaleError
+                                              ? "border-red-500 focus:border-red-500 focus:ring-red-500/20"
+                                              : ""
+                                          }`}
+                                        />
+                                      </div>
+                                    );
+                                  }
+                                )}
+                              </div>
+                            )}
+
                             <Button
                               type="submit"
                               size="sm"
                               variant="secondary"
-                              disabled={
-                                updatePanneauPromoMutation.isPending ||
-                                updatePanneauSaleToggleMutation.isPending ||
-                                !isPanneauSaleActive ||
-                                hasPanneauPromoError
-                              }
+                              disabled={!canSavePanneauPromo}
                             >
                               Enregistrer la promotion
                             </Button>
@@ -1463,15 +1867,38 @@ export default function AdminDashboard({ title }: AdminDashboardProps) {
                                   <span className="font-medium text-gray-800 dark:text-gray-200">
                                     {product.name}
                                   </span>
-                                  <input
-                                    type="checkbox"
-                                    checked={product.supportsPanneau === true}
-                                    disabled={updatePanneauReferenceMutation.isPending}
-                                    onChange={(e) =>
-                                      handleTogglePanneauReference(product._id, e.target.checked)
-                                    }
-                                    className="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
-                                  />
+                                  <span className="relative inline-flex shrink-0">
+                                    <input
+                                      type="checkbox"
+                                      checked={product.supportsPanneau === true}
+                                      disabled={
+                                        updatePanneauReferenceMutation.isPending &&
+                                        updatePanneauReferenceMutation.variables?.productId ===
+                                          product._id
+                                      }
+                                      onChange={(e) =>
+                                        handleTogglePanneauReference(product._id, e.target.checked)
+                                      }
+                                      className="peer sr-only"
+                                    />
+                                    <span aria-hidden="true" className={panneauReferenceCheckboxBoxClass}>
+                                      <svg
+                                        className={`h-3.5 w-3.5 text-white transition-opacity duration-200 ${
+                                          product.supportsPanneau === true ? "opacity-100" : "opacity-0"
+                                        }`}
+                                        fill="none"
+                                        viewBox="0 0 24 24"
+                                        stroke="currentColor"
+                                        strokeWidth={3}
+                                      >
+                                        <path
+                                          strokeLinecap="round"
+                                          strokeLinejoin="round"
+                                          d="M5 13l4 4L19 7"
+                                        />
+                                      </svg>
+                                    </span>
+                                  </span>
                                 </label>
                               ))}
                             </div>
@@ -1485,19 +1912,13 @@ export default function AdminDashboard({ title }: AdminDashboardProps) {
             </Card>
 
             {/* Dashboard Charts */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.8, delay: 0.2 }}
-            >
+            <div>
               <DashboardCharts />
-            </motion.div>
-          </motion.div>
+            </div>
+          </div>
         </main>
       </div>
     </>
   );
 }
 
-export const getServerSideProps: GetServerSideProps = async (context) =>
-  requireAdminPage(context, "Tableau de Bord Admin - Rideaux Bambou");

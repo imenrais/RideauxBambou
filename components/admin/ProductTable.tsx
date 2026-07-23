@@ -127,7 +127,7 @@ export default function ProductTable({
               <TableCell align="center">
                 <div className="flex justify-center">
                   <Image
-                    src={product.image || "/logo.png"}
+                    src={product.image || "/images/logo.png"}
                     alt={product.name || "Product image"}
                     width={48}
                     height={48}

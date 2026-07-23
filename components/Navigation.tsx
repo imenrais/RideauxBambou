@@ -8,31 +8,22 @@ import { useState, useEffect, useCallback } from "react";
 import { useSimpleCart } from "../contexts/SimpleCartContext";
 import { NAV_SECTIONS, scrollToSection, type NavSectionId } from "../lib/scroll-nav";
 
+import CartPopover from "./CartPopover";
 import DarkModeToggle from "./DarkModeToggle";
 
 interface NavigationProps {
   showCartIcon?: boolean;
 }
 
-const SHOP_RELATED_PATHS = new Set([
-  "/products",
-  "/configurer",
-  "/panier",
-  "/paiement",
-  "/commande-reussie",
-]);
+const BOUTIQUE_HIGHLIGHT_PATHS = new Set(["/products", "/configurer"]);
 
-const CLIENT_ORDERING_PATHS = new Set([
-  "/configurer",
-  "/panier",
-  "/paiement",
-]);
+const NO_NAV_HIGHLIGHT_PATHS = new Set(["/panier", "/paiement", "/commande-reussie"]);
 
-const isNavSectionId = (value: string): value is NavSectionId =>
-  Object.values(NAV_SECTIONS).includes(value as NavSectionId);
-
-const getSectionFromPath = (path: string): NavSectionId => {
-  if (SHOP_RELATED_PATHS.has(path)) {
+const getSectionFromPath = (path: string): NavSectionId | null => {
+  if (NO_NAV_HIGHLIGHT_PATHS.has(path)) {
+    return null;
+  }
+  if (BOUTIQUE_HIGHLIGHT_PATHS.has(path)) {
     return NAV_SECTIONS.boutique;
   }
   return NAV_SECTIONS.accueil;
@@ -49,8 +40,8 @@ export default function Navigation({ showCartIcon = true }: NavigationProps) {
   const { data: session } = useSession();
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [activeSection, setActiveSection] = useState<NavSectionId>(NAV_SECTIONS.accueil);
-  const { getTotalItems } = useSimpleCart();
+  const [activeSection, setActiveSection] = useState<NavSectionId | null>(NAV_SECTIONS.accueil);
+  const { getTotalItems, isCartOpen, toggleCart, closeCart } = useSimpleCart();
   const isAdmin = session?.user?.role === "admin";
 
   const navigateToSection = useCallback(
@@ -86,19 +77,28 @@ export default function Navigation({ showCartIcon = true }: NavigationProps) {
   };
 
   const toggleProfile = () => {
+    closeCart();
     setIsProfileOpen(!isProfileOpen);
+  };
+
+  const handleToggleCart = () => {
+    setIsProfileOpen(false);
+    toggleCart();
   };
 
   const toggleMobileMenu = () => {
     setIsMobileMenuOpen(!isMobileMenuOpen);
   };
 
-  // Close profile dropdown when clicking outside
+  // Close profile / cart dropdowns when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as Element;
       if (isProfileOpen && !target.closest("[data-profile-dropdown]")) {
         setIsProfileOpen(false);
+      }
+      if (isCartOpen && !target.closest("[data-cart-dropdown]")) {
+        closeCart();
       }
     };
 
@@ -106,7 +106,7 @@ export default function Navigation({ showCartIcon = true }: NavigationProps) {
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
-  }, [isProfileOpen]);
+  }, [isProfileOpen, isCartOpen, closeCart]);
 
   useEffect(() => {
     if (router.pathname !== "/") {
@@ -120,16 +120,10 @@ export default function Navigation({ showCartIcon = true }: NavigationProps) {
       return;
     }
 
-    const hashSection = router.asPath.split("#")[1];
-    if (hashSection && isNavSectionId(hashSection)) {
-      setActiveSection(hashSection);
-      return;
-    }
-
     const updateSectionFromScroll = () => {
-      const viewportAnchor = window.innerHeight * 0.28;
-      let closestSection: NavSectionId = NAV_SECTIONS.accueil;
-      let closestDistance = Number.POSITIVE_INFINITY;
+      // Offset below sticky nav — last section that has crossed this line wins.
+      const viewportAnchor = 96;
+      let currentSection: NavSectionId = NAV_SECTIONS.accueil;
 
       for (const item of CLIENT_MENU_ITEMS) {
         const section = document.getElementById(item.sectionId);
@@ -137,14 +131,14 @@ export default function Navigation({ showCartIcon = true }: NavigationProps) {
           continue;
         }
 
-        const distance = Math.abs(section.getBoundingClientRect().top - viewportAnchor);
-        if (distance < closestDistance) {
-          closestDistance = distance;
-          closestSection = item.sectionId;
+        if (section.getBoundingClientRect().top <= viewportAnchor) {
+          currentSection = item.sectionId;
         }
       }
 
-      setActiveSection((current) => (current === closestSection ? current : closestSection));
+      setActiveSection((previous) =>
+        previous === currentSection ? previous : currentSection
+      );
     };
 
     let frameId: number | null = null;
@@ -172,15 +166,11 @@ export default function Navigation({ showCartIcon = true }: NavigationProps) {
       window.removeEventListener("resize", scheduleUpdate);
       window.removeEventListener("hashchange", scheduleUpdate);
     };
-  }, [router.asPath, router.pathname]);
-
-  if (CLIENT_ORDERING_PATHS.has(router.pathname)) {
-    return null;
-  }
+  }, [router.pathname]);
 
   return (
     <>
-      <nav className="sticky top-0 z-50 border-b border-gray-200/80 bg-white/90 shadow-[0_1px_0_rgba(17,24,39,0.04)] backdrop-blur-md dark:border-gray-700/80 dark:bg-gray-900/90">
+      <nav className="sticky top-0 z-50 border-b border-gray-200/80 bg-gray-100/90 shadow-[0_1px_0_rgba(17,24,39,0.04)] backdrop-blur-md dark:border-gray-700/80 dark:bg-gray-900/90">
         <div className="mx-auto max-w-7xl px-3 sm:px-4 lg:px-6">
           <div className="relative flex h-16 items-center justify-between">
           <div className="flex items-center">
@@ -190,15 +180,15 @@ export default function Navigation({ showCartIcon = true }: NavigationProps) {
               onClick={handleLogoClick}
               className="group flex items-center gap-3"
             >
-              <div className="relative h-10 w-10 overflow-hidden rounded-full">
-                <Image
-                  src="/logo.png"
-                  alt="Rideaux Bambou Logo"
-                  fill
-                  className="object-cover"
-                  priority
-                />
-              </div>
+              <Image
+                src="/images/logo.png"
+                alt="Rideaux Bambou Logo"
+                width={80}
+                height={80}
+                className="h-10 w-10 rounded-full object-cover"
+                quality={100}
+                priority
+              />
               <h1 className="hidden text-xl font-semibold text-gray-900 transition-colors duration-150 group-hover:text-gray-700 sm:block dark:text-white dark:group-hover:text-gray-200">
                 Rideaux Bambou
               </h1>
@@ -244,25 +234,30 @@ export default function Navigation({ showCartIcon = true }: NavigationProps) {
           {/* Right side actions */}
           <div className="flex items-center space-x-1.5 sm:space-x-3">
             {showCartIcon && (
-              <Link
-                href="/panier"
-                className="relative rounded-full border border-transparent p-2 text-gray-600 transition-all duration-150 hover:border-gray-200 hover:bg-gray-100/80 hover:text-gray-900 dark:text-gray-300 dark:hover:border-gray-700 dark:hover:bg-gray-800/80 dark:hover:text-white"
-              >
-                <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"
-                  />
-                </svg>
-                {/* Cart count badge */}
-                {getTotalItems() > 0 && (
-                  <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-gray-900 text-xs font-medium text-white dark:bg-gray-100 dark:text-gray-900">
-                    {getTotalItems()}
-                  </span>
-                )}
-              </Link>
+              <div className="relative" data-cart-dropdown>
+                <button
+                  type="button"
+                  onClick={handleToggleCart}
+                  className="relative rounded-full border border-transparent p-2 text-gray-600 transition-all duration-150 hover:border-gray-200 hover:bg-gray-100/80 hover:text-gray-900 dark:text-gray-300 dark:hover:border-gray-700 dark:hover:bg-gray-800/80 dark:hover:text-white"
+                  aria-label="Ouvrir le panier"
+                  aria-expanded={isCartOpen}
+                >
+                  <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"
+                    />
+                  </svg>
+                  {getTotalItems() > 0 && (
+                    <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-gray-900 px-1 text-[10px] font-semibold text-white dark:bg-gray-100 dark:text-gray-900">
+                      {getTotalItems()}
+                    </span>
+                  )}
+                </button>
+                <CartPopover />
+              </div>
             )}
 
             <DarkModeToggle />
@@ -285,7 +280,7 @@ export default function Navigation({ showCartIcon = true }: NavigationProps) {
                     </span>
                   </div>
                   <svg
-                    className={`h-4 w-4 transition-transform ${isProfileOpen ? "rotate-180" : ""}`}
+                    className={`h-4 w-4 shrink-0 text-gray-500 transition-transform dark:text-gray-400 ${isProfileOpen ? "rotate-180" : ""}`}
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
@@ -486,7 +481,7 @@ export default function Navigation({ showCartIcon = true }: NavigationProps) {
         <button
           type="button"
           onClick={() => navigateToSection(NAV_SECTIONS.boutique)}
-          className="fixed bottom-4 right-4 z-[60] inline-flex min-w-[220px] items-center justify-center rounded-full bg-gradient-to-r from-green-600 to-green-700 px-8 py-3.5 text-lg font-extrabold text-white shadow-[0_12px_30px_rgba(22,163,74,0.35)] transition duration-200 hover:scale-105 hover:from-green-700 hover:to-green-800 sm:bottom-6 sm:right-6 sm:min-w-[280px] sm:px-10 sm:py-4 sm:text-xl lg:min-w-[320px] lg:px-12 lg:py-4 lg:text-2xl dark:from-white dark:to-gray-100 dark:text-gray-900 dark:shadow-[0_12px_28px_rgba(0,0,0,0.35)] dark:hover:from-gray-100 dark:hover:to-white"
+          className="fixed bottom-4 right-4 z-[60] inline-flex min-w-[220px] items-center justify-center rounded-full bg-gradient-to-r from-gray-900 to-gray-800 px-8 py-3.5 text-lg font-extrabold text-white shadow-[0_12px_30px_rgba(17,24,39,0.3)] transition duration-200 hover:scale-105 hover:from-gray-800 hover:to-gray-700 sm:bottom-6 sm:right-6 sm:min-w-[280px] sm:px-10 sm:py-4 sm:text-xl lg:min-w-[320px] lg:px-12 lg:py-4 lg:text-2xl dark:from-white dark:to-gray-100 dark:text-gray-900 dark:shadow-[0_12px_28px_rgba(0,0,0,0.35)] dark:hover:from-gray-100 dark:hover:to-white"
         >
           Demander Devis
         </button>

@@ -30,7 +30,7 @@ export default function Card({
     xl: "shadow-2xl",
   };
 
-  const baseClasses = `rounded-xl bg-white dark:bg-gray-800 ${paddingClasses[padding]} ${shadowClasses[shadow]}`;
+  const baseClasses = `rounded-xl border border-gray-200/80 bg-white dark:border-gray-700/60 dark:bg-gray-800 ${paddingClasses[padding]} ${shadowClasses[shadow]}`;
   const hoverClasses = hover ? "transition-all duration-300 hover:shadow-xl" : "";
   const finalClasses = `${baseClasses} ${hoverClasses} ${className}`;
 

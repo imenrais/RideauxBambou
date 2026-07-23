@@ -3,11 +3,10 @@ import { NextApiRequest, NextApiResponse } from "next";
 import { z } from "zod";
 
 import { requireAuth } from "../../lib/auth-helpers";
+import { checkoutCustomerInfoSchema, getCustomerDisplayName, serializeCustomerInfo } from "../../lib/customer-info";
 import { getAllDeliveryFees } from "../../lib/delivery-fee-store";
 import { sendAdminOrderNotificationEmail, sendOrderConfirmationEmail } from "../../lib/email";
-import { optionalEmailSchema } from "../../lib/email-validation";
 import { subscribePromoEmail } from "../../lib/promo-subscriber-store";
-import { requiredPhoneSchema } from "../../lib/phone-validation";
 import { prisma } from "../../lib/prisma";
 
 // Validation schema for cart checkout
@@ -19,27 +18,17 @@ const createOrderSchema = z.object({
         curtainTypeName: z.string().min(1, "Curtain type name is required"),
         width: z
           .number()
-          .min(50, "Width must be at least 50cm")
-          .max(300, "Width must be at most 300cm"),
+          .min(1, "Width must be at least 1cm"),
         height: z
           .number()
           .min(100, "Height must be at least 100cm")
           .max(250, "Height must be at most 250cm"),
         totalCost: z.number().min(0, "Total cost must be positive"),
+        quantity: z.number().int().min(1, "Quantity must be at least 1").default(1),
       })
     )
     .min(1, "At least one item is required"),
-  customerInfo: z.object({
-    firstName: z.string().min(2, "First name must be at least 2 characters"),
-    lastName: z.string().min(2, "Last name must be at least 2 characters"),
-    email: optionalEmailSchema.optional(),
-    phone: requiredPhoneSchema,
-    address: z.string().min(10, "Address must be at least 10 characters"),
-    city: z.string().min(2, "City must be at least 2 characters"),
-    state: z.string().min(2, "State must be at least 2 characters"),
-    postalCode: z.string().min(4, "Postal code must be at least 4 characters"),
-    notes: z.string().optional(),
-  }),
+  customerInfo: checkoutCustomerInfoSchema,
   totalAmount: z.number().min(0, "Total amount must be positive"),
   deliveryFee: z.number().min(0, "Delivery fee must be positive"),
   installationFee: z.number().min(0, "Les frais de pose doivent être positifs"),
@@ -139,16 +128,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         installationFee: resolvedInstallationFee,
         wantsInstallation,
         totalAmount: resolvedTotalAmount,
-        customerInfo: {
-          firstName: customerInfo.firstName,
-          lastName: customerInfo.lastName,
-          email: customerEmail,
-          phone: customerInfo.phone,
-          address: customerInfo.address,
-          city: customerInfo.city,
-          state: customerInfo.state,
-          postalCode: customerInfo.postalCode,
-        } as unknown as Prisma.InputJsonValue,
+        customerInfo: serializeCustomerInfo(customerInfo) as unknown as Prisma.InputJsonValue,
         notes: customerInfo.notes || "",
         status: "pending",
       };
@@ -176,11 +156,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             .map((adminUser) => adminUser.email?.trim())
             .filter((email): email is string => Boolean(email));
 
+          const itemCount = items.reduce(
+            (sum, item) => sum + Math.max(1, Number(item.quantity) || 1),
+            0
+          );
+
           const orderData = {
             orderId: createdOrder.id,
             items: items.map((item) => ({
               name: item.curtainTypeName,
-              quantity: 1,
+              quantity: Math.max(1, Number(item.quantity) || 1),
               price: item.totalCost,
               dimensions: `${item.width}cm x ${item.height}cm`,
             })),
@@ -200,7 +185,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           if (customerEmail) {
             const customerEmailResult = await sendOrderConfirmationEmail(
               customerEmail,
-              `${customerInfo.firstName} ${customerInfo.lastName}`,
+              getCustomerDisplayName(serializeCustomerInfo(customerInfo)),
               orderData
             );
             customerEmailSent = customerEmailResult.success;
@@ -208,11 +193,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
           await sendAdminOrderNotificationEmail({
             orderId: createdOrder.id,
-            customerName: `${customerInfo.firstName} ${customerInfo.lastName}`,
+            customerName: getCustomerDisplayName(serializeCustomerInfo(customerInfo)),
             customerEmail: customerInfo.email || "Non renseigné",
             customerPhone: customerInfo.phone,
             totalAmount: resolvedTotalAmount,
-            itemCount: items.length,
+            itemCount,
             createdAt: new Date().toISOString(),
             recipients: adminRecipients,
           });
@@ -221,13 +206,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
       })();
 
+      const itemCount = items.reduce(
+        (sum, item) => sum + Math.max(1, Number(item.quantity) || 1),
+        0
+      );
+
       return res.status(201).json({
         success: true,
         data: {
           orderId: createdOrder.id,
           totalAmount: resolvedTotalAmount,
           installationFee: resolvedInstallationFee,
-          itemCount: items.length,
+          itemCount,
           status: "pending",
           deliveryFee: resolvedDeliveryFee,
           customerEmailSent,

@@ -1,7 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { pageMainClass, pageShellClass } from "../../lib/design-system";
-import { motion } from "framer-motion";
-import { GetServerSideProps } from "next";
 import Head from "next/head";
 import { useRouter } from "next/router";
 import { useSession } from "next-auth/react";
@@ -25,14 +23,11 @@ import {
   TableRow,
 } from "../../components/ui/Table";
 import { useToast } from "../../contexts/ToastContext";
-import { requireAdminPage } from "../../lib/admin-page-guard";
 import { formFieldLabelClass, formSelectClass } from "../../lib/form-field-styles";
 import { getEmailValidationError, normalizeEmailValue } from "../../lib/email-validation";
 import { checkPasswordStrength } from "../../lib/password-validation";
 
-interface AdminUsersProps {
-  title: string;
-}
+const PAGE_TITLE = "Gestion des Employés - Rideaux Bambou Admin";
 
 const roleColors = {
   user: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
@@ -40,7 +35,7 @@ const roleColors = {
   admin: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200",
 };
 
-export default function AdminUsers({ title }: AdminUsersProps) {
+export default function AdminUsers() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -347,7 +342,7 @@ export default function AdminUsers({ title }: AdminUsersProps) {
   return (
     <>
       <Head>
-        <title>{title}</title>
+        <title>{PAGE_TITLE}</title>
         <meta name="description" content="Manage Users - Rideaux Bambou Admin" />
       </Head>
 
@@ -360,12 +355,7 @@ export default function AdminUsers({ title }: AdminUsersProps) {
           <div className="mb-6">
             <BackButton href="/admin" />
           </div>
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8 }}
-            className="space-y-6"
-          >
+          <div className="space-y-6">
             {/* Header */}
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Gestion des Employés</h1>
@@ -698,7 +688,7 @@ export default function AdminUsers({ title }: AdminUsersProps) {
                 </div>
               )}
             </div>
-          </motion.div>
+          </div>
         </main>
 
         {/* Role Update Modal */}
@@ -861,6 +851,3 @@ export default function AdminUsers({ title }: AdminUsersProps) {
     </>
   );
 }
-
-export const getServerSideProps: GetServerSideProps = async (context) =>
-  requireAdminPage(context, "Gestion des Employés - Rideaux Bambou Admin");

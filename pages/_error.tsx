@@ -38,7 +38,7 @@ function Error({ statusCode }: ErrorProps) {
             <button
               type="button"
               onClick={handleBackNavigation}
-              className="block w-full bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors"
+              className="block w-full rounded-lg bg-gray-900 px-4 py-2 text-white transition-colors hover:bg-gray-800 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100"
             >
               Retour à l&apos;accueil
             </button>

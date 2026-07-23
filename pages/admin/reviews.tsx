@@ -1,6 +1,4 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { motion } from "framer-motion";
-import { GetServerSideProps } from "next";
 import Image from "next/image";
 import { useRouter } from "next/router";
 import { useSession } from "next-auth/react";
@@ -14,7 +12,6 @@ import ImageUpload from "../../components/ui/ImageUpload";
 import Input from "../../components/ui/Input";
 import Loading from "../../components/ui/Loading";
 import { useToast } from "../../contexts/ToastContext";
-import { requireAdminPage } from "../../lib/admin-page-guard";
 
 interface ReviewItem {
   _id: string;
@@ -22,10 +19,6 @@ interface ReviewItem {
   caption?: string;
   order: number;
   isActive: boolean;
-}
-
-interface AdminReviewsProps {
-  title: string;
 }
 
 interface ReviewFormState {
@@ -38,7 +31,7 @@ const defaultFormState: ReviewFormState = {
   caption: "",
 };
 
-export default function AdminReviews({ title }: AdminReviewsProps) {
+export default function AdminReviews() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -229,7 +222,7 @@ export default function AdminReviews({ title }: AdminReviewsProps) {
   }
 
   return (
-    <AdminLayout title={title} description="Gestion des avis - Administration">
+    <AdminLayout title="Gestion des Avis - Administration" description="Gestion des avis - Administration">
       <div className="mb-6">
         <BackButton />
       </div>
@@ -287,9 +280,8 @@ export default function AdminReviews({ title }: AdminReviewsProps) {
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
         {orderedReviews.map((review) => (
-          <motion.div
+          <div
             key={review._id}
-            layout
             draggable
             onDragStart={() => {
               setDraggedReviewId(review._id);
@@ -306,25 +298,15 @@ export default function AdminReviews({ title }: AdminReviewsProps) {
               setDraggedReviewId(null);
               setDragOverReviewId(null);
             }}
-            animate={{
-              scale: draggedReviewId === review._id ? 1.02 : 1,
-              opacity: draggedReviewId === review._id ? 0.9 : 1,
-              y: dragOverReviewId === review._id && draggedReviewId !== review._id ? -6 : 0,
-            }}
-            transition={{ type: "spring", stiffness: 260, damping: 20 }}
-            whileDrag={{
-              scale: 1.04,
-              rotate: 1.5,
-              boxShadow: "0px 14px 28px rgba(0,0,0,0.18)",
-              zIndex: 20,
-            }}
-            className="cursor-grab list-none active:cursor-grabbing"
+            className={`cursor-grab list-none active:cursor-grabbing ${
+              draggedReviewId === review._id ? "scale-[1.02] opacity-90" : ""
+            } ${
+              dragOverReviewId === review._id && draggedReviewId !== review._id
+                ? "-translate-y-1.5"
+                : ""
+            }`}
           >
-            <motion.div
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.25 }}
-            >
+            <div>
               <Card className="h-full overflow-hidden p-0">
                 <div className="relative h-56 w-full bg-gray-100 dark:bg-gray-700">
                   <Image src={review.image} alt="Capture d'ecran d'avis client" fill className="object-cover" />
@@ -346,8 +328,8 @@ export default function AdminReviews({ title }: AdminReviewsProps) {
                   </div>
                 </div>
               </Card>
-            </motion.div>
-          </motion.div>
+            </div>
+          </div>
         ))}
       </div>
 
@@ -394,6 +376,3 @@ export default function AdminReviews({ title }: AdminReviewsProps) {
     </AdminLayout>
   );
 }
-
-export const getServerSideProps: GetServerSideProps = async (context) =>
-  requireAdminPage(context, "Gestion des Avis - Administration");

@@ -108,7 +108,7 @@ export default function LoginPage({ title }: LoginPageProps) {
 
   return (
     <StandardLayout title={title} description="Connexion - Rideaux Bambou" showCartIcon={false}>
-      <div className="-mx-4 -my-8 min-h-screen bg-white px-4 py-8 dark:bg-gray-900">
+      <div className="-mx-4 -my-8 min-h-screen bg-gray-100 px-4 py-8 dark:bg-gray-900">
         {/* Back Button and Main Content */}
         <div className="px-4 py-6 sm:px-6 sm:py-8">
           <BackButton href="/" />
@@ -124,7 +124,7 @@ export default function LoginPage({ title }: LoginPageProps) {
               {/* Header */}
               <div className="mb-8 text-center">
                 <img
-                  src="/logo.png"
+                  src="/images/logo.png"
                   alt="Rideaux Bambou"
                   className="mx-auto mb-4 h-12 w-12 object-contain"
                 />
@@ -177,7 +177,7 @@ export default function LoginPage({ title }: LoginPageProps) {
                   <div className="mt-2 text-left">
                     <Link
                       href="/mot-de-passe-oublie"
-                      className="text-sm font-medium text-green-600 hover:text-green-700 dark:text-green-500 dark:hover:text-green-400"
+                      className="text-sm font-medium text-gray-900 hover:text-gray-700 dark:text-gray-100 dark:hover:text-white"
                     >
                       Mot de passe oublié ?
                     </Link>

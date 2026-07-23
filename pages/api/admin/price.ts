@@ -90,12 +90,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             !wasStoreSaleActive;
 
           if (shouldNotifyStoreSale) {
-            try {
-              const notificationResult = await notifyPromoSubscribersOfCurrentSales();
-              console.log("Store sale notifications:", notificationResult);
-            } catch (notificationError) {
-              console.error("Store sale notification error:", notificationError);
-            }
+            void notifyPromoSubscribersOfCurrentSales()
+              .then((notificationResult) => {
+                console.log("Store sale notifications:", notificationResult);
+              })
+              .catch((notificationError) => {
+                console.error("Store sale notification error:", notificationError);
+              });
           }
         }
 

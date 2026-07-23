@@ -28,7 +28,7 @@ export default function DashboardCharts() {
   const { data: ordersData, isLoading: ordersLoading } = useQuery({
     queryKey: ["admin-orders-stats"],
     queryFn: async () => {
-      const response = await fetch("/api/admin/orders?page=1&limit=100");
+      const response = await fetch("/api/admin/orders?page=1&limit=100&includeStats=true");
       const data = await response.json();
       return data.success ? data.data : { orders: [], stats: {} };
     },
@@ -204,7 +204,20 @@ export default function DashboardCharts() {
     labels: statusLabels,
     dataLabels: { enabled: true },
     colors: statusLegendColors,
-    legend: { position: "bottom" },
+    legend: {
+      position: "bottom",
+      horizontalAlign: "center",
+      offsetY: 8,
+      itemMargin: {
+        horizontal: 14,
+        vertical: 6,
+      },
+    },
+    tooltip: {
+      y: {
+        formatter: (value: number) => `${value} commande${value > 1 ? "s" : ""}`,
+      },
+    },
     plotOptions: {
       pie: {
         donut: {
@@ -215,6 +228,7 @@ export default function DashboardCharts() {
   };
 
   const statusChartSeries = statusValues;
+  const statusTotal = statusValues.reduce((sum, value) => sum + value, 0);
 
   if (ordersLoading || productsLoading || deliveryFeesLoading) {
     return (
@@ -307,18 +321,13 @@ export default function DashboardCharts() {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Card className="border-0 bg-white shadow-md dark:bg-gray-900">
           <h3 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">Distribution des Commandes</h3>
-          <Chart options={statusChartOptions} series={statusChartSeries} type="donut" height={300} />
-          <div className="mt-4 grid grid-cols-2 gap-2 text-xs sm:grid-cols-3">
-            {statusLabels.map((label, index) => (
-              <div key={label} className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
-                <span
-                  className="inline-block h-2.5 w-2.5 rounded-full"
-                  style={{ backgroundColor: statusLegendColors[index] }}
-                />
-                <span>{label}</span>
-              </div>
-            ))}
-          </div>
+          {statusTotal > 0 ? (
+            <Chart options={statusChartOptions} series={statusChartSeries} type="donut" height={300} />
+          ) : (
+            <div className="flex h-[300px] items-center justify-center text-sm text-gray-500 dark:text-gray-400">
+              Aucune commande à afficher
+            </div>
+          )}
         </Card>
 
         {/* Recent Orders */}

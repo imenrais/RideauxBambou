@@ -85,6 +85,13 @@ export default function AdminNavigation() {
   });
 
   useEffect(() => {
+    for (const item of ADMIN_MENU_ITEMS) {
+      void router.prefetch(item.href);
+    }
+    void router.prefetch("/admin/settings");
+  }, [router]);
+
+  useEffect(() => {
     const saved = localStorage.getItem(NOTIFICATIONS_STORAGE_KEY);
     if (saved) {
       try {
@@ -224,12 +231,6 @@ export default function AdminNavigation() {
     };
   }, [isProfileOpen, isNotificationsOpen]);
 
-  useEffect(() => {
-    for (const item of ADMIN_MENU_ITEMS) {
-      void router.prefetch(item.href);
-    }
-  }, [router]);
-
   return (
     <nav className="sticky top-0 z-50 border-b border-gray-200/80 bg-white/90 shadow-[0_1px_0_rgba(17,24,39,0.04)] backdrop-blur-md dark:border-gray-700/80 dark:bg-gray-900/90">
       <div className="mx-auto max-w-7xl px-3 sm:px-4 lg:px-6">
@@ -238,7 +239,7 @@ export default function AdminNavigation() {
           <Link href="/admin" className="group flex items-center gap-3">
             <div className="relative h-10 w-10 overflow-hidden rounded-full">
               <Image
-                src="/logo.png"
+                src="/images/logo.png"
                 alt="Rideaux Bambou Logo"
                 fill
                 className="object-cover"
@@ -360,43 +361,85 @@ export default function AdminNavigation() {
                                 setIsNotificationsOpen(false);
                                 void router.push(`/admin/orders?orderId=${item.orderId}`);
                               }}
-                              className={`w-full border-b border-gray-100 px-4 py-3 text-left transition hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700/40 ${
-                                isUnread ? "bg-gray-100/80 dark:bg-gray-700/30" : ""
+                              className={`group relative w-full cursor-pointer border-b border-gray-100 text-left transition dark:border-gray-700 ${
+                                isUnread
+                                  ? "bg-gray-900/[0.04] hover:bg-gray-900/[0.07] dark:bg-white/[0.06] dark:hover:bg-white/[0.09]"
+                                  : "hover:bg-gray-50 dark:hover:bg-gray-700/40"
                               }`}
                             >
-                              <div className="flex items-start justify-between gap-3">
-                                <div className="min-w-0">
-                                  <p className="truncate text-sm font-semibold text-gray-900 dark:text-white">
-                                    Commande #{item.orderId?.slice(-8)}
-                                  </p>
-                                  <p className="truncate text-xs text-gray-600 dark:text-gray-300">
+                              {isUnread && (
+                                <span
+                                  className="absolute inset-y-0 left-0 w-1 bg-gray-900 dark:bg-white"
+                                  aria-hidden="true"
+                                />
+                              )}
+                              <div
+                                className={`flex items-start gap-3 px-4 py-3 ${
+                                  isUnread ? "pl-5" : ""
+                                }`}
+                              >
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <p
+                                      className={`truncate text-sm ${
+                                        isUnread
+                                          ? "font-semibold text-gray-900 dark:text-white"
+                                          : "font-medium text-gray-700 dark:text-gray-200"
+                                      }`}
+                                    >
+                                      Commande #{item.orderId?.slice(-8)}
+                                    </p>
+                                    {isUnread && (
+                                      <span className="shrink-0 rounded bg-gray-900 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white dark:bg-white dark:text-gray-900">
+                                        Nouveau
+                                      </span>
+                                    )}
+                                  </div>
+                                  <p
+                                    className={`truncate text-xs ${
+                                      isUnread
+                                        ? "font-medium text-gray-700 dark:text-gray-200"
+                                        : "text-gray-600 dark:text-gray-300"
+                                    }`}
+                                  >
                                     {item.customerName || "Client"}
                                   </p>
-                                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                                    {item.totalAmount?.toFixed(2)} TND
-                                  </p>
+                                  <div className="mt-0.5 flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                                    <span>{item.totalAmount?.toFixed(2)} TND</span>
+                                    <span aria-hidden="true">·</span>
+                                    <span>
+                                      {new Date(item.createdAt).toLocaleTimeString("fr-FR", {
+                                        hour: "2-digit",
+                                        minute: "2-digit",
+                                      })}
+                                    </span>
+                                  </div>
                                 </div>
-                                <div className="flex flex-col items-end gap-1">
-                                  {isUnread && (
-                                    <span className="h-2.5 w-2.5 rounded-full bg-gray-900 dark:bg-gray-100" />
-                                  )}
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      deleteNotification(item.orderId);
-                                    }}
-                                    className="text-[11px] font-medium text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    deleteNotification(item.orderId);
+                                  }}
+                                  className="shrink-0 rounded-md p-1 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/40 dark:hover:text-red-400"
+                                  aria-label="Supprimer la notification"
+                                  title="Supprimer"
+                                >
+                                  <svg
+                                    className="h-4 w-4"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                    aria-hidden="true"
                                   >
-                                    Supprimer
-                                  </button>
-                                  <span className="text-[11px] text-gray-400">
-                                    {new Date(item.createdAt).toLocaleTimeString("fr-FR", {
-                                      hour: "2-digit",
-                                      minute: "2-digit",
-                                    })}
-                                  </span>
-                                </div>
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      strokeWidth={2}
+                                      d="M6 18L18 6M6 6l12 12"
+                                    />
+                                  </svg>
+                                </button>
                               </div>
                             </div>
                           );
@@ -439,7 +482,7 @@ export default function AdminNavigation() {
                   </svg>
                 )}
                 <svg
-                  className={`h-4 w-4 transition-transform ${isProfileOpen ? "rotate-180" : ""}`}
+                  className={`h-4 w-4 shrink-0 text-gray-500 transition-transform dark:text-gray-400 ${isProfileOpen ? "rotate-180" : ""}`}
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"

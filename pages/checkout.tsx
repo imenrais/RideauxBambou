@@ -2,16 +2,33 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import Head from "next/head";
 import { useRouter } from "next/router";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 
 import Footer from "../components/Footer";
 import Navigation from "../components/Navigation";
 import { useSimpleCart } from "../contexts/SimpleCartContext";
 import { useToast } from "../contexts/ToastContext";
+import {
+  CUSTOMER_TYPE_LABELS,
+  type CustomerType,
+} from "../lib/customer-info";
+import { formatCurtainTypeName } from "../lib/curtain-type-name";
 import { getEmailValidationError, normalizeEmailValue } from "../lib/email-validation";
+import {
+  calculateOrderInvoiceTotals,
+  getOrderSummaryLines,
+} from "../lib/invoice-totals";
+import {
+  applyMatriculeFiscaleInput,
+  formatMatriculeFiscale,
+  getMatriculeFiscaleValidationError,
+  MATRICULE_FISCALE_FORMAT,
+} from "../lib/matricule-fiscale";
 import { getPhoneValidationError, normalizePhoneValue } from "../lib/phone-validation";
 import { usePublicProductsQuery } from "../lib/products-query";
 import { OUT_OF_STOCK_CLIENT_MESSAGE } from "../lib/product-availability-sync";
+import { getCurtainLineTotal } from "../lib/order-pricing";
+import { parseDeliveryFeesResponse } from "../lib/delivery-fees-query";
 import {
   getCitiesForGovernorate,
   GOVERNORATE_CODE_MAP,
@@ -28,8 +45,11 @@ import {
 } from "../lib/form-field-styles";
 
 interface CheckoutFormData {
+  customerType: CustomerType;
   firstName: string;
   lastName: string;
+  companyName: string;
+  matriculeFiscale: string;
   email: string;
   phone: string;
   address: string;
@@ -45,16 +65,21 @@ export default function CheckoutPage() {
     items,
     isLoading: cartLoading,
     getTotalPrice,
+    getTotalItems,
     clearCart,
   } = useSimpleCart();
-  const [wantsInstallation, setWantsInstallation] = useState(false);
+  const [wantsInstallation, setWantsInstallation] = useState<boolean | null>(null);
   const [orderCompleted, setOrderCompleted] = useState(false);
   const [emailError, setEmailError] = useState("");
   const [phoneError, setPhoneError] = useState("");
+  const [matriculeFiscaleError, setMatriculeFiscaleError] = useState("");
   const { error: showError } = useToast();
   const [formData, setFormData] = useState<CheckoutFormData>({
+    customerType: "person",
     firstName: "",
     lastName: "",
+    companyName: "",
+    matriculeFiscale: "",
     email: "",
     phone: "",
     address: "",
@@ -63,6 +88,7 @@ export default function CheckoutPage() {
     postalCode: "",
     notes: "",
   });
+  const isCompanyOrder = formData.customerType === "company";
 
   const { data: productsData } = usePublicProductsQuery();
 
@@ -84,34 +110,59 @@ export default function CheckoutPage() {
   });
 
   // Fetch delivery fees
-  const { data: deliveryFees } = useQuery({
+  const { data: deliveryFeesPayload } = useQuery({
     queryKey: ["delivery-fees"],
     queryFn: async () => {
       try {
         const response = await fetch("/api/delivery-fees");
         const data = await response.json();
-        return data.success ? data.data : [];
+        return data.success ? parseDeliveryFeesResponse(data.data) : parseDeliveryFeesResponse([]);
       } catch (error) {
         console.error("Error fetching delivery fees:", error);
-        return [];
+        return parseDeliveryFeesResponse([]);
       }
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
     refetchOnWindowFocus: false,
   });
 
+  const deliveryFees = deliveryFeesPayload?.fees ?? [];
+  const isFreeDeliveryActive = deliveryFeesPayload?.isFreeDeliveryActive === true;
+
   // Get current delivery fee based on selected state
   const normalizedSelectedState = normalizeGovernorate(formData.state);
   const selectedStateCode =
     GOVERNORATE_CODE_MAP[normalizedSelectedState] ||
     (formData.state.trim().length === 2 ? formData.state.trim().toUpperCase() : "");
-  const currentDeliveryFee =
-    deliveryFees?.find(
-      (fee: any) =>
-        normalizeGovernorate(fee.state) === normalizedSelectedState ||
-        fee.stateCode === selectedStateCode
-    )?.fee || 0;
+  const hasSelectedRegion = formData.state.trim().length > 0;
+  const currentDeliveryFee = hasSelectedRegion
+    ? deliveryFees.find(
+        (fee: any) =>
+          normalizeGovernorate(fee.state) === normalizedSelectedState ||
+          fee.stateCode === selectedStateCode
+      )?.fee ?? 0
+    : 0;
   const citiesForSelectedGovernorate = getCitiesForGovernorate(formData.state);
+  const installationFee = wantsInstallation === true ? installationFeeData?.fee || 11 : 0;
+  const baseOrderTotal = getTotalPrice() + currentDeliveryFee + installationFee;
+  const invoiceTotals = useMemo(
+    () =>
+      calculateOrderInvoiceTotals({
+        totalAmount: baseOrderTotal,
+        deliveryFee: currentDeliveryFee,
+        installationFee: installationFee,
+        customerInfo: { customerType: formData.customerType },
+      }),
+    [baseOrderTotal, currentDeliveryFee, installationFee, formData.customerType]
+  );
+  const invoiceSummaryLines = useMemo(
+    () =>
+      getOrderSummaryLines(invoiceTotals, {
+        regionSelected: hasSelectedRegion,
+        isFreeDeliveryActive,
+      }),
+    [invoiceTotals, hasSelectedRegion, isFreeDeliveryActive]
+  );
 
   // Handle empty cart redirect
   useEffect(() => {
@@ -119,19 +170,6 @@ export default function CheckoutPage() {
       router.push("/panier");
     }
   }, [cartLoading, items.length, router, orderCompleted]);
-
-  useEffect(() => {
-    if (!router.isReady) {
-      return;
-    }
-
-    const installQuery = router.query.install;
-    if (installQuery === "yes") {
-      setWantsInstallation(true);
-    } else if (installQuery === "no") {
-      setWantsInstallation(false);
-    }
-  }, [router.isReady, router.query.install]);
 
   const availableProductIds = new Set(
     (Array.isArray(productsData) ? productsData : [])
@@ -162,27 +200,27 @@ export default function CheckoutPage() {
       const resolvedTotalAmount =
         typeof serverData.totalAmount === "number"
           ? serverData.totalAmount
-          : getTotalPrice() + currentDeliveryFee + (wantsInstallation ? installationFeeData?.fee || 11 : 0);
+          : baseOrderTotal;
       const resolvedDeliveryFee =
         typeof serverData.deliveryFee === "number" ? serverData.deliveryFee : currentDeliveryFee;
       const resolvedInstallationFee =
         typeof serverData.installationFee === "number"
           ? serverData.installationFee
-          : wantsInstallation
-            ? installationFeeData?.fee || 11
-            : 0;
+          : installationFee;
 
       const orderDetails = {
         orderId: serverData.orderId || "",
         totalAmount: resolvedTotalAmount,
         deliveryFee: resolvedDeliveryFee,
         installationFee: resolvedInstallationFee,
-        wantsInstallation,
-        itemCount: items.length,
-        customerName: `${formData.firstName} ${formData.lastName}`.trim(),
+        itemCount:
+          typeof serverData.itemCount === "number" ? serverData.itemCount : getTotalItems(),
+        customerType: formData.customerType,
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        companyName: formData.companyName,
         customerPhone: formData.phone,
-        customerEmail: formData.email || "Non renseigné",
-        address: `${formData.address}, ${formData.city}, ${formData.state} ${formData.postalCode}`,
+        customerEmail: normalizeEmailValue(formData.email),
       };
       sessionStorage.setItem("last-order-details", JSON.stringify(orderDetails));
       setOrderCompleted(true);
@@ -195,10 +233,29 @@ export default function CheckoutPage() {
     },
   });
 
+  const handleCustomerTypeChange = (customerType: CustomerType) => {
+    setFormData((prev) => ({
+      ...prev,
+      customerType,
+      ...(customerType === "person"
+        ? { companyName: "", matriculeFiscale: "" }
+        : { firstName: "", lastName: "" }),
+    }));
+    if (customerType === "person") {
+      setMatriculeFiscaleError("");
+    }
+  };
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     const nextValue =
-      name === "phone" ? normalizePhoneValue(value) : name === "email" ? value : value;
+      name === "phone"
+        ? normalizePhoneValue(value)
+        : name === "email"
+          ? value
+          : name === "matriculeFiscale"
+            ? applyMatriculeFiscaleInput(formData.matriculeFiscale, value)
+            : value;
     setFormData((prev) => ({
       ...prev,
       [name]: nextValue,
@@ -209,6 +266,9 @@ export default function CheckoutPage() {
     }
     if (name === "phone" && phoneError) {
       setPhoneError(getPhoneValidationError(nextValue, { required: true }));
+    }
+    if (name === "matriculeFiscale" && matriculeFiscaleError) {
+      setMatriculeFiscaleError(getMatriculeFiscaleValidationError(nextValue));
     }
   };
 
@@ -226,12 +286,22 @@ export default function CheckoutPage() {
 
     const normalizedEmail = normalizeEmailValue(formData.email);
     const normalizedPhone = normalizePhoneValue(formData.phone);
+    const formattedMatriculeFiscale = formatMatriculeFiscale(formData.matriculeFiscale);
     const nextEmailError = getEmailValidationError(normalizedEmail);
     const nextPhoneError = getPhoneValidationError(normalizedPhone, { required: true });
+    const nextMatriculeFiscaleError = isCompanyOrder
+      ? getMatriculeFiscaleValidationError(formattedMatriculeFiscale)
+      : "";
     setEmailError(nextEmailError);
     setPhoneError(nextPhoneError);
-    setFormData((prev) => ({ ...prev, email: normalizedEmail, phone: normalizedPhone }));
-    if (nextEmailError || nextPhoneError) {
+    setMatriculeFiscaleError(nextMatriculeFiscaleError);
+    setFormData((prev) => ({
+      ...prev,
+      email: normalizedEmail,
+      phone: normalizedPhone,
+      matriculeFiscale: formattedMatriculeFiscale,
+    }));
+    if (nextEmailError || nextPhoneError || nextMatriculeFiscaleError) {
       return;
     }
 
@@ -240,13 +310,23 @@ export default function CheckoutPage() {
       return;
     }
 
+    if (wantsInstallation === null) {
+      showError("Veuillez indiquer si vous souhaitez la pose.");
+      return;
+    }
+
     const orderData = {
       items: items.map((item) => ({
         curtainTypeId: item.productId,
-        curtainTypeName: `${item.productName} (${item.curtainType === "panneau" ? "Panneau" : "Store"})`,
+        curtainTypeName: formatCurtainTypeName(item.productName, item.curtainType),
         width: item.width,
         height: item.height,
-        totalCost: item.calculation.total * item.quantity,
+        quantity: item.quantity,
+        totalCost: getCurtainLineTotal(
+          item.curtainType,
+          item.calculation.total,
+          item.quantity
+        ),
       })),
       customerInfo: {
         ...formData,
@@ -274,10 +354,13 @@ export default function CheckoutPage() {
 
   if (cartLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="text-center">
-          <div className="mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-b-2 border-green-600"></div>
-          <p className="text-gray-600 dark:text-gray-400">Chargement...</p>
+      <div className="min-h-screen bg-gray-100 dark:bg-gray-900">
+        <Navigation />
+        <div className="flex min-h-[calc(100vh-4rem)] items-center justify-center">
+          <div className="text-center">
+            <div className="mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-b-2 border-green-600"></div>
+            <p className="text-gray-600 dark:text-gray-400">Chargement...</p>
+          </div>
         </div>
       </div>
     );
@@ -293,10 +376,10 @@ export default function CheckoutPage() {
         <title>Commande - Rideaux Bambou</title>
         <meta name="description" content="Finalisez votre commande de rideaux en bambou" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <link rel="icon" href="/logo.png" />
+        <link rel="icon" href="/images/logo.png" />
       </Head>
 
-      <div className="min-h-screen bg-white dark:bg-gray-900">
+      <div className="min-h-screen bg-gray-100 dark:bg-gray-900">
         <Navigation />
 
         <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
@@ -354,40 +437,70 @@ export default function CheckoutPage() {
                           )}
                         </div>
                         <span className="text-gray-900 dark:text-white">
-                          {formatPrice(item.calculation.total * item.quantity)}
+                          {formatPrice(
+                            getCurtainLineTotal(
+                              item.curtainType,
+                              item.calculation.total,
+                              item.quantity
+                            )
+                          )}
                         </span>
                       </div>
                     ))}
 
-                    {currentDeliveryFee > 0 && (
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-600 dark:text-gray-400">Frais de livraison</span>
-                        <span className="text-gray-900 dark:text-white">
-                          {formatPrice(currentDeliveryFee)}
-                        </span>
+                    <div className="border-t border-gray-200 pt-3 dark:border-gray-700">
+                      <label className={formFieldLabelClass}>Pose *</label>
+                      <div className="flex flex-wrap gap-4">
+                        {([true, false] as const).map((wantsPose) => (
+                          <label
+                            key={wantsPose ? "oui" : "non"}
+                            className="flex items-center gap-2 text-gray-700 dark:text-gray-200"
+                          >
+                            <input
+                              type="radio"
+                              name="pose"
+                              checked={wantsInstallation === wantsPose}
+                              onChange={() => setWantsInstallation(wantsPose)}
+                              className="sr-only"
+                            />
+                            <span className="flex h-4 w-4 items-center justify-center rounded-full border border-gray-300 bg-white">
+                              <span
+                                className={`h-2 w-2 rounded-full bg-black transition-opacity ${
+                                  wantsInstallation === wantsPose ? "opacity-100" : "opacity-0"
+                                }`}
+                              />
+                            </span>
+                            <span className="text-sm">{wantsPose ? "Oui" : "Non"}</span>
+                          </label>
+                        ))}
                       </div>
-                    )}
-                    {wantsInstallation && (
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-600 dark:text-gray-400">
-                          Frais de pose
-                        </span>
-                        <span className="text-gray-900 dark:text-white">
-                          {formatPrice(installationFeeData?.fee || 11)}
-                        </span>
-                      </div>
-                    )}
+                    </div>
 
                     <div className="border-t border-gray-200 pt-3 dark:border-gray-700">
-                      <div className="flex justify-between text-lg font-semibold">
-                        <span className="text-gray-900 dark:text-white">Total</span>
-                        <span className="text-green-600 dark:text-green-400">
-                          {formatPrice(
-                            getTotalPrice() +
-                              currentDeliveryFee +
-                              (wantsInstallation ? installationFeeData?.fee || 11 : 0)
-                          )}
-                        </span>
+                      <div className="space-y-2 text-sm">
+                        {invoiceSummaryLines.map((line) => (
+                          <div
+                            key={line.label}
+                            className={`flex justify-between ${
+                              line.emphasis
+                                ? "border-t border-gray-200 pt-3 text-lg font-semibold dark:border-gray-700"
+                                : "text-gray-600 dark:text-gray-400"
+                            }`}
+                          >
+                            <span
+                              className={
+                                line.emphasis
+                                  ? "text-gray-900 dark:text-white"
+                                  : undefined
+                              }
+                            >
+                              {line.label}
+                            </span>
+                            <span className="text-gray-900 dark:text-white">
+                              {line.displayText ?? formatPrice(line.amount)}
+                            </span>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   </div>
@@ -407,52 +520,110 @@ export default function CheckoutPage() {
                   </h2>
 
                   <form onSubmit={handleSubmit} className="space-y-6">
-                    <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-                      <div>
-                        <label
-                          htmlFor="firstName"
-                          className={formFieldLabelClass}
-                        >
-                          Prénom *
-                        </label>
-                        <input
-                          type="text"
-                          id="firstName"
-                          name="firstName"
-                          value={formData.firstName}
-                          onChange={handleInputChange}
-                          required
-                          className={formSelectClass}
-                          style={{
-                            color: "rgb(17, 24, 39)",
-                            WebkitTextFillColor: "rgb(17, 24, 39)",
-                            opacity: 1,
-                          }}
-                        />
-                      </div>
-                      <div>
-                        <label
-                          htmlFor="lastName"
-                          className={formFieldLabelClass}
-                        >
-                          Nom *
-                        </label>
-                        <input
-                          type="text"
-                          id="lastName"
-                          name="lastName"
-                          value={formData.lastName}
-                          onChange={handleInputChange}
-                          required
-                          className={formSelectClass}
-                          style={{
-                            color: "rgb(17, 24, 39)",
-                            WebkitTextFillColor: "rgb(17, 24, 39)",
-                            opacity: 1,
-                          }}
-                        />
+                    <div>
+                      <label className={formFieldLabelClass}>Type de client *</label>
+                      <div className="flex flex-wrap gap-4">
+                        {(["person", "company"] as const).map((type) => (
+                          <label
+                            key={type}
+                            className="flex items-center gap-2 text-gray-700 dark:text-gray-200"
+                          >
+                            <input
+                              type="radio"
+                              name="customerType"
+                              value={type}
+                              checked={formData.customerType === type}
+                              onChange={() => handleCustomerTypeChange(type)}
+                              className="sr-only"
+                            />
+                            <span className="flex h-4 w-4 items-center justify-center rounded-full border border-gray-300 bg-white">
+                              <span
+                                className={`h-2 w-2 rounded-full bg-black transition-opacity ${
+                                  formData.customerType === type ? "opacity-100" : "opacity-0"
+                                }`}
+                              />
+                            </span>
+                            <span className="text-sm">{CUSTOMER_TYPE_LABELS[type]}</span>
+                          </label>
+                        ))}
                       </div>
                     </div>
+
+                    {isCompanyOrder ? (
+                      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                        <div className="md:col-span-2">
+                          <label htmlFor="companyName" className={formFieldLabelClass}>
+                            Nom de l&apos;entreprise *
+                          </label>
+                          <input
+                            type="text"
+                            id="companyName"
+                            name="companyName"
+                            value={formData.companyName}
+                            onChange={handleInputChange}
+                            required
+                            className={formSelectClass}
+                          />
+                        </div>
+                        <div className="md:col-span-2">
+                          <label htmlFor="matriculeFiscale" className={formFieldLabelClass}>
+                            Matricule fiscale *
+                          </label>
+                          <input
+                            type="text"
+                            id="matriculeFiscale"
+                            name="matriculeFiscale"
+                            value={formData.matriculeFiscale}
+                            onChange={handleInputChange}
+                            onBlur={() =>
+                              setMatriculeFiscaleError(
+                                getMatriculeFiscaleValidationError(formData.matriculeFiscale)
+                              )
+                            }
+                            required
+                            placeholder={MATRICULE_FISCALE_FORMAT}
+                            maxLength={17}
+                            className={formSelectClass}
+                          />
+                          {matriculeFiscaleError && (
+                            <p className="mt-1 text-sm text-red-500 dark:text-red-400">
+                              {matriculeFiscaleError}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                        <div>
+                          <label htmlFor="firstName" className={formFieldLabelClass}>
+                            Prénom *
+                          </label>
+                          <input
+                            type="text"
+                            id="firstName"
+                            name="firstName"
+                            value={formData.firstName}
+                            onChange={handleInputChange}
+                            required
+                            className={formSelectClass}
+                          />
+                        </div>
+                        <div>
+                          <label htmlFor="lastName" className={formFieldLabelClass}>
+                            Nom *
+                          </label>
+                          <input
+                            type="text"
+                            id="lastName"
+                            name="lastName"
+                            value={formData.lastName}
+                            onChange={handleInputChange}
+                            required
+                            className={formSelectClass}
+                          />
+                        </div>
+                      </div>
+                    )}
 
                     <div>
                       <label
@@ -473,11 +644,6 @@ export default function CheckoutPage() {
                           setEmailError(getEmailValidationError(normalizedEmail));
                         }}
                         className={formFieldClass}
-                        style={{
-                          color: "rgb(17, 24, 39)",
-                          WebkitTextFillColor: "rgb(17, 24, 39)",
-                          opacity: 1,
-                        }}
                       />
                       {emailError && (
                         <p className="mt-1 text-sm text-red-500 dark:text-red-400">{emailError}</p>
@@ -505,11 +671,6 @@ export default function CheckoutPage() {
                         pattern="[0-9]*"
                         required
                         className={formFieldClass}
-                        style={{
-                          color: "rgb(17, 24, 39)",
-                          WebkitTextFillColor: "rgb(17, 24, 39)",
-                          opacity: 1,
-                        }}
                       />
                       {phoneError && (
                         <p className="mt-1 text-sm text-red-500 dark:text-red-400">{phoneError}</p>
@@ -531,11 +692,6 @@ export default function CheckoutPage() {
                         onChange={handleInputChange}
                         required
                         className={formFieldClass}
-                        style={{
-                          color: "rgb(17, 24, 39)",
-                          WebkitTextFillColor: "rgb(17, 24, 39)",
-                          opacity: 1,
-                        }}
                       />
                     </div>
 
@@ -609,11 +765,6 @@ export default function CheckoutPage() {
                           onChange={handleInputChange}
                           required
                           className={formSelectClass}
-                          style={{
-                            color: "rgb(17, 24, 39)",
-                            WebkitTextFillColor: "rgb(17, 24, 39)",
-                            opacity: 1,
-                          }}
                         />
                       </div>
                     </div>
@@ -632,11 +783,6 @@ export default function CheckoutPage() {
                         onChange={handleInputChange}
                         rows={3}
                         className={formFieldClass}
-                        style={{
-                          color: "rgb(17, 24, 39)",
-                          WebkitTextFillColor: "rgb(17, 24, 39)",
-                          opacity: 1,
-                        }}
                       />
                     </div>
 
@@ -644,11 +790,13 @@ export default function CheckoutPage() {
                       type="submit"
                       disabled={
                         checkoutMutation.isPending ||
+                        wantsInstallation === null ||
                         Boolean(emailError) ||
                         Boolean(phoneError) ||
+                        Boolean(matriculeFiscaleError) ||
                         hasUnavailableItems
                       }
-                      className="w-full rounded-lg bg-gradient-to-r from-green-600 to-green-700 px-4 py-3 font-medium text-white transition-all hover:from-green-700 hover:to-green-800 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                      className="w-full rounded-lg bg-gray-900 px-4 py-3 font-medium text-white transition-colors hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100"
                     >
                       Passer votre commande
                     </button>

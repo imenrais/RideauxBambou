@@ -170,12 +170,12 @@ export default function Contact({ title }: ContactProps) {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.6, delay: 0.1 }}
-                    className="group relative overflow-hidden rounded-xl border border-gray-200 bg-gradient-to-br from-green-50 to-emerald-50 p-6 transition-all duration-300 hover:shadow-lg hover:shadow-green-100 dark:border-gray-700 dark:from-gray-800 dark:to-gray-700 dark:hover:shadow-gray-900"
+                    className="group relative overflow-hidden rounded-xl border border-gray-200 bg-gradient-to-br from-gray-50 to-white p-6 transition-all duration-300 hover:shadow-lg hover:shadow-gray-200 dark:border-gray-700 dark:from-gray-800 dark:to-gray-700 dark:hover:shadow-gray-900"
                   >
                     <div className="absolute right-4 top-4">
-                      <div className="rounded-full bg-green-100 p-3 group-hover:bg-green-200 dark:bg-green-900 dark:group-hover:bg-green-800">
+                      <div className="rounded-full bg-gray-100 p-3 group-hover:bg-gray-200 dark:bg-gray-700 dark:group-hover:bg-gray-600">
                         <svg
-                          className="h-6 w-6 text-green-600 dark:text-green-400"
+                          className="h-6 w-6 text-gray-700 dark:text-gray-300"
                           fill="none"
                           stroke="currentColor"
                           viewBox="0 0 24 24"
@@ -213,12 +213,12 @@ export default function Contact({ title }: ContactProps) {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.6, delay: 0.2 }}
-                    className="group relative overflow-hidden rounded-xl border border-gray-200 bg-gradient-to-br from-blue-50 to-indigo-50 p-6 transition-all duration-300 hover:shadow-lg hover:shadow-blue-100 dark:border-gray-700 dark:from-gray-800 dark:to-gray-700 dark:hover:shadow-gray-900"
+                    className="group relative overflow-hidden rounded-xl border border-gray-200 bg-gradient-to-br from-gray-50 to-white p-6 transition-all duration-300 hover:shadow-lg hover:shadow-gray-200 dark:border-gray-700 dark:from-gray-800 dark:to-gray-700 dark:hover:shadow-gray-900"
                   >
                     <div className="absolute right-4 top-4">
-                      <div className="rounded-full bg-blue-100 p-3 group-hover:bg-blue-200 dark:bg-blue-900 dark:group-hover:bg-blue-800">
+                      <div className="rounded-full bg-gray-100 p-3 group-hover:bg-gray-200 dark:bg-gray-700 dark:group-hover:bg-gray-600">
                         <svg
-                          className="h-6 w-6 text-blue-600 dark:text-blue-400"
+                          className="h-6 w-6 text-gray-700 dark:text-gray-300"
                           fill="none"
                           stroke="currentColor"
                           viewBox="0 0 24 24"
@@ -240,7 +240,7 @@ export default function Contact({ title }: ContactProps) {
                       <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
                         <a
                           href="tel:+21651590770"
-                          className="font-medium transition-colors hover:text-blue-600 dark:hover:text-blue-400"
+                          className="font-medium transition-colors hover:text-gray-900 dark:hover:text-white"
                         >
                           +216 51 590 770
                         </a>
@@ -253,12 +253,12 @@ export default function Contact({ title }: ContactProps) {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.6, delay: 0.3 }}
-                    className="group relative overflow-hidden rounded-xl border border-gray-200 bg-gradient-to-br from-purple-50 to-pink-50 p-6 transition-all duration-300 hover:shadow-lg hover:shadow-purple-100 dark:border-gray-700 dark:from-gray-800 dark:to-gray-700 dark:hover:shadow-gray-900 md:col-span-2 lg:col-span-1"
+                    className="group relative overflow-hidden rounded-xl border border-gray-200 bg-gradient-to-br from-gray-50 to-white p-6 transition-all duration-300 hover:shadow-lg hover:shadow-gray-200 dark:border-gray-700 dark:from-gray-800 dark:to-gray-700 dark:hover:shadow-gray-900 md:col-span-2 lg:col-span-1"
                   >
                     <div className="absolute right-4 top-4">
-                      <div className="rounded-full bg-purple-100 p-3 group-hover:bg-purple-200 dark:bg-purple-900 dark:group-hover:bg-purple-800">
+                      <div className="rounded-full bg-gray-100 p-3 group-hover:bg-gray-200 dark:bg-gray-700 dark:group-hover:bg-gray-600">
                         <svg
-                          className="h-6 w-6 text-purple-600 dark:text-purple-400"
+                          className="h-6 w-6 text-gray-700 dark:text-gray-300"
                           fill="none"
                           stroke="currentColor"
                           viewBox="0 0 24 24"
@@ -278,7 +278,7 @@ export default function Contact({ title }: ContactProps) {
                       <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
                         <a
                           href="mailto:rideauxbambou@gmail.com"
-                          className="font-medium transition-colors hover:text-purple-600 dark:hover:text-purple-400"
+                          className="font-medium transition-colors hover:text-gray-900 dark:hover:text-white"
                         >
                           rideauxbambou@gmail.com
                         </a>
@@ -350,7 +350,7 @@ export default function Contact({ title }: ContactProps) {
               </h2>
               <ul className="space-y-3 text-gray-600 dark:text-gray-400">
                 <li className="flex items-center space-x-2">
-                  <svg className="h-5 w-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                  <svg className="h-5 w-5 text-gray-800 dark:text-gray-200" fill="currentColor" viewBox="0 0 20 20">
                     <path
                       fillRule="evenodd"
                       d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
@@ -360,7 +360,7 @@ export default function Contact({ title }: ContactProps) {
                   <span>Produits de qualité supérieure</span>
                 </li>
                 <li className="flex items-center space-x-2">
-                  <svg className="h-5 w-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                  <svg className="h-5 w-5 text-gray-800 dark:text-gray-200" fill="currentColor" viewBox="0 0 20 20">
                     <path
                       fillRule="evenodd"
                       d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
@@ -370,7 +370,7 @@ export default function Contact({ title }: ContactProps) {
                   <span>Service client personnalisé</span>
                 </li>
                 <li className="flex items-center space-x-2">
-                  <svg className="h-5 w-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                  <svg className="h-5 w-5 text-gray-800 dark:text-gray-200" fill="currentColor" viewBox="0 0 20 20">
                     <path
                       fillRule="evenodd"
                       d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
@@ -380,7 +380,7 @@ export default function Contact({ title }: ContactProps) {
                   <span>Livraison rapide en Tunisie</span>
                 </li>
                 <li className="flex items-center space-x-2">
-                  <svg className="h-5 w-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                  <svg className="h-5 w-5 text-gray-800 dark:text-gray-200" fill="currentColor" viewBox="0 0 20 20">
                     <path
                       fillRule="evenodd"
                       d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"

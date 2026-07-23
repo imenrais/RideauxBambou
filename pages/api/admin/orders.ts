@@ -3,9 +3,9 @@ import { NextApiRequest, NextApiResponse } from "next";
 import { z } from "zod";
 
 import { requireAdmin } from "../../../lib/auth-helpers";
-import { optionalEmailSchema } from "../../../lib/email-validation";
+import { adminCustomerInfoSchema, serializeCustomerInfo } from "../../../lib/customer-info";
 import { subscribePromoEmail } from "../../../lib/promo-subscriber-store";
-import { requiredPhoneSchema } from "../../../lib/phone-validation";
+import { matchesOrderSearch, normalizeOrderSearchText } from "../../../lib/order-search";
 import { prisma } from "../../../lib/prisma";
 
 const LEGACY_STATUS_MAP: Record<string, string> = {
@@ -15,71 +15,6 @@ const LEGACY_STATUS_MAP: Record<string, string> = {
 const normalizeOrderStatus = (status: string) => {
   const normalized = status.trim().toLowerCase();
   return LEGACY_STATUS_MAP[normalized] || normalized;
-};
-
-const normalizeSearchText = (value: unknown) =>
-  String(value || "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .trim()
-    .replace(/\s+/g, " ");
-
-const normalizePhoneDigits = (value: unknown) => {
-  const digits = String(value || "").replace(/\D/g, "");
-  if (digits.length > 8) {
-    return digits.slice(-8);
-  }
-  return digits;
-};
-
-const buildCustomerNameCandidates = (
-  customerInfo: Record<string, unknown>,
-  user?: { name?: string | null } | null
-) => {
-  const firstName = normalizeSearchText(customerInfo.firstName);
-  const lastName = normalizeSearchText(customerInfo.lastName);
-  const legacyName = normalizeSearchText(customerInfo.name);
-  const accountName = normalizeSearchText(user?.name);
-
-  return [...new Set([`${firstName} ${lastName}`.trim(), legacyName, accountName].filter(Boolean))];
-};
-
-const matchesCustomerName = (nameCandidates: string[], searchTokens: string[]) => {
-  if (searchTokens.length === 0) {
-    return false;
-  }
-
-  const nameParts = nameCandidates
-    .flatMap((candidate) => candidate.split(/\s+/))
-    .filter((part) => part.length > 0);
-
-  return searchTokens.every(
-    (token) =>
-      nameCandidates.some((candidate) => candidate.includes(token)) ||
-      nameParts.some((part) => part.startsWith(token))
-  );
-};
-
-const matchesCustomerPhone = (phoneValue: unknown, digitsSearch: string) => {
-  if (digitsSearch.length < 3) {
-    return false;
-  }
-
-  const phoneDigits = normalizePhoneDigits(phoneValue);
-  return phoneDigits.includes(digitsSearch);
-};
-
-const matchesOrderIdSearch = (orderId: string, query: string) => {
-  const normalizedQuery = query.replace(/\s/g, "");
-  if (!normalizedQuery) {
-    return false;
-  }
-
-  const normalizedOrderId = normalizeSearchText(orderId).replace(/\s/g, "");
-  const shortOrderId = normalizedOrderId.slice(-8);
-
-  return shortOrderId.includes(normalizedQuery) || normalizedOrderId.includes(normalizedQuery);
 };
 
 const buildStatusWhere = (status?: string | string[]): Prisma.OrderWhereInput => {
@@ -100,21 +35,13 @@ const buildStatusWhere = (status?: string | string[]): Prisma.OrderWhereInput =>
 };
 
 const createAdminOrderSchema = z.object({
-  customerInfo: z.object({
-    firstName: z.string().min(2, "Le prénom doit contenir au moins 2 caractères"),
-    lastName: z.string().min(2, "Le nom doit contenir au moins 2 caractères"),
-    email: optionalEmailSchema.optional(),
-    phone: requiredPhoneSchema,
-    address: z.string().min(5, "L'adresse est requise"),
-    city: z.string().min(2, "La ville est requise"),
-    state: z.string().min(2, "La région est requise"),
-    postalCode: z.string().min(2, "Le code postal est requis"),
-  }),
+  customerInfo: adminCustomerInfoSchema,
   item: z.object({
     curtainTypeName: z.string().min(1, "Le nom du produit est requis"),
     width: z.number().positive("La largeur doit être supérieure à 0"),
     height: z.number().positive("La hauteur doit être supérieure à 0"),
     totalCost: z.number().min(0, "Le prix produit doit être positif"),
+    quantity: z.number().int().min(1, "La quantité doit être au moins 1").default(1),
   }),
   wantsInstallation: z.boolean(),
   deliveryFee: z.number().min(0, "Les frais de livraison doivent être positifs"),
@@ -138,6 +65,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           validationResult.data;
         const resolvedInstallationFee = wantsInstallation ? installationFee : 0;
         const totalAmount = Math.max(0, item.totalCost + deliveryFee + resolvedInstallationFee);
+        const serializedCustomerInfo = serializeCustomerInfo(customerInfo);
 
         const createdOrder = await prisma.order.create({
           data: {
@@ -148,19 +76,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 curtainTypeName: item.curtainTypeName,
                 width: item.width,
                 height: item.height,
+                quantity: item.quantity,
                 totalCost: item.totalCost,
               },
             ] as unknown as Prisma.InputJsonValue,
-            customerInfo: {
-              firstName: customerInfo.firstName.trim(),
-              lastName: customerInfo.lastName.trim(),
-              email: customerInfo.email || "",
-              phone: customerInfo.phone.trim(),
-              address: customerInfo.address.trim(),
-              city: customerInfo.city.trim(),
-              state: customerInfo.state.trim(),
-              postalCode: customerInfo.postalCode.trim(),
-            } as unknown as Prisma.InputJsonValue,
+            customerInfo: serializedCustomerInfo as unknown as Prisma.InputJsonValue,
             wantsInstallation,
             deliveryFee,
             installationFee: resolvedInstallationFee,
@@ -209,8 +129,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const pageNum = parseInt(page as string);
         const limitNum = parseInt(limit as string);
         const skip = (pageNum - 1) * limitNum;
-        const normalizedSearch = normalizeSearchText(search);
-        const normalizedOrderIdLookup = normalizeSearchText(orderId).replace(/\s/g, "");
+        const normalizedSearch = normalizeOrderSearchText(search);
+        const normalizedOrderIdLookup = normalizeOrderSearchText(orderId).replace(/\s/g, "");
         const shouldIncludeStats = includeStats === "true";
 
         const where = buildStatusWhere(status);
@@ -246,25 +166,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           totalOrders = matchedOrders.length;
           orders = matchedOrders.slice(skip, skip + limitNum);
         } else if (normalizedSearch) {
-            const searchTokens = normalizedSearch.split(" ").filter((token) => token.length > 0);
-            const compactSearch = normalizedSearch.replace(/\s/g, "");
-            const digitsSearch = normalizedSearch.replace(/\D/g, "");
-
             const allFilteredByStatus = await prisma.order.findMany({
               where,
               include: orderInclude,
               orderBy: { createdAt: "desc" },
             });
 
-            const searchedOrders = allFilteredByStatus.filter((order) => {
-              const customerInfo = (order.customerInfo || {}) as Record<string, unknown>;
-              const nameCandidates = buildCustomerNameCandidates(customerInfo, order.user);
-              const matchesName = matchesCustomerName(nameCandidates, searchTokens);
-              const matchesPhone = matchesCustomerPhone(customerInfo.phone, digitsSearch);
-              const matchesOrderId = matchesOrderIdSearch(order.id, compactSearch);
-
-              return matchesName || matchesPhone || matchesOrderId;
-            });
+            const searchedOrders = allFilteredByStatus.filter((order) =>
+              matchesOrderSearch(order, normalizedSearch)
+            );
 
           totalOrders = searchedOrders.length;
           orders = searchedOrders.slice(skip, skip + limitNum);

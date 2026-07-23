@@ -1,4 +1,4 @@
-import { DeliveryFee } from "@prisma/client";
+import { DeliveryFee, Prisma } from "@prisma/client";
 
 import { prisma } from "./prisma";
 
@@ -150,7 +150,7 @@ export async function updateDeliveryFee(state: string, fee: number, updatedBy: s
       create: {
         id: "default",
         isFreeDeliveryActive: false,
-        feeBackup: null,
+        feeBackup: Prisma.DbNull,
         updatedBy,
       },
     });
@@ -182,7 +182,7 @@ export async function getDeliveryFeeSettings() {
     data: {
       id: "default",
       isFreeDeliveryActive: false,
-      feeBackup: null,
+      feeBackup: Prisma.DbNull,
       updatedBy: "system",
     },
   });

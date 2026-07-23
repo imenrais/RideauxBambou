@@ -7,17 +7,12 @@ import {
   validateAndSanitizeEmail,
   setSecurityHeaders,
   handleApiError,
-  rateLimit,
 } from "../../../lib/security";
 import { enforceIpRateLimit, getRequestIp } from "../../../lib/auth-throttle";
 import { prisma } from "../../../lib/prisma";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  // Set security headers
   setSecurityHeaders(res);
-
-  // Rate limiting - using authRateLimit from security
-  // This is handled by the middleware pattern
 
   if (req.method !== "POST") {
     return res.status(405).json({

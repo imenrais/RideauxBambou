@@ -20,11 +20,11 @@ export default function AdminLayout({
         <title>{title}</title>
         <meta name="description" content={description} />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <link rel="icon" href="/logo.png" />
-        <link rel="apple-touch-icon" href="/logo.png" />
+        <link rel="icon" href="/images/logo.png" />
+        <link rel="apple-touch-icon" href="/images/logo.png" />
       </Head>
 
-      <div className="min-h-screen bg-white dark:bg-gray-900">
+      <div className="min-h-screen bg-gray-100 dark:bg-gray-900">
         <AdminNavigation />
 
         <main className="mx-auto max-w-7xl px-3 py-6 sm:px-6 sm:py-8 lg:px-8">{children}</main>

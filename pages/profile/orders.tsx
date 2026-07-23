@@ -11,6 +11,7 @@ import Badge from "../../components/ui/Badge";
 import Button from "../../components/ui/Button";
 import Card from "../../components/ui/Card";
 import Loading from "../../components/ui/Loading";
+import { normalizeCurtainTypeName } from "../../lib/curtain-type-name";
 import { formSelectClass } from "../../lib/form-field-styles";
 
 interface UserOrdersProps {
@@ -226,7 +227,7 @@ export default function UserOrders({ title }: UserOrdersProps) {
                                   <div className="h-12 w-12 rounded-lg bg-gray-200 dark:bg-gray-700"></div>
                                   <div>
                                     <p className="text-sm font-medium text-gray-900 dark:text-white">
-                                      {item.curtainTypeName || "Curtain"}
+                                      {normalizeCurtainTypeName(item.curtainTypeName)}
                                     </p>
                                     <p className="text-sm text-gray-600 dark:text-gray-400">
                                       {item.dimensions} - {item.totalCost?.toFixed(2)} TND

@@ -11,7 +11,7 @@ interface ForbiddenPageProps {
 export default function ForbiddenPage({ title }: ForbiddenPageProps) {
   return (
     <StandardLayout title={title} description="Access forbidden">
-      <div className="-mx-4 -my-8 min-h-screen bg-white px-4 py-8 dark:bg-gray-900">
+      <div className="-mx-4 -my-8 min-h-screen bg-gray-100 px-4 py-8 dark:bg-gray-900">
         {/* Main Content */}
         <main className="flex min-h-screen items-center justify-center px-4 py-12 sm:px-6 lg:px-8">
           <div className="w-full max-w-md space-y-8 text-center">

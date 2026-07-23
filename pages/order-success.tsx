@@ -7,19 +7,38 @@ import { useEffect, useState } from "react";
 import BackButton from "../components/BackButton";
 import Footer from "../components/Footer";
 import Navigation from "../components/Navigation";
+import type { CustomerType } from "../lib/customer-info";
+import {
+  calculateOrderInvoiceTotals,
+  getOrderSummaryLines,
+} from "../lib/invoice-totals";
 
 interface OrderDetails {
   orderId: string;
   totalAmount: number;
-  deliveryFee: number;
-  installationFee: number;
-  wantsInstallation: boolean;
+  deliveryFee?: number;
+  installationFee?: number;
   itemCount: number;
-  customerName: string;
+  customerType?: CustomerType;
+  firstName?: string;
+  lastName?: string;
+  companyName?: string;
+  customerName?: string;
   customerPhone: string;
-  customerEmail: string;
-  address: string;
+  customerEmail?: string;
 }
+
+const getCustomerNameLabel = (orderDetails: OrderDetails) =>
+  orderDetails.customerType === "company" ? "Nom de l'entreprise" : "Prénom et nom";
+
+const getCustomerNameValue = (orderDetails: OrderDetails) => {
+  if (orderDetails.customerType === "company") {
+    return orderDetails.companyName?.trim() || "";
+  }
+
+  const fullName = `${orderDetails.firstName || ""} ${orderDetails.lastName || ""}`.trim();
+  return fullName || orderDetails.customerName?.trim() || "";
+};
 
 export default function OrderSuccessPage() {
   const router = useRouter();
@@ -53,16 +72,32 @@ export default function OrderSuccessPage() {
     }).format(price);
   };
 
+  const customerEmail = orderDetails?.customerEmail?.trim() || "";
+  const showEmail =
+    Boolean(customerEmail) &&
+    customerEmail.toLowerCase() !== "non renseigné";
+  const invoiceTotals = orderDetails
+    ? calculateOrderInvoiceTotals({
+        totalAmount: orderDetails.totalAmount,
+        deliveryFee: orderDetails.deliveryFee ?? 0,
+        installationFee: orderDetails.installationFee ?? 0,
+        customerInfo: { customerType: orderDetails.customerType },
+      })
+    : null;
+  const invoiceSummaryLines = invoiceTotals
+    ? getOrderSummaryLines(invoiceTotals, { regionSelected: true })
+    : [];
+
   return (
     <>
       <Head>
         <title>Commande confirmée - Rideaux Bambou</title>
         <meta name="description" content="Votre commande a été confirmée avec succès" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <link rel="icon" href="/logo.png" />
+        <link rel="icon" href="/images/logo.png" />
       </Head>
 
-      <div className="min-h-screen bg-white dark:bg-gray-900">
+      <div className="min-h-screen bg-gray-100 dark:bg-gray-900">
         <Navigation />
 
         <main className="mx-auto max-w-4xl px-4 py-12 sm:px-6 lg:px-8">
@@ -128,38 +163,37 @@ export default function OrderSuccessPage() {
                 <h2 className="mb-4 text-xl font-semibold text-gray-900 dark:text-white">
                   Détails de votre commande
                 </h2>
-                <div className="grid grid-cols-1 gap-3 text-sm text-gray-700 dark:text-gray-300 md:grid-cols-2">
+                <div className="space-y-3 text-sm text-gray-700 dark:text-gray-300">
                   <p>
-                    <strong>Commande:</strong> #{orderDetails.orderId.slice(-8)}
+                    <strong>Commande :</strong> #{orderDetails.orderId.slice(-8)}
                   </p>
                   <p>
-                    <strong>Articles:</strong> {orderDetails.itemCount}
+                    <strong>{getCustomerNameLabel(orderDetails)} :</strong>{" "}
+                    {getCustomerNameValue(orderDetails)}
                   </p>
                   <p>
-                    <strong>Total:</strong> {formatPrice(orderDetails.totalAmount)}
+                    <strong>Téléphone :</strong> {orderDetails.customerPhone}
                   </p>
+                  {showEmail && (
+                    <p>
+                      <strong>Email :</strong> {customerEmail}
+                    </p>
+                  )}
                   <p>
-                    <strong>Livraison:</strong> {formatPrice(orderDetails.deliveryFee)}
+                    <strong>Articles :</strong> {orderDetails.itemCount}
                   </p>
-                  <p>
-                    <strong>Pose :</strong>{" "}
-                    {orderDetails.wantsInstallation
-                      ? formatPrice(orderDetails.installationFee)
-                      : "Non demandée"}
-                  </p>
-                  <p>
-                    <strong>Client:</strong> {orderDetails.customerName}
-                  </p>
-                  <p>
-                    <strong>Téléphone:</strong> {orderDetails.customerPhone}
-                  </p>
-                  <p>
-                    <strong>Email:</strong> {orderDetails.customerEmail}
-                  </p>
+                  <div className="space-y-2 border-t border-green-200 pt-3 dark:border-green-800/50">
+                    {invoiceSummaryLines.map((line) => (
+                      <p
+                        key={line.label}
+                        className={line.emphasis ? "text-base font-semibold text-gray-900 dark:text-white" : ""}
+                      >
+                        <strong>{line.label} :</strong>{" "}
+                        {line.displayText ?? formatPrice(line.amount)}
+                      </p>
+                    ))}
+                  </div>
                 </div>
-                <p className="mt-3 text-sm text-gray-700 dark:text-gray-300">
-                  <strong>Adresse:</strong> {orderDetails.address}
-                </p>
               </motion.div>
             )}
 
@@ -230,7 +264,7 @@ export default function OrderSuccessPage() {
             >
               <Link
                 href="/#boutique"
-                className="inline-flex items-center rounded-md border border-transparent bg-gradient-to-r from-green-600 to-green-700 px-6 py-3 text-base font-medium text-white transition-all hover:from-green-700 hover:to-green-800 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+                className="inline-flex items-center rounded-md border border-transparent bg-gray-900 px-6 py-3 text-base font-medium text-white transition-colors hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100"
               >
                 Continuer mes achats
               </Link>

@@ -1,5 +1,4 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { GetServerSideProps } from "next";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/router";
 import { useSession } from "next-auth/react";
@@ -11,7 +10,6 @@ import Button from "../../components/ui/Button";
 import Loading from "../../components/ui/Loading";
 import { adminTableShellClassName } from "../../components/ui/Table";
 import { useToast } from "../../contexts/ToastContext";
-import { requireAdminPage } from "../../lib/admin-page-guard";
 import { notifyProductsUpdated } from "../../lib/product-availability-sync";
 import { PRODUCTS_QUERY_KEY } from "../../lib/products-query";
 
@@ -22,10 +20,6 @@ const ProductTable = dynamic(() => import("../../components/admin/ProductTable")
 const ProductForm = dynamic(() => import("../../components/admin/ProductForm"), {
   loading: () => <div className="p-4 text-center">Chargement...</div>,
 });
-
-interface AdminProductsProps {
-  title: string;
-}
 
 interface Product {
   _id: string;
@@ -101,7 +95,7 @@ const upsertProductInCache = (cachedData: Product[] | undefined, product: Produc
 const ADMIN_PRODUCTS_QUERY_KEY = ["admin-products"] as const;
 const ADMIN_PRODUCTS_STATS_QUERY_KEY = ["admin-products-stats"] as const;
 
-export default function AdminProducts({ title }: AdminProductsProps) {
+export default function AdminProducts() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -312,7 +306,7 @@ export default function AdminProducts({ title }: AdminProductsProps) {
   }
 
   return (
-    <AdminLayout title={title} description="Gestion des produits - Administration">
+    <AdminLayout title="Gestion des Produits - Administration" description="Gestion des produits - Administration">
       <div className="mb-6">
         <BackButton />
       </div>
@@ -321,7 +315,7 @@ export default function AdminProducts({ title }: AdminProductsProps) {
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Gestion des Produits</h1>
           <p className="mt-2 text-gray-600 dark:text-gray-400">Gérez votre catalogue de produits</p>
         </div>
-        <Button onClick={() => setShowModal(true)} className="shrink-0 bg-green-600 hover:bg-green-700">
+        <Button onClick={() => setShowModal(true)} className="shrink-0">
           Ajouter un produit
         </Button>
       </div>
@@ -361,6 +355,3 @@ export default function AdminProducts({ title }: AdminProductsProps) {
     </AdminLayout>
   );
 }
-
-export const getServerSideProps: GetServerSideProps = async (context) =>
-  requireAdminPage(context, "Gestion des Produits - Administration");

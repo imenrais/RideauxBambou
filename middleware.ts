@@ -86,7 +86,7 @@ export default withAuth(
           pathname.startsWith("/commande-reussie") ||
           pathname.startsWith("/contact") ||
           pathname.startsWith("/_next") ||
-          pathname.startsWith("/logo.png")
+          pathname.startsWith("/images/")
         ) {
           return true;
         }

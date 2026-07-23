@@ -101,7 +101,7 @@ export default function ResetPasswordPage({ title, token }: ResetPasswordPagePro
 
   return (
     <StandardLayout title={title} description="Réinitialiser votre mot de passe">
-      <div className="-mx-4 -my-8 min-h-screen bg-white px-4 py-8 dark:bg-gray-900">
+      <div className="-mx-4 -my-8 min-h-screen bg-gray-100 px-4 py-8 dark:bg-gray-900">
         {/* Back Button and Main Content */}
         <div className="px-4 py-6 sm:px-6 sm:py-8">
           <BackButton />
@@ -117,7 +117,7 @@ export default function ResetPasswordPage({ title, token }: ResetPasswordPagePro
             >
               <div className="mb-8 text-center">
                 <Image
-                  src="/logo.png"
+                  src="/images/logo.png"
                   alt="Rideaux Bambou"
                   width={48}
                   height={48}
@@ -260,7 +260,7 @@ export default function ResetPasswordPage({ title, token }: ResetPasswordPagePro
                   <button
                     type="submit"
                     disabled={isLoading}
-                    className="flex w-full justify-center rounded-md border border-transparent bg-green-600 px-4 py-3 text-sm font-medium text-white shadow-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-green-700 dark:hover:bg-green-600"
+                    className="flex w-full justify-center rounded-md border border-transparent bg-gray-900 px-4 py-3 text-sm font-medium text-white shadow-sm hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100"
                   >
                     {isLoading ? "Réinitialisation..." : "Réinitialiser le mot de passe"}
                   </button>
@@ -271,7 +271,7 @@ export default function ResetPasswordPage({ title, token }: ResetPasswordPagePro
                   <button
                     type="button"
                     onClick={handleBackNavigation}
-                    className="text-sm text-green-600 hover:text-green-500 dark:text-green-400 dark:hover:text-green-300"
+                    className="text-sm text-gray-900 hover:text-gray-700 dark:text-gray-100 dark:hover:text-white"
                   >
                     Retour à la connexion
                   </button>

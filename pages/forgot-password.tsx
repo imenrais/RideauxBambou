@@ -83,7 +83,7 @@ export default function ForgotPasswordPage({ title }: ForgotPasswordPageProps) {
               {/* Header */}
               <div className="mb-8 text-center">
                 <Image
-                  src="/logo.png"
+                  src="/images/logo.png"
                   alt="Rideaux Bambou"
                   width={48}
                   height={48}
@@ -189,7 +189,7 @@ export default function ForgotPasswordPage({ title }: ForgotPasswordPageProps) {
                   disabled={isLoading || Boolean(emailError)}
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
-                  className="w-full rounded-lg bg-gradient-to-r from-green-600 to-green-700 px-4 py-3 font-medium text-white transition-all duration-200 hover:from-green-700 hover:to-green-800 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="w-full rounded-lg bg-gray-900 px-4 py-3 font-medium text-white transition-colors duration-200 hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100"
                 >
                   {isLoading ? (
                     <div className="flex items-center justify-center">
@@ -226,7 +226,7 @@ export default function ForgotPasswordPage({ title }: ForgotPasswordPageProps) {
                   Vous avez votre mot de passe?{" "}
                   <Link
                     href="/connexion"
-                    className="text-green-600 hover:underline dark:text-green-400"
+                    className="text-gray-900 hover:underline dark:text-gray-100"
                   >
                     Se connecter
                   </Link>

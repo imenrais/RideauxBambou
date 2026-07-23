@@ -27,11 +27,11 @@ export default function Button({
 
   const variantClasses = {
     primary:
-      "rounded-xl bg-gradient-to-r from-green-600 to-green-700 text-white shadow-lg hover:from-green-700 hover:to-green-800 hover:shadow-xl focus:ring-green-500/50",
+      "rounded-xl bg-gray-900 text-white shadow-lg hover:bg-gray-800 hover:shadow-xl focus:ring-gray-500/40 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100",
     secondary:
-      "rounded-xl border border-gray-200/50 bg-white/80 backdrop-blur-sm text-gray-700 shadow-sm hover:bg-white hover:shadow-md focus:ring-green-500/50 dark:border-gray-600/50 dark:bg-gray-700/80 dark:text-gray-300 dark:hover:bg-gray-700",
+      "rounded-xl border border-gray-300 bg-white text-gray-800 shadow-sm hover:bg-gray-50 hover:shadow-md focus:ring-gray-400/40 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700",
     ghost:
-      "rounded-xl text-gray-700 hover:bg-gray-100/80 backdrop-blur-sm focus:ring-green-500/50 dark:text-gray-300 dark:hover:bg-gray-800/80",
+      "rounded-xl text-gray-800 hover:bg-gray-200/80 focus:ring-gray-400/40 dark:text-gray-300 dark:hover:bg-gray-800/80",
     danger:
       "rounded-xl bg-gradient-to-r from-red-600 to-red-700 text-white shadow-lg hover:from-red-700 hover:to-red-800 hover:shadow-xl focus:ring-red-500/50",
   };

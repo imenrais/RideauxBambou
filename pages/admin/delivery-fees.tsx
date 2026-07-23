@@ -1,5 +1,4 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { GetServerSideProps } from "next";
 import { useRouter } from "next/router";
 import { useSession } from "next-auth/react";
 import { useState, useEffect, useMemo } from "react";
@@ -19,11 +18,6 @@ import {
   adminTableComfortableSpacingClassName,
   adminTableShellClassName,
 } from "../../components/ui/Table";
-import { requireAdminPage } from "../../lib/admin-page-guard";
-
-interface AdminDeliveryFeesProps {
-  title: string;
-}
 
 interface DeliveryFeesResponse {
   fees: DeliveryFee[];
@@ -105,7 +99,7 @@ function parseDeliveryFeesResponse(data: {
   };
 }
 
-export default function AdminDeliveryFees({ title }: AdminDeliveryFeesProps) {
+export default function AdminDeliveryFees() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -304,7 +298,7 @@ export default function AdminDeliveryFees({ title }: AdminDeliveryFeesProps) {
 
   return (
     <AdminLayout
-      title={title}
+      title="Frais de Livraison - Rideaux Bambou Admin"
       description="Gestion des frais de livraison par gouvernorat - Rideaux Bambou Admin"
     >
       <div className="mb-6">
@@ -396,7 +390,6 @@ export default function AdminDeliveryFees({ title }: AdminDeliveryFeesProps) {
                 onClick={handleSaveAll}
                 disabled={updateFeeMutation.isPending}
                 loading={updateFeeMutation.isPending}
-                className="bg-green-600 hover:bg-green-700"
               >
                 {updateFeeMutation.isPending ? "Enregistrement..." : "Enregistrer"}
               </Button>
@@ -462,6 +455,3 @@ export default function AdminDeliveryFees({ title }: AdminDeliveryFeesProps) {
     </AdminLayout>
   );
 }
-
-export const getServerSideProps: GetServerSideProps = async (context) =>
-  requireAdminPage(context, "Frais de Livraison - Rideaux Bambou Admin");

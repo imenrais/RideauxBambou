@@ -1,5 +1,3 @@
-import { motion } from "framer-motion";
-import { GetServerSideProps } from "next";
 import { useRouter } from "next/router";
 import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
@@ -11,13 +9,8 @@ import Card from "../../components/ui/Card";
 import Input from "../../components/ui/Input";
 import Loading from "../../components/ui/Loading";
 import { useToast } from "../../contexts/ToastContext";
-import { requireAdminPage } from "../../lib/admin-page-guard";
 
-interface AdminSettingsProps {
-  title: string;
-}
-
-export default function AdminSettings({ title }: AdminSettingsProps) {
+export default function AdminSettings() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const [currentPassword, setCurrentPassword] = useState("");
@@ -77,54 +70,45 @@ export default function AdminSettings({ title }: AdminSettingsProps) {
   };
 
   return (
-    <AdminLayout title={title} description="Paramètres administrateur">
+    <AdminLayout title="Paramètres Admin - Rideaux Bambou" description="Paramètres administrateur">
       <div className="mb-6">
         <BackButton href="/admin" />
       </div>
 
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6 }}
-      >
-        <Card className="p-6">
-          <h1 className="mb-2 text-2xl font-bold text-gray-900 dark:text-white">Paramètres Admin</h1>
-          <div className="mt-4 rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-            <h2 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
-              Changer le Mot de Passe
-            </h2>
-            <form onSubmit={handlePasswordUpdate} className="max-w-md space-y-3">
-              <Input
-                type="password"
-                value={currentPassword}
-                onChange={(e) => setCurrentPassword(e.target.value)}
-                placeholder="Mot de passe actuel"
-                className="h-10 text-sm"
-              />
-              <Input
-                type="password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="Nouveau mot de passe"
-                className="h-10 text-sm"
-              />
-              <Input
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="Confirmer le nouveau mot de passe"
-                className="h-10 text-sm"
-              />
-              <Button type="submit" loading={isSubmitting} className="mt-2 h-10 px-5 text-sm">
-                {isSubmitting ? "Mise à jour..." : "Modifier le Mot de Passe"}
-              </Button>
-            </form>
-          </div>
-        </Card>
-      </motion.div>
+      <Card className="p-6">
+        <h1 className="mb-2 text-2xl font-bold text-gray-900 dark:text-white">Paramètres Admin</h1>
+        <div className="mt-4 rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+          <h2 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
+            Changer le Mot de Passe
+          </h2>
+          <form onSubmit={handlePasswordUpdate} className="max-w-md space-y-3">
+            <Input
+              type="password"
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              placeholder="Mot de passe actuel"
+              className="h-10 text-sm"
+            />
+            <Input
+              type="password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              placeholder="Nouveau mot de passe"
+              className="h-10 text-sm"
+            />
+            <Input
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              placeholder="Confirmer le nouveau mot de passe"
+              className="h-10 text-sm"
+            />
+            <Button type="submit" loading={isSubmitting} className="mt-2 h-10 px-5 text-sm">
+              {isSubmitting ? "Mise à jour..." : "Modifier le Mot de Passe"}
+            </Button>
+          </form>
+        </div>
+      </Card>
     </AdminLayout>
   );
 }
-
-export const getServerSideProps: GetServerSideProps = async (context) =>
-  requireAdminPage(context, "Paramètres Admin - Rideaux Bambou");

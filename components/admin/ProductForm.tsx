@@ -57,9 +57,10 @@ export default function ProductForm({ product, onSubmit, onCancel, isLoading }: 
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
+      initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -20 }}
+      exit={{ opacity: 0, y: -8 }}
+      transition={{ duration: 0.18, ease: "easeOut" }}
       className="space-y-6"
     >
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">

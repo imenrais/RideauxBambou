@@ -26,7 +26,7 @@ export default function Loading({
   };
 
   const containerClasses = fullScreen
-    ? "flex min-h-screen items-center justify-center bg-gradient-to-br from-green-50 to-amber-50 dark:bg-gray-900"
+    ? "flex min-h-screen items-center justify-center bg-gray-100 dark:bg-gray-900"
     : "flex items-center justify-center";
 
   return (
@@ -35,7 +35,7 @@ export default function Loading({
         <motion.div
           animate={{ rotate: 360 }}
           transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-          className={`${sizeClasses[size]} rounded-full border-2 border-gray-300 border-t-green-600`}
+          className={`${sizeClasses[size]} rounded-full border-2 border-gray-300 border-t-gray-900 dark:border-gray-600 dark:border-t-white`}
         />
         {text && (
           <motion.p

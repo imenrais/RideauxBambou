@@ -22,8 +22,10 @@ export function DarkModeProvider({ children }: { children: React.ReactNode }) {
 
     if (isDark) {
       document.documentElement.classList.add("dark");
+      document.documentElement.style.colorScheme = "dark";
     } else {
       document.documentElement.classList.remove("dark");
+      document.documentElement.style.colorScheme = "light";
     }
   }, []);
 
@@ -33,8 +35,10 @@ export function DarkModeProvider({ children }: { children: React.ReactNode }) {
 
     if (newDarkMode) {
       document.documentElement.classList.add("dark");
+      document.documentElement.style.colorScheme = "dark";
     } else {
       document.documentElement.classList.remove("dark");
+      document.documentElement.style.colorScheme = "light";
     }
 
     localStorage.setItem("darkMode", newDarkMode.toString());

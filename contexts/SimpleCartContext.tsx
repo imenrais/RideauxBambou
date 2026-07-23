@@ -7,7 +7,7 @@ import React, {
   useState,
 } from "react";
 
-import { computeCurtainPrice } from "../lib/order-pricing";
+import { computeCurtainPrice, getCurtainLineTotal } from "../lib/order-pricing";
 import type { PanneauConfig } from "../lib/panneau-types";
 import { defaultPanneauConfig } from "../lib/panneau-pricing";
 import { subscribeToPriceSettingsUpdates, type PriceSettingsSyncPayload } from "../lib/price-sync";
@@ -33,6 +33,10 @@ interface SimpleCartContextType {
   items: SimpleCartItem[];
   isLoading: boolean;
   pricesLoaded: boolean;
+  isCartOpen: boolean;
+  openCart: () => void;
+  closeCart: () => void;
+  toggleCart: () => void;
   storePriceSettings: {
     pricePerM2: number;
     salePricePerM2?: number | null;
@@ -70,8 +74,13 @@ export function SimpleCartProvider({ children }: { children: React.ReactNode }) 
   const [items, setItems] = useState<SimpleCartItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [pricesLoaded, setPricesLoaded] = useState(false);
+  const [isCartOpen, setIsCartOpen] = useState(false);
   const [storePriceSettings, setStorePriceSettings] = useState(defaultStorePriceSettings);
   const [panneauConfig, setPanneauConfig] = useState<PanneauConfig>(defaultPanneauConfigState);
+
+  const openCart = useCallback(() => setIsCartOpen(true), []);
+  const closeCart = useCallback(() => setIsCartOpen(false), []);
+  const toggleCart = useCallback(() => setIsCartOpen((open) => !open), []);
 
   const calculatePrice = useCallback(
     (width: number, height: number, curtainType: "panneau" | "store" = "store") =>
@@ -245,13 +254,21 @@ export function SimpleCartProvider({ children }: { children: React.ReactNode }) 
   const getTotalItems = () => items.reduce((total, item) => total + item.quantity, 0);
 
   const getTotalPrice = () =>
-    items.reduce((total, item) => total + item.calculation.total * item.quantity, 0);
+    items.reduce(
+      (total, item) =>
+        total + getCurtainLineTotal(item.curtainType, item.calculation.total, item.quantity),
+      0
+    );
 
   const contextValue = useMemo(
     () => ({
       items,
       isLoading,
       pricesLoaded,
+      isCartOpen,
+      openCart,
+      closeCart,
+      toggleCart,
       storePriceSettings,
       panneauConfig,
       addItem,
@@ -268,6 +285,10 @@ export function SimpleCartProvider({ children }: { children: React.ReactNode }) 
       items,
       isLoading,
       pricesLoaded,
+      isCartOpen,
+      openCart,
+      closeCart,
+      toggleCart,
       storePriceSettings,
       panneauConfig,
       calculatePrice,

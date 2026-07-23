@@ -11,14 +11,13 @@ import Loading from "../components/ui/Loading";
 import { useSimpleCart } from "../contexts/SimpleCartContext";
 import { usePublicProductsQuery } from "../lib/products-query";
 import { OUT_OF_STOCK_CLIENT_MESSAGE } from "../lib/product-availability-sync";
+import { getCurtainLineTotal } from "../lib/order-pricing";
 
 export default function SimpleCartPage() {
   const {
     items,
     removeItem,
-    clearCart,
     updateQuantity,
-    getItemCount,
     getTotalItems,
     getTotalPrice,
     isLoading,
@@ -43,10 +42,6 @@ export default function SimpleCartPage() {
 
   const handleRemoveItem = (itemId: string) => {
     removeItem(itemId);
-  };
-
-  const handleClearCart = () => {
-    clearCart();
   };
 
   const handleQuantityChange = (itemId: string, newQuantity: number) => {
@@ -74,10 +69,10 @@ export default function SimpleCartPage() {
         <title>Panier - Rideaux Bambou</title>
         <meta name="description" content="Votre panier de rideaux en bambou" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <link rel="icon" href="/logo.png" />
+        <link rel="icon" href="/images/logo.png" />
       </Head>
 
-      <div className="min-h-screen bg-white dark:bg-gray-900">
+      <div className="min-h-screen bg-gray-100 dark:bg-gray-900">
         <Navigation />
 
         <main className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
@@ -97,7 +92,7 @@ export default function SimpleCartPage() {
               </h1>
               {items.length > 0 && (
                 <p className="text-gray-600 dark:text-gray-400">
-                  {getItemCount()} article{getItemCount() > 1 ? "s" : ""} dans votre panier
+                  {getTotalItems()} article{getTotalItems() > 1 ? "s" : ""} dans votre panier
                 </p>
               )}
             </motion.div>
@@ -125,7 +120,7 @@ export default function SimpleCartPage() {
                 </p>
                 <Link
                   href="/#boutique"
-                  className="inline-flex items-center rounded-md border border-transparent bg-gradient-to-r from-green-600 to-green-700 px-6 py-3 text-base font-medium text-white transition-all hover:from-green-700 hover:to-green-800 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+                  className="inline-flex items-center rounded-md border border-transparent bg-gray-900 px-6 py-3 text-base font-medium text-white transition-colors hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100"
                 >
                   Découvrir nos produits
                 </Link>
@@ -171,7 +166,6 @@ export default function SimpleCartPage() {
                                 <p>
                                   Dimensions: {item.width}cm × {item.height}cm
                                 </p>
-                                <p>Surface: {item.calculation.area} m²</p>
                                 <p>Prix: {formatPrice(item.calculation.total)}</p>
                                 <p>Quantité: {item.quantity}</p>
                                 {!availableProductIds.has(item.productId) && (
@@ -180,7 +174,13 @@ export default function SimpleCartPage() {
                                   </p>
                                 )}
                                 <p className="font-semibold text-green-600 dark:text-green-400">
-                                  {formatPrice(item.calculation.total * item.quantity)}
+                                  {formatPrice(
+                                    getCurtainLineTotal(
+                                      item.curtainType,
+                                      item.calculation.total,
+                                      item.quantity
+                                    )
+                                  )}
                                 </p>
                               </div>
                             </div>
@@ -191,7 +191,8 @@ export default function SimpleCartPage() {
                             <div className="flex items-center space-x-2">
                               <button
                                 onClick={() => handleQuantityChange(item.id, item.quantity - 1)}
-                                className="rounded-full bg-gray-200 p-1 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500"
+                                disabled={item.curtainType === "store"}
+                                className="rounded-full bg-gray-200 p-1 hover:bg-gray-300 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-gray-600 dark:hover:bg-gray-500"
                               >
                                 <svg
                                   className="h-4 w-4"
@@ -212,7 +213,8 @@ export default function SimpleCartPage() {
                               </span>
                               <button
                                 onClick={() => handleQuantityChange(item.id, item.quantity + 1)}
-                                className="rounded-full bg-gray-200 p-1 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500"
+                                disabled={item.curtainType === "store"}
+                                className="rounded-full bg-gray-200 p-1 hover:bg-gray-300 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-gray-600 dark:hover:bg-gray-500"
                               >
                                 <svg
                                   className="h-4 w-4"
@@ -254,21 +256,6 @@ export default function SimpleCartPage() {
                       </motion.div>
                     ))}
                   </motion.div>
-
-                  {/* Clear Cart Button */}
-                  <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.6, delay: 0.4 }}
-                    className="mt-6"
-                  >
-                    <button
-                      onClick={handleClearCart}
-                      className="text-red-600 transition-colors hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
-                    >
-                      Vider le panier
-                    </button>
-                  </motion.div>
                 </div>
 
                 {/* Order Summary */}
@@ -306,14 +293,10 @@ export default function SimpleCartPage() {
                     <button
                       onClick={handleCheckout}
                       disabled={hasUnavailableItems}
-                      className="w-full rounded-lg bg-gradient-to-r from-green-600 to-green-700 px-4 py-3 font-medium text-white transition-all hover:from-green-700 hover:to-green-800 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="w-full rounded-lg bg-gray-900 px-4 py-3 font-medium text-white transition-colors hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100"
                     >
                       Commander
                     </button>
-
-                    <p className="mt-3 text-center text-xs text-gray-500 dark:text-gray-400">
-                      * Les prix incluent la TVA
-                    </p>
                   </motion.div>
                 </div>
               </div>

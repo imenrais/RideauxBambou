@@ -1,6 +1,4 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { motion } from "framer-motion";
-import { GetServerSideProps } from "next";
 import Head from "next/head";
 import { useRouter } from "next/router";
 import { useSession } from "next-auth/react";
@@ -8,17 +6,40 @@ import { useState, useEffect, useMemo, useRef } from "react";
 
 import AdminNavigation from "../../components/AdminNavigation";
 import BackButton from "../../components/BackButton";
+import StorePanelBreakdown, {
+  StorePanelQuantityHint,
+} from "../../components/StorePanelBreakdown";
 import Button from "../../components/ui/Button";
 import Card from "../../components/ui/Card";
 import Input from "../../components/ui/Input";
 import Loading from "../../components/ui/Loading";
-import PriceDisplay from "../../components/ui/PriceDisplay";
 import { adminTableShellClassName } from "../../components/ui/Table";
 import { useToast } from "../../contexts/ToastContext";
-import { requireAdminPage } from "../../lib/admin-page-guard";
 import { escapeHtml } from "../../lib/email-templates";
 import { getEmailValidationError, normalizeEmailValue } from "../../lib/email-validation";
-import { computeCurtainPrice } from "../../lib/order-pricing";
+import {
+  CUSTOMER_TYPE_LABELS,
+  getCustomerDisplayName,
+  getCustomerTypeLabel,
+  readMatriculeFiscale,
+  type CustomerType,
+} from "../../lib/customer-info";
+import { amountToFrenchWordsTnd } from "../../lib/french-amount";
+import {
+  applyMatriculeFiscaleInput,
+  formatMatriculeFiscale,
+  formatMatriculeFiscaleForDisplay,
+  getMatriculeFiscaleValidationError,
+  MATRICULE_FISCALE_FORMAT,
+} from "../../lib/matricule-fiscale";
+import { calculateOrderInvoiceTotals, getOrderDisplayTotal, getOrderSummaryLines, getPrintedInvoiceGrandTotal, getPrintedInvoiceLines } from "../../lib/invoice-totals";
+import { parseDeliveryFeesResponse } from "../../lib/delivery-fees-query";
+import { formatCurtainTypeName, normalizeCurtainTypeName } from "../../lib/curtain-type-name";
+import { computeCurtainPrice, getCurtainLineTotal } from "../../lib/order-pricing";
+import {
+  getStorePanelCountFromWidth,
+  getStorePanelMeasurements,
+} from "../../lib/store-panel-count";
 import {
   formFieldClass,
   formFieldDisabledClass,
@@ -46,9 +67,7 @@ import {
   normalizeGovernorate,
 } from "../../lib/tunisia-locations";
 
-interface AdminOrdersProps {
-  title: string;
-}
+const PAGE_TITLE = "Gestion des Commandes - Rideaux Bambou Admin";
 
 interface Product {
   _id: string;
@@ -58,9 +77,6 @@ interface Product {
 
 type CanonicalOrderStatus = "pending" | "confirmed" | "processing" | "delivered" | "cancelled";
 type CurtainType = "panneau" | "store";
-
-const STORE_WIDTH_MAX = 210;
-const STORE_MIN_TOTAL = 77;
 
 const statusAliases: Record<string, CanonicalOrderStatus> = {
   shipped: "processing",
@@ -107,6 +123,46 @@ const statusLabels: Record<string, string> = {
   cancelled: "Annulée",
   shipped: "En cours",
 };
+
+function parseCustomerInfo(customerInfo?: Record<string, unknown>) {
+  const info = customerInfo || {};
+  const customerType = info.customerType === "company" ? "company" : "person";
+  const firstName = typeof info.firstName === "string" ? info.firstName.trim() : "";
+  const lastName = typeof info.lastName === "string" ? info.lastName.trim() : "";
+  const legacyName = typeof info.name === "string" ? info.name.trim() : "";
+  const companyName = typeof info.companyName === "string" ? info.companyName.trim() : "";
+  const matriculeFiscaleRaw = readMatriculeFiscale(info);
+  const matriculeFiscaleDisplay = matriculeFiscaleRaw
+    ? formatMatriculeFiscaleForDisplay(matriculeFiscaleRaw)
+    : "N/A";
+  const readField = (value: unknown) =>
+    typeof value === "string" && value.trim() ? value.trim() : "N/A";
+
+  return {
+    customerType,
+    customerTypeLabel: getCustomerTypeLabel(info),
+    name: getCustomerDisplayName(info),
+    companyName: companyName || "N/A",
+    taxId: matriculeFiscaleRaw || "N/A",
+    matriculeFiscale: matriculeFiscaleDisplay,
+    firstName: firstName || "N/A",
+    lastName: lastName || "N/A",
+    legacyName: legacyName || "N/A",
+    phone: readField(info.phone),
+    email: readField(info.email),
+    address: readField(info.address),
+    city: readField(info.city),
+    state: readField(info.state),
+    postalCode: readField(info.postalCode),
+  };
+}
+
+const orderTableHeadClass =
+  "whitespace-nowrap px-3 py-3 text-center text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-300 sm:px-4";
+const orderTableCellClass =
+  "whitespace-nowrap px-3 py-4 text-center text-sm text-gray-900 dark:text-white sm:px-4";
+const orderTableAddressCellClass =
+  "max-w-[14rem] px-3 py-4 text-center text-sm text-gray-900 dark:text-white sm:px-4";
 
 const ADMIN_ORDERS_LIST_QUERY_KEY = ["admin-orders"] as const;
 const ADMIN_ORDERS_STATS_QUERY_KEY = ["admin-orders-stats"] as const;
@@ -279,7 +335,7 @@ const replaceOrderById = (
   };
 };
 
-export default function AdminOrders({ title }: AdminOrdersProps) {
+export default function AdminOrders() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -291,9 +347,9 @@ export default function AdminOrders({ title }: AdminOrdersProps) {
   const hasScrolledToFocusedOrder = useRef(false);
   const [isManualOrderModalOpen, setIsManualOrderModalOpen] = useState(false);
   const [manualOrderError, setManualOrderError] = useState("");
-  const [manualStoreWidthError, setManualStoreWidthError] = useState("");
   const [manualEmailError, setManualEmailError] = useState("");
   const [manualPhoneError, setManualPhoneError] = useState("");
+  const [manualMatriculeFiscaleError, setManualMatriculeFiscaleError] = useState("");
   const [hasSelectedManualReferenceByType, setHasSelectedManualReferenceByType] = useState<
     Record<CurtainType, boolean>
   >({
@@ -301,8 +357,11 @@ export default function AdminOrders({ title }: AdminOrdersProps) {
     store: false,
   });
   const [manualOrderForm, setManualOrderForm] = useState({
+    customerType: "person" as CustomerType,
     firstName: "",
     lastName: "",
+    companyName: "",
+    matriculeFiscale: "",
     email: "",
     phone: "",
     address: "",
@@ -319,6 +378,7 @@ export default function AdminOrders({ title }: AdminOrdersProps) {
     wantsInstallation: null as boolean | null,
     notes: "",
   });
+  const isManualCompanyOrder = manualOrderForm.customerType === "company";
   const { success, error } = useToast();
   const getFocusedOrderClass = (orderId: string) =>
     orderId === focusedOrderId
@@ -347,21 +407,23 @@ export default function AdminOrders({ title }: AdminOrdersProps) {
     refetchOnWindowFocus: false,
   });
 
-  const { data: deliveryFees = [] } = useQuery({
+  const { data: deliveryFeesPayload } = useQuery({
     queryKey: ["admin-orders-delivery-fees"],
     queryFn: async () => {
       try {
         const response = await fetch("/api/delivery-fees");
         const data = await response.json();
-        const fees = data.success ? data.data : [];
-        return Array.isArray(fees) ? fees : [];
+        return data.success ? parseDeliveryFeesResponse(data.data) : parseDeliveryFeesResponse([]);
       } catch {
-        return [];
+        return parseDeliveryFeesResponse([]);
       }
     },
     staleTime: 5 * 60 * 1000,
     refetchOnWindowFocus: false,
   });
+
+  const deliveryFees = deliveryFeesPayload?.fees ?? [];
+  const isFreeDeliveryActive = deliveryFeesPayload?.isFreeDeliveryActive === true;
 
   const { data: storePriceData } = useQuery({
     queryKey: ["admin-store-price"],
@@ -435,11 +497,13 @@ export default function AdminOrders({ title }: AdminOrdersProps) {
   const selectedStateCode =
     GOVERNORATE_CODE_MAP[normalizedSelectedState] ||
     (manualOrderForm.state.trim().length === 2 ? manualOrderForm.state.trim().toUpperCase() : "");
-  const autoDeliveryFee =
-    deliveryFees?.find(
-      (fee: any) =>
-        normalizeGovernorate(fee.state) === normalizedSelectedState || fee.stateCode === selectedStateCode
-    )?.fee || 0;
+  const hasSelectedRegion = manualOrderForm.state.trim().length > 0;
+  const autoDeliveryFee = hasSelectedRegion
+    ? deliveryFees.find(
+        (fee: any) =>
+          normalizeGovernorate(fee.state) === normalizedSelectedState || fee.stateCode === selectedStateCode
+      )?.fee ?? 0
+    : 0;
 
   const widthValue = Number(manualOrderForm.width);
   const heightValue = Number(manualOrderForm.height);
@@ -453,72 +517,111 @@ export default function AdminOrders({ title }: AdminOrdersProps) {
 
   const isDimensionValid = hasWidth && hasHeight && widthValue > 0 && resolvedHeightValue > 0;
   const isQuantityValid = quantityValue > 0;
-  const isStoreWidthInvalid =
-    manualOrderForm.curtainType === "store" &&
-    hasWidth &&
-    !Number.isNaN(widthValue) &&
-    widthValue > STORE_WIDTH_MAX;
   const installationSelected = manualOrderForm.wantsInstallation === true;
 
   const priceCalculation = useMemo(() => {
-    if (!isDimensionValid || isStoreWidthInvalid) {
+    if (!isDimensionValid) {
       return { area: 0, pricePerM2: storePricePerM2, total: 0 };
     }
-    if (manualOrderForm.curtainType === "panneau") {
-      return computeCurtainPrice(
-        widthValue,
-        panneauConfig.fixedHeightCm,
-        "panneau",
-        { effectivePricePerM2: storePricePerM2 },
-        panneauConfig
-      );
-    }
-    const adjustedHeight = resolvedHeightValue + 20;
-    const area = (widthValue * adjustedHeight) / 10000;
-    const installationAddon = widthValue >= 100 ? 8.6 : 4.3;
-    return {
-      area: Math.round(area * 100) / 100,
-      pricePerM2: storePricePerM2,
-      total: Math.max(STORE_MIN_TOTAL, Math.trunc(area * storePricePerM2 + installationAddon)),
-    };
+    return computeCurtainPrice(
+      widthValue,
+      resolvedHeightValue,
+      manualOrderForm.curtainType,
+      { effectivePricePerM2: storePricePerM2 },
+      panneauConfig
+    );
   }, [
     widthValue,
     resolvedHeightValue,
     isDimensionValid,
-    isStoreWidthInvalid,
     manualOrderForm.curtainType,
     storePricePerM2,
     panneauConfig,
   ]);
 
+  // Same pricing as the client configurator (lib/order-pricing):
+  // store = ((h+20)×largeur×€/m²) + 4,3/8,6 per spit curtain; trunc; do not × panel qty.
   const computedItemTotalCost = useMemo(() => {
     if (!isQuantityValid) return 0;
-    return Math.trunc(priceCalculation.total * quantityValue);
-  }, [priceCalculation.total, quantityValue, isQuantityValid]);
+    if (manualOrderForm.curtainType === "store") {
+      return Math.trunc(priceCalculation.total);
+    }
+    return getCurtainLineTotal(
+      manualOrderForm.curtainType,
+      priceCalculation.total,
+      quantityValue
+    );
+  }, [
+    priceCalculation.total,
+    quantityValue,
+    isQuantityValid,
+    manualOrderForm.curtainType,
+  ]);
 
   const formatPrice = (price: number) =>
     new Intl.NumberFormat("fr-FR", { style: "currency", currency: "TND" }).format(price);
-
-  const selectedPanneauWidth = useMemo(
-    () => panneauConfig.widths.find((entry) => entry.widthCm === widthValue),
-    [panneauConfig.widths, widthValue]
-  );
 
   const displayOrderTotal = useMemo(() => {
     if (!isQuantityValid) {
       return 0;
     }
 
-    return (
-      priceCalculation.total * quantityValue +
-      (installationSelected ? installationFeeValue : 0)
-    );
+    const productTotal =
+      manualOrderForm.curtainType === "store"
+        ? priceCalculation.total
+        : priceCalculation.total * quantityValue;
+
+    return productTotal + (installationSelected ? installationFeeValue : 0);
   }, [
     priceCalculation.total,
     quantityValue,
     isQuantityValid,
     installationSelected,
     installationFeeValue,
+    manualOrderForm.curtainType,
+  ]);
+
+  const manualInvoiceTotals = useMemo(
+    () =>
+      calculateOrderInvoiceTotals({
+        totalAmount: displayOrderTotal + (Number(autoDeliveryFee) || 0),
+        deliveryFee: Number(autoDeliveryFee) || 0,
+        installationFee: installationSelected ? installationFeeValue : 0,
+        customerInfo: { customerType: manualOrderForm.customerType },
+      }),
+    [
+      displayOrderTotal,
+      autoDeliveryFee,
+      installationSelected,
+      installationFeeValue,
+      manualOrderForm.customerType,
+    ]
+  );
+
+  const manualInvoiceLines = useMemo(
+    () =>
+      getOrderSummaryLines(manualInvoiceTotals, {
+        regionSelected: hasSelectedRegion,
+        isFreeDeliveryActive,
+      }),
+    [manualInvoiceTotals, hasSelectedRegion, isFreeDeliveryActive]
+  );
+
+  const storePanelMeasurements = useMemo(() => {
+    if (
+      manualOrderForm.curtainType !== "store" ||
+      !isDimensionValid ||
+      Number.isNaN(widthValue) ||
+      Number.isNaN(resolvedHeightValue)
+    ) {
+      return [];
+    }
+    return getStorePanelMeasurements(widthValue, resolvedHeightValue);
+  }, [
+    manualOrderForm.curtainType,
+    isDimensionValid,
+    widthValue,
+    resolvedHeightValue,
   ]);
 
   // Redirect if not admin
@@ -637,8 +740,23 @@ export default function AdminOrders({ title }: AdminOrdersProps) {
         productId: nextProductId,
       };
     });
-    setManualStoreWidthError("");
   }, [manualOrderForm.curtainType, panneauProducts, products, hasSelectedManualReferenceByType, panneauConfig.fixedHeightCm, panneauWidthValues]);
+
+  useEffect(() => {
+    if (manualOrderForm.curtainType !== "store") {
+      return;
+    }
+
+    const widthCm = Number(manualOrderForm.width);
+    const nextQuantity =
+      manualOrderForm.width === "" || Number.isNaN(widthCm) || widthCm <= 0
+        ? "1"
+        : String(getStorePanelCountFromWidth(widthCm));
+
+    setManualOrderForm((prev) =>
+      prev.quantity === nextQuantity ? prev : { ...prev, quantity: nextQuantity }
+    );
+  }, [manualOrderForm.curtainType, manualOrderForm.width]);
 
   const orderIdLookup = focusOrderLookup?.trim() || "";
 
@@ -770,8 +888,11 @@ export default function AdminOrders({ title }: AdminOrdersProps) {
   const createOrderMutation = useMutation({
     mutationFn: async (payload: {
       customerInfo: {
-        firstName: string;
-        lastName: string;
+        customerType: CustomerType;
+        firstName?: string;
+        lastName?: string;
+        companyName?: string;
+        matriculeFiscale?: string;
         email?: string;
         phone: string;
         address: string;
@@ -783,6 +904,7 @@ export default function AdminOrders({ title }: AdminOrdersProps) {
         curtainTypeName: string;
         width: number;
         height: number;
+        quantity: number;
         totalCost: number;
       };
       wantsInstallation: boolean;
@@ -838,6 +960,7 @@ export default function AdminOrders({ title }: AdminOrdersProps) {
             curtainTypeName: payload.item.curtainTypeName,
             width: payload.item.width,
             height: payload.item.height,
+            quantity: payload.item.quantity,
             totalCost: payload.item.totalCost,
           },
         ],
@@ -866,8 +989,11 @@ export default function AdminOrders({ title }: AdminOrdersProps) {
       }
 
       setManualOrderForm({
+        customerType: "person",
         firstName: "",
         lastName: "",
+        companyName: "",
+        matriculeFiscale: "",
         email: "",
         phone: "",
         address: "",
@@ -887,9 +1013,9 @@ export default function AdminOrders({ title }: AdminOrdersProps) {
       });
       setHasSelectedManualReferenceByType({ panneau: false, store: false });
       setManualOrderError("");
-      setManualStoreWidthError("");
       setManualEmailError("");
       setManualPhoneError("");
+      setManualMatriculeFiscaleError("");
       setIsManualOrderModalOpen(false);
       success("Commande créée avec succès.");
     },
@@ -914,12 +1040,25 @@ export default function AdminOrders({ title }: AdminOrdersProps) {
     },
   });
 
+  const handleManualCustomerTypeChange = (customerType: CustomerType) => {
+    setManualOrderForm((prev) => ({
+      ...prev,
+      customerType,
+      ...(customerType === "person"
+        ? { companyName: "", matriculeFiscale: "" }
+        : { firstName: "", lastName: "" }),
+    }));
+    if (customerType === "person") {
+      setManualMatriculeFiscaleError("");
+    }
+  };
+
   const handleCreateManualOrder = (e: React.FormEvent) => {
     e.preventDefault();
     setManualOrderError("");
-    setManualStoreWidthError("");
     setManualEmailError("");
     setManualPhoneError("");
+    setManualMatriculeFiscaleError("");
 
     const width = Number(manualOrderForm.width);
     const height =
@@ -933,13 +1072,21 @@ export default function AdminOrders({ title }: AdminOrdersProps) {
     const productName = selectedProductName;
     const normalizedEmail = normalizeEmailValue(manualOrderForm.email);
     const normalizedPhone = normalizePhoneValue(manualOrderForm.phone);
+    const formattedMatriculeFiscale = formatMatriculeFiscale(manualOrderForm.matriculeFiscale);
     const emailValidationError = getEmailValidationError(normalizedEmail);
     const phoneValidationError = getPhoneValidationError(normalizedPhone, { required: true });
+    const matriculeValidationError =
+      manualOrderForm.customerType === "company"
+        ? getMatriculeFiscaleValidationError(formattedMatriculeFiscale)
+        : "";
 
     setManualOrderForm((prev) => ({
       ...prev,
       email: normalizedEmail,
       phone: normalizedPhone,
+      ...(prev.customerType === "company"
+        ? { matriculeFiscale: formattedMatriculeFiscale }
+        : {}),
     }));
     if (emailValidationError) {
       setManualEmailError(emailValidationError);
@@ -949,6 +1096,24 @@ export default function AdminOrders({ title }: AdminOrdersProps) {
     if (phoneValidationError) {
       setManualPhoneError(phoneValidationError);
       setManualOrderError(phoneValidationError);
+      return;
+    }
+    if (matriculeValidationError) {
+      setManualMatriculeFiscaleError(matriculeValidationError);
+      setManualOrderError(matriculeValidationError);
+      return;
+    }
+    if (manualOrderForm.customerType === "person") {
+      if (manualOrderForm.firstName.trim().length < 2) {
+        setManualOrderError("Le prénom doit contenir au moins 2 caractères.");
+        return;
+      }
+      if (manualOrderForm.lastName.trim().length < 2) {
+        setManualOrderError("Le nom doit contenir au moins 2 caractères.");
+        return;
+      }
+    } else if (manualOrderForm.companyName.trim().length < 2) {
+      setManualOrderError("Le nom de l'entreprise doit contenir au moins 2 caractères.");
       return;
     }
 
@@ -978,11 +1143,6 @@ export default function AdminOrders({ title }: AdminOrdersProps) {
       setManualOrderError("Veuillez sélectionner une largeur panneau valide.");
       return;
     }
-    if (manualOrderForm.curtainType === "store" && width > STORE_WIDTH_MAX) {
-      setManualStoreWidthError(`La largeur ne peut pas dépasser ${STORE_WIDTH_MAX} cm.`);
-      setManualOrderError("Veuillez corriger la largeur du store.");
-      return;
-    }
     if (quantity <= 0) {
       setManualOrderError("La quantité doit être supérieure à 0.");
       return;
@@ -994,8 +1154,16 @@ export default function AdminOrders({ title }: AdminOrdersProps) {
 
     createOrderMutation.mutate({
       customerInfo: {
-        firstName: manualOrderForm.firstName.trim(),
-        lastName: manualOrderForm.lastName.trim(),
+        customerType: manualOrderForm.customerType,
+        ...(manualOrderForm.customerType === "company"
+          ? {
+              companyName: manualOrderForm.companyName.trim(),
+              matriculeFiscale: formattedMatriculeFiscale,
+            }
+          : {
+              firstName: manualOrderForm.firstName.trim(),
+              lastName: manualOrderForm.lastName.trim(),
+            }),
         email: normalizedEmail,
         phone: normalizedPhone,
         address: manualOrderForm.address.trim(),
@@ -1004,11 +1172,10 @@ export default function AdminOrders({ title }: AdminOrdersProps) {
         postalCode: manualOrderForm.postalCode.trim(),
       },
       item: {
-        curtainTypeName: `${productName} - ${
-          manualOrderForm.curtainType === "panneau" ? "Panneau" : "Store"
-        }`,
+        curtainTypeName: formatCurtainTypeName(productName, manualOrderForm.curtainType),
         width,
         height,
+        quantity,
         totalCost: computedItemTotalCost,
       },
       wantsInstallation: manualOrderForm.wantsInstallation === true,
@@ -1018,167 +1185,279 @@ export default function AdminOrders({ title }: AdminOrdersProps) {
     });
   };
 
-  const formatInvoiceDate = (value: string | Date) =>
-    new Date(value).toLocaleString("fr-FR", {
-      day: "numeric",
-      month: "long",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-    });
+  const formatInvoiceDate = (value: string | Date) => {
+    const date = new Date(value);
+    const months = [
+      "janvier",
+      "février",
+      "mars",
+      "avril",
+      "mai",
+      "juin",
+      "juillet",
+      "août",
+      "septembre",
+      "octobre",
+      "novembre",
+      "décembre",
+    ];
+    const day = date.getDate();
+    const month = months[date.getMonth()] || "";
+    const year = String(date.getFullYear()).slice(-2);
+    return `${day}/${month}/${year}`;
+  };
 
   const printInvoice = (order: any) => {
-    const customer = order.customerInfo || {};
+    const customer = parseCustomerInfo(order.customerInfo);
     const orderItems = Array.isArray(order.items) ? order.items : [];
-    const invoiceNumber = `RB-${(order._id?.slice(-8) || "--------").toUpperCase()}`;
+    const yearSuffix = String(new Date(order.createdAt || Date.now()).getFullYear()).slice(-2);
+    const orderSeq = String(parseInt((order._id || "0").slice(-6), 16) % 1000 || 1).padStart(
+      3,
+      "0"
+    );
+    const invoiceNumber = `${orderSeq} / ${yearSuffix}`;
     const orderDate = formatInvoiceDate(order.createdAt);
-    const subtotal =
-      (order.totalAmount || 0) - (order.deliveryFee || 0) - (order.installationFee || 0);
+    const invoiceTotals = calculateOrderInvoiceTotals(
+      {
+        totalAmount: order.totalAmount || 0,
+        deliveryFee: order.deliveryFee || 0,
+        installationFee: order.installationFee || 0,
+        customerInfo: order.customerInfo,
+      },
+      // Admin facture only: particuliers get the same FODEC / H.T / TTC math as companies.
+      { applyCompanyFiscalBreakdown: true }
+    );
 
-    const itemsRows = orderItems
-      .map((item: any) => {
-        const productName = escapeHtml(item.curtainTypeName || "Article");
-        const dimensions = escapeHtml(`${item.width || 0} cm × ${item.height || 0} cm`);
-        const amount = escapeHtml(`${(item.totalCost || 0).toFixed(2)} TND`);
+    const isCompanyInvoice = invoiceTotals.customerType === "company";
+    const includePersonTax = !isCompanyInvoice;
+    const printedLines = getPrintedInvoiceLines(invoiceTotals, { includePersonTax });
+    const printedGrandTotal = getPrintedInvoiceGrandTotal(invoiceTotals, { includePersonTax });
+    const customerName =
+      isCompanyInvoice && customer.companyName && customer.companyName !== "N/A"
+        ? customer.companyName
+        : getCustomerDisplayName(order.customerInfo || {});
+    const personNomPrenom = [customer.lastName, customer.firstName]
+      .filter((part) => part && part !== "N/A")
+      .join(" ")
+      .trim();
+    const customerAddress = [customer.address, customer.city, customer.state]
+      .filter((part) => part && part !== "N/A")
+      .join(", ");
 
-        return `
+    const totalCurtains = orderItems.reduce(
+      (sum: number, item: any) => sum + Math.max(1, Number(item.quantity) || 1),
+      0
+    );
+    const fournitureLabel =
+      totalCurtains <= 0
+        ? "Fourniture de rideaux bambou"
+        : totalCurtains === 1
+          ? "Fourniture d'un rideau bambou"
+          : `Fourniture de ${totalCurtains} rideaux bambou`;
+
+    const formatAmount = (value: number) =>
+      value.toLocaleString("fr-FR", {
+        minimumFractionDigits: 3,
+        maximumFractionDigits: 3,
+      });
+
+    // Always one TARIFS line: total qty + products HT (before FODEC).
+    const productsHt = invoiceTotals.productsSubtotal;
+    const itemsRows =
+      totalCurtains > 0
+        ? `
           <tr>
-            <td>${productName}</td>
-            <td>${dimensions}</td>
-            <td>${amount}</td>
+            <td class="qty">${escapeHtml(String(totalCurtains).padStart(2, "0"))}</td>
+            <td>Rideaux Bambou</td>
+            <td class="price">${escapeHtml(`${formatAmount(productsHt)} DT`)}</td>
           </tr>
-        `;
+        `
+        : "";
+
+    const clientBlock = isCompanyInvoice
+      ? `<p><strong>STE :</strong> ${escapeHtml(customerName)}</p>
+         <p>${escapeHtml(customerAddress || "—")}</p>
+         <p><strong>M/F :</strong> ${escapeHtml(customer.matriculeFiscale)}</p>`
+      : `<p><strong>Nom et prénom :</strong> ${escapeHtml(personNomPrenom || customerName)}</p>
+         <p>${escapeHtml(customerAddress || "—")}</p>`;
+
+    const totalsBlock = printedLines
+      .map((line) => {
+        const amount = escapeHtml(`${formatAmount(line.amount)} DT`);
+        if (line.emphasis) {
+          return `<p class="grand"><span>${escapeHtml(line.label)} :</span><span>${amount}</span></p>`;
+        }
+        return `<p><span>${escapeHtml(line.label)} :</span><span>${amount}</span></p>`;
       })
       .join("");
+
+    const amountWords = escapeHtml(amountToFrenchWordsTnd(printedGrandTotal));
 
     const html = `<!DOCTYPE html>
 <html lang="fr">
   <head>
     <meta charset="utf-8" />
-    <title>${escapeHtml(invoiceNumber)}</title>
+    <title>Facture ${escapeHtml(invoiceNumber)}</title>
     <style>
       @page {
         size: A4;
         margin: 0;
       }
-      * {
-        box-sizing: border-box;
-      }
+      * { box-sizing: border-box; }
       html, body {
         margin: 0;
         padding: 0;
       }
       body {
-        font-family: Arial, sans-serif;
+        font-family: Arial, Helvetica, sans-serif;
         color: #111;
-        padding: 18mm 16mm;
+        /* 5cm left for pre-printed orange band + logo */
+        padding: 2.5cm 1.6cm 1.8cm 5cm;
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
+        font-size: 13px;
+        line-height: 1.45;
       }
-      .invoice-header {
-        text-align: center;
-        margin-bottom: 28px;
+      .top-row {
+        display: flex;
+        justify-content: flex-start;
+        margin-bottom: 1.6cm;
       }
-      .brand {
-        font-size: 12px;
-        letter-spacing: 0.18em;
-        text-transform: uppercase;
-        color: #666;
-      }
-      .invoice-title {
-        margin: 10px 0 0;
-        font-size: 30px;
+      .date {
         font-weight: 700;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-      }
-      .invoice-meta {
-        margin: 12px 0 0;
-        color: #555;
         font-size: 14px;
       }
       .client-block {
-        margin-bottom: 20px;
+        /* Center on the full page (body padding is uneven: 5cm left / 1.6cm right) */
+        width: 100%;
+        margin: 0 auto 1.4cm;
+        text-align: center;
         line-height: 1.7;
         font-size: 14px;
+        position: relative;
+        left: calc((1.6cm - 5cm) / 2);
       }
-      .client-block strong {
-        display: inline-block;
-        min-width: 88px;
+      .client-block p {
+        margin: 0 0 2px;
+      }
+      .meta {
+        margin-bottom: 1.1cm;
+      }
+      .meta p {
+        margin: 0 0 6px;
+        font-size: 14px;
+        font-weight: 700;
+      }
+      .tariffs-title {
+        margin: 0 0 8px;
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
       }
       table {
         width: 100%;
         border-collapse: collapse;
-        margin-top: 8px;
+        margin-bottom: 1.2cm;
       }
       th, td {
-        border: 1px solid #ddd;
-        padding: 10px;
-        text-align: left;
-        font-size: 14px;
+        border: 1px solid #111;
+        padding: 8px 10px;
+        font-size: 13px;
       }
       th {
-        background: #f4f4f4;
+        text-align: center;
         font-weight: 700;
       }
+      td.qty {
+        text-align: center;
+        width: 14%;
+      }
+      td.price {
+        text-align: right;
+        width: 28%;
+        white-space: nowrap;
+      }
       .totals {
-        margin-top: 18px;
-        width: 320px;
+        width: 280px;
         margin-left: auto;
+        margin-bottom: 1.4cm;
       }
       .totals p {
         display: flex;
         justify-content: space-between;
-        margin: 7px 0;
+        gap: 16px;
+        margin: 5px 0;
+        font-size: 13px;
+      }
+      .totals .grand {
+        margin-top: 10px;
+        padding-top: 8px;
+        border-top: 1px solid #111;
+        font-weight: 700;
         font-size: 14px;
       }
-      .grand {
-        margin-top: 10px;
-        padding-top: 10px;
-        border-top: 2px solid #111;
-        font-size: 18px;
+      .amount-words {
+        margin-bottom: 0.35cm;
+        font-size: 13px;
+        line-height: 1.55;
+      }
+      .bank {
+        margin-top: 0;
+        margin-bottom: 1.25cm;
+        font-size: 13px;
+        font-weight: 700;
+      }
+      .signature {
+        margin-top: 1cm;
+        font-size: 14px;
         font-weight: 700;
       }
       @media print {
         body {
-          padding: 18mm 16mm;
+          padding: 2.5cm 1.6cm 1.8cm 5cm;
         }
       }
     </style>
   </head>
   <body>
-    <header class="invoice-header">
-      <div class="brand">Rideaux Bambou</div>
-      <h1 class="invoice-title">Facture</h1>
-      <p class="invoice-meta">N° ${escapeHtml(invoiceNumber)} · ${escapeHtml(orderDate)}</p>
-    </header>
+    <div class="top-row">
+      <div class="date">Tunis le : ${escapeHtml(orderDate)}</div>
+    </div>
 
     <section class="client-block">
-      <p><strong>Client :</strong> ${escapeHtml(getCustomerFullName(customer))}</p>
-      <p><strong>Téléphone :</strong> ${escapeHtml(customer.phone || "—")}</p>
-      <p><strong>Adresse :</strong> ${escapeHtml(
-        [customer.address, customer.city, customer.state].filter(Boolean).join(", ") || "—"
-      )}</p>
+      ${clientBlock}
     </section>
 
+    <section class="meta">
+      <p>Facture : ${escapeHtml(invoiceNumber)}</p>
+      <p>${escapeHtml(fournitureLabel)}</p>
+    </section>
+
+    <p class="tariffs-title">TARIFS</p>
     <table>
       <thead>
         <tr>
-          <th>Produit</th>
-          <th>Dimensions</th>
-          <th>Montant</th>
+          <th>Qte</th>
+          <th>Désignations</th>
+          <th>Prix H.T</th>
         </tr>
       </thead>
-      <tbody>${itemsRows || "<tr><td colspan='3'>Aucun article</td></tr>"}</tbody>
+      <tbody>
+        ${itemsRows || `<tr><td class="qty">—</td><td>Aucun article</td><td class="price">—</td></tr>`}
+      </tbody>
     </table>
 
     <div class="totals">
-      <p><span>Sous-total</span><span>${subtotal.toFixed(2)} TND</span></p>
-      <p><span>Livraison</span><span>${(order.deliveryFee || 0).toFixed(2)} TND</span></p>
-      <p><span>Pose</span><span>${(order.installationFee || 0).toFixed(2)} TND</span></p>
-      <p class="grand"><span>Total</span><span>${(order.totalAmount || 0).toFixed(2)} TND</span></p>
+      ${totalsBlock}
     </div>
+
+    <p class="amount-words">
+      Arrêter la présente facture à la somme de : ${amountWords}
+    </p>
+
+    <p class="bank">Pour Tout Virement : ATB la Marsa : 01 005 0341105008072 83</p>
+
+    <p class="signature">Gérant :</p>
   </body>
 </html>`;
 
@@ -1209,13 +1488,6 @@ export default function AdminOrders({ title }: AdminOrdersProps) {
     };
   };
 
-  const getCustomerFullName = (customerInfo: any) => {
-    const firstName = customerInfo?.firstName?.trim() || "";
-    const lastName = customerInfo?.lastName?.trim() || "";
-    const fullName = `${firstName} ${lastName}`.trim();
-    return fullName || customerInfo?.name || "Client";
-  };
-
   if (status === "loading") {
     return <Loading fullScreen text="Chargement..." />;
   }
@@ -1227,11 +1499,11 @@ export default function AdminOrders({ title }: AdminOrdersProps) {
   return (
     <>
       <Head>
-        <title>{title}</title>
+        <title>{PAGE_TITLE}</title>
         <meta name="description" content="Manage Orders - Rideaux Bambou Admin" />
       </Head>
 
-      <div className="min-h-screen bg-white dark:bg-gray-900">
+      <div className="min-h-screen bg-gray-100 dark:bg-gray-900">
         {/* Navigation */}
         <AdminNavigation />
 
@@ -1240,12 +1512,7 @@ export default function AdminOrders({ title }: AdminOrdersProps) {
           <div className="mb-6">
             <BackButton href="/admin" />
           </div>
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8 }}
-            className="space-y-6"
-          >
+          <div className="space-y-6">
             {/* Header */}
             <div>
               <div className="mb-14 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -1257,7 +1524,6 @@ export default function AdminOrders({ title }: AdminOrdersProps) {
                   onClick={() => {
                     setHasSelectedManualReferenceByType({ panneau: false, store: false });
                     setManualOrderError("");
-                    setManualStoreWidthError("");
                     setManualOrderForm((prev) => ({
                       ...prev,
                       productId: "",
@@ -1314,12 +1580,7 @@ export default function AdminOrders({ title }: AdminOrdersProps) {
             {/* Stats Cards */}
             {ordersData?.stats && (
               <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5">
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.8, delay: 0.2 }}
-                  className="rounded-lg bg-white p-4 text-center shadow-sm dark:bg-gray-800"
-                >
+                <div className="rounded-lg bg-white p-4 text-center shadow-sm dark:bg-gray-800">
                   <div className="mb-1 text-xl font-bold text-yellow-600 dark:text-yellow-400">
                     ⏳
                   </div>
@@ -1329,14 +1590,9 @@ export default function AdminOrders({ title }: AdminOrdersProps) {
                   <p className="text-xl font-bold text-yellow-600 dark:text-yellow-400">
                     {ordersData.stats.pendingOrders}
                   </p>
-                </motion.div>
+                </div>
 
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.8, delay: 0.3 }}
-                  className="rounded-lg bg-white p-4 text-center shadow-sm dark:bg-gray-800"
-                >
+                <div className="rounded-lg bg-white p-4 text-center shadow-sm dark:bg-gray-800">
                   <div className="mb-1 text-xl font-bold text-blue-600 dark:text-blue-400">✅</div>
                   <h3 className="mb-1 text-sm font-semibold text-gray-900 dark:text-white">
                     Confirmées
@@ -1344,14 +1600,9 @@ export default function AdminOrders({ title }: AdminOrdersProps) {
                   <p className="text-xl font-bold text-blue-600 dark:text-blue-400">
                     {ordersData.stats.confirmedOrders || 0}
                   </p>
-                </motion.div>
+                </div>
 
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.8, delay: 0.28 }}
-                  className="rounded-lg bg-white p-4 text-center shadow-sm dark:bg-gray-800"
-                >
+                <div className="rounded-lg bg-white p-4 text-center shadow-sm dark:bg-gray-800">
                   <div className="mb-1 text-xl font-bold text-purple-600 dark:text-purple-400">🛠️</div>
                   <h3 className="mb-1 text-sm font-semibold text-gray-900 dark:text-white">
                     En cours
@@ -1359,14 +1610,9 @@ export default function AdminOrders({ title }: AdminOrdersProps) {
                   <p className="text-xl font-bold text-purple-600 dark:text-purple-400">
                     {ordersData.stats.processingOrders || 0}
                   </p>
-                </motion.div>
+                </div>
 
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.8, delay: 0.35 }}
-                  className="rounded-lg bg-white p-4 text-center shadow-sm dark:bg-gray-800"
-                >
+                <div className="rounded-lg bg-white p-4 text-center shadow-sm dark:bg-gray-800">
                   <div className="mb-1 text-xl font-bold text-green-600 dark:text-green-400">
                     ✓
                   </div>
@@ -1376,14 +1622,9 @@ export default function AdminOrders({ title }: AdminOrdersProps) {
                   <p className="text-xl font-bold text-green-600 dark:text-green-400">
                     {ordersData.stats.deliveredOrders}
                   </p>
-                </motion.div>
+                </div>
 
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.8, delay: 0.4 }}
-                  className="rounded-lg bg-white p-4 text-center shadow-sm dark:bg-gray-800"
-                >
+                <div className="rounded-lg bg-white p-4 text-center shadow-sm dark:bg-gray-800">
                   <div className="mb-1 text-xl font-bold text-red-600 dark:text-red-400">✕</div>
                   <h3 className="mb-1 text-sm font-semibold text-gray-900 dark:text-white">
                     Annulées
@@ -1391,7 +1632,7 @@ export default function AdminOrders({ title }: AdminOrdersProps) {
                   <p className="text-xl font-bold text-red-600 dark:text-red-400">
                     {ordersData.stats.cancelledOrders || 0}
                   </p>
-                </motion.div>
+                </div>
               </div>
             )}
 
@@ -1474,7 +1715,11 @@ export default function AdminOrders({ title }: AdminOrdersProps) {
                                   value="panneau"
                                   checked={manualOrderForm.curtainType === "panneau"}
                                   onChange={() =>
-                                    setManualOrderForm((prev) => ({ ...prev, curtainType: "panneau" }))
+                                    setManualOrderForm((prev) => ({
+                                      ...prev,
+                                      curtainType: "panneau",
+                                      quantity: "1",
+                                    }))
                                   }
                                   className="sr-only"
                                 />
@@ -1547,39 +1792,16 @@ export default function AdminOrders({ title }: AdminOrdersProps) {
                                   type="number"
                                   value={manualOrderForm.width}
                                   onChange={(e) => {
-                                    const nextWidth = e.target.value;
-                                    setManualOrderForm((prev) => ({ ...prev, width: nextWidth }));
-                                    if (!nextWidth) {
-                                      setManualStoreWidthError("");
-                                      return;
-                                    }
-                                    const parsed = Number(nextWidth);
-                                    if (!Number.isNaN(parsed) && parsed > STORE_WIDTH_MAX) {
-                                      setManualStoreWidthError(
-                                        `La largeur ne peut pas dépasser ${STORE_WIDTH_MAX} cm.`
-                                      );
-                                    } else {
-                                      setManualStoreWidthError("");
-                                    }
+                                    setManualOrderForm((prev) => ({
+                                      ...prev,
+                                      width: e.target.value,
+                                    }));
                                   }}
                                   min={1}
-                                  max={STORE_WIDTH_MAX}
                                   step={1}
                                   className={formNumberFieldClass}
                                   required
                                 />
-                              )}
-                              {manualOrderForm.curtainType !== "panneau" && (
-                                <>
-                                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                                    Largeur maximale: {STORE_WIDTH_MAX} cm.
-                                  </p>
-                                  {manualStoreWidthError && (
-                                    <p className="mt-1 text-xs font-medium text-red-600 dark:text-red-400">
-                                      {manualStoreWidthError}
-                                    </p>
-                                  )}
-                                </>
                               )}
                             </div>
                             <div>
@@ -1610,52 +1832,37 @@ export default function AdminOrders({ title }: AdminOrdersProps) {
                           </div>
 
                           <div>
-                            <label className={formFieldLabelClass}>
-                              Pose
-                            </label>
+                            <label className={formFieldLabelClass}>Pose</label>
                             <div className="flex flex-wrap gap-4">
-                              <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200">
-                                <input
-                                  type="radio"
-                                  name="manual-installation"
-                                  checked={manualOrderForm.wantsInstallation === true}
-                                  onChange={() =>
-                                    setManualOrderForm((prev) => ({ ...prev, wantsInstallation: true }))
-                                  }
-                                  className="sr-only"
-                                />
-                                <span className="flex h-4 w-4 items-center justify-center rounded-full border border-gray-300 bg-white">
-                                  <span
-                                    className={`h-2 w-2 rounded-full bg-black transition-opacity ${
-                                      manualOrderForm.wantsInstallation === true
-                                        ? "opacity-100"
-                                        : "opacity-0"
-                                    }`}
+                              {([true, false] as const).map((wantsPose) => (
+                                <label
+                                  key={wantsPose ? "oui" : "non"}
+                                  className="flex items-center gap-2 text-gray-700 dark:text-gray-200"
+                                >
+                                  <input
+                                    type="radio"
+                                    name="manual-installation"
+                                    checked={manualOrderForm.wantsInstallation === wantsPose}
+                                    onChange={() =>
+                                      setManualOrderForm((prev) => ({
+                                        ...prev,
+                                        wantsInstallation: wantsPose,
+                                      }))
+                                    }
+                                    className="sr-only"
                                   />
-                                </span>
-                                Oui
-                              </label>
-                              <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200">
-                                <input
-                                  type="radio"
-                                  name="manual-installation"
-                                  checked={manualOrderForm.wantsInstallation === false}
-                                  onChange={() =>
-                                    setManualOrderForm((prev) => ({ ...prev, wantsInstallation: false }))
-                                  }
-                                  className="sr-only"
-                                />
-                                <span className="flex h-4 w-4 items-center justify-center rounded-full border border-gray-300 bg-white">
-                                  <span
-                                    className={`h-2 w-2 rounded-full bg-black transition-opacity ${
-                                      manualOrderForm.wantsInstallation === false
-                                        ? "opacity-100"
-                                        : "opacity-0"
-                                    }`}
-                                  />
-                                </span>
-                                Non
-                              </label>
+                                  <span className="flex h-4 w-4 items-center justify-center rounded-full border border-gray-300 bg-white">
+                                    <span
+                                      className={`h-2 w-2 rounded-full bg-black transition-opacity ${
+                                        manualOrderForm.wantsInstallation === wantsPose
+                                          ? "opacity-100"
+                                          : "opacity-0"
+                                      }`}
+                                    />
+                                  </span>
+                                  <span className="text-sm">{wantsPose ? "Oui" : "Non"}</span>
+                                </label>
+                              ))}
                             </div>
                           </div>
 
@@ -1672,7 +1879,8 @@ export default function AdminOrders({ title }: AdminOrdersProps) {
                                     quantity: Math.max(1, Number(prev.quantity || "1") - 1).toString(),
                                   }))
                                 }
-                                className="flex h-7 w-7 items-center justify-center rounded-md border border-gray-300 text-base font-medium text-gray-700 transition-colors hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+                                disabled={manualOrderForm.curtainType === "store"}
+                                className="flex h-7 w-7 items-center justify-center rounded-md border border-gray-300 text-base font-medium text-gray-700 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
                               >
                                 -
                               </button>
@@ -1691,56 +1899,82 @@ export default function AdminOrders({ title }: AdminOrdersProps) {
                                     quantity: Math.min(10, Number(prev.quantity || "1") + 1).toString(),
                                   }))
                                 }
-                                className="flex h-7 w-7 items-center justify-center rounded-md border border-gray-300 text-base font-medium text-gray-700 transition-colors hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+                                disabled={manualOrderForm.curtainType === "store"}
+                                className="flex h-7 w-7 items-center justify-center rounded-md border border-gray-300 text-base font-medium text-gray-700 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
                               >
                                 +
                               </button>
                             </div>
+                            {manualOrderForm.curtainType === "store" &&
+                              storePanelMeasurements.length === 0 && <StorePanelQuantityHint />}
                           </div>
 
-                          <div className="rounded-lg bg-gray-50 p-4 dark:bg-gray-700">
-                            <div className="space-y-1 text-sm text-gray-600 dark:text-gray-300">
-                              <div className="flex justify-between">
-                                <span>
-                                  {manualOrderForm.curtainType === "panneau" ? "Prix:" : "Prix par m²:"}
-                                </span>
-                                <span>
-                                  {manualOrderForm.curtainType === "panneau" ? (
-                                    !selectedPanneauWidth ? (
-                                      formatPrice(priceCalculation.total)
-                                    ) : (
-                                      <PriceDisplay
-                                        pricePerM2={selectedPanneauWidth.price}
-                                        salePricePerM2={selectedPanneauWidth.salePrice}
-                                        isSaleActive={panneauConfig.isSaleActive === true}
-                                        suffix=""
-                                        inline
-                                        listClassName="text-sm text-gray-500 line-through dark:text-gray-400"
-                                        saleClassName="text-sm font-semibold text-green-600 dark:text-green-400"
-                                      />
-                                    )
-                                  ) : (
-                                    <PriceDisplay
-                                      pricePerM2={storePriceData?.pricePerM2 ?? 77}
-                                      salePricePerM2={storePriceData?.salePricePerM2}
-                                      isSaleActive={storePriceData?.isSaleActive === true}
-                                      suffix=""
-                                      inline
-                                      listClassName="text-sm text-gray-500 line-through dark:text-gray-400"
-                                      saleClassName="text-sm font-semibold text-green-600 dark:text-green-400"
-                                    />
+                          {manualOrderForm.curtainType === "store" &&
+                            storePanelMeasurements.length > 0 && (
+                              <StorePanelBreakdown
+                                panels={storePanelMeasurements}
+                                compact
+                              />
+                            )}
+
+                          <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
+                            <h4 className="mb-3 text-sm font-semibold text-gray-900 dark:text-white">
+                              Résumé de la commande
+                            </h4>
+                            <div className="space-y-3">
+                              <div className="flex flex-col gap-2 text-sm sm:flex-row sm:justify-between">
+                                <div>
+                                  <p className="font-medium text-gray-900 dark:text-white">
+                                    {selectedProductName || "Référence"}
+                                  </p>
+                                  {(hasWidth || hasHeight) && (
+                                    <p className="text-gray-500 dark:text-gray-400">
+                                      {hasWidth ? `${widthValue}cm` : "—"} ×{" "}
+                                      {hasHeight ? `${resolvedHeightValue}cm` : "—"}
+                                    </p>
+                                  )}
+                                  <p className="text-gray-500 dark:text-gray-400">
+                                    {manualOrderForm.curtainType === "panneau"
+                                      ? "Panneau"
+                                      : "Store"}
+                                    {isQuantityValid ? ` - Qté: ${quantityValue}` : ""}
+                                  </p>
+                                </div>
+                                <span className="text-gray-900 dark:text-white">
+                                  {formatPrice(
+                                    isDimensionValid && isQuantityValid
+                                      ? computedItemTotalCost
+                                      : 0
                                   )}
                                 </span>
                               </div>
-                              {installationSelected ? (
-                                <div className="flex justify-between text-sm">
-                                  <span>Frais de pose</span>
-                                  <span>{formatPrice(installationFeeValue)}</span>
+
+                              <div className="border-t border-gray-200 pt-3 dark:border-gray-700">
+                                <div className="space-y-2 text-sm">
+                                  {manualInvoiceLines.map((line) => (
+                                    <div
+                                      key={line.label}
+                                      className={`flex justify-between ${
+                                        line.emphasis
+                                          ? "border-t border-gray-200 pt-3 text-lg font-semibold dark:border-gray-700"
+                                          : "text-gray-600 dark:text-gray-400"
+                                      }`}
+                                    >
+                                      <span
+                                        className={
+                                          line.emphasis
+                                            ? "text-gray-900 dark:text-white"
+                                            : undefined
+                                        }
+                                      >
+                                        {line.label}
+                                      </span>
+                                      <span className="text-gray-900 dark:text-white">
+                                        {line.displayText ?? formatPrice(line.amount)}
+                                      </span>
+                                    </div>
+                                  ))}
                                 </div>
-                              ) : null}
-                              <div className="flex justify-between font-semibold text-gray-900 dark:text-white">
-                                <span>Total</span>
-                                <span>{formatPrice(displayOrderTotal)}</span>
                               </div>
                             </div>
                           </div>
@@ -1750,32 +1984,130 @@ export default function AdminOrders({ title }: AdminOrdersProps) {
                           <h4 className="text-sm font-semibold text-gray-900 dark:text-white">
                             Informations client
                           </h4>
-                          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                            <div>
-                              <label className={formFieldLabelClass}>Prénom</label>
-                              <input
-                                type="text"
-                                value={manualOrderForm.firstName}
-                                onChange={(e) =>
-                                  setManualOrderForm((prev) => ({ ...prev, firstName: e.target.value }))
-                                }
-                                className={formFieldClass}
-                                required
-                              />
-                            </div>
-                            <div>
-                              <label className={formFieldLabelClass}>Nom</label>
-                              <input
-                                type="text"
-                                value={manualOrderForm.lastName}
-                                onChange={(e) =>
-                                  setManualOrderForm((prev) => ({ ...prev, lastName: e.target.value }))
-                                }
-                                className={formFieldClass}
-                                required
-                              />
+                          <div>
+                            <label className={formFieldLabelClass}>Type de client</label>
+                            <div className="flex flex-wrap gap-4">
+                              {(["person", "company"] as const).map((type) => (
+                                <label
+                                  key={type}
+                                  className="flex items-center gap-2 text-gray-700 dark:text-gray-200"
+                                >
+                                  <input
+                                    type="radio"
+                                    name="manualCustomerType"
+                                    value={type}
+                                    checked={manualOrderForm.customerType === type}
+                                    onChange={() => handleManualCustomerTypeChange(type)}
+                                    className="sr-only"
+                                  />
+                                  <span className="flex h-4 w-4 items-center justify-center rounded-full border border-gray-300 bg-white">
+                                    <span
+                                      className={`h-2 w-2 rounded-full bg-black transition-opacity ${
+                                        manualOrderForm.customerType === type
+                                          ? "opacity-100"
+                                          : "opacity-0"
+                                      }`}
+                                    />
+                                  </span>
+                                  <span className="text-sm">{CUSTOMER_TYPE_LABELS[type]}</span>
+                                </label>
+                              ))}
                             </div>
                           </div>
+                          {isManualCompanyOrder ? (
+                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                              <div className="sm:col-span-2">
+                                <label className={formFieldLabelClass}>Nom de l&apos;entreprise</label>
+                                <input
+                                  type="text"
+                                  value={manualOrderForm.companyName}
+                                  onChange={(e) =>
+                                    setManualOrderForm((prev) => ({
+                                      ...prev,
+                                      companyName: e.target.value,
+                                    }))
+                                  }
+                                  className={formFieldClass}
+                                  required
+                                />
+                              </div>
+                              <div className="sm:col-span-2">
+                                <label className={formFieldLabelClass}>Matricule fiscale</label>
+                                <input
+                                  type="text"
+                                  value={manualOrderForm.matriculeFiscale}
+                                  onChange={(e) => {
+                                    const nextMatricule = applyMatriculeFiscaleInput(
+                                      manualOrderForm.matriculeFiscale,
+                                      e.target.value
+                                    );
+                                    setManualOrderForm((prev) => ({
+                                      ...prev,
+                                      matriculeFiscale: nextMatricule,
+                                    }));
+                                    if (manualMatriculeFiscaleError) {
+                                      setManualMatriculeFiscaleError(
+                                        getMatriculeFiscaleValidationError(nextMatricule)
+                                      );
+                                    }
+                                  }}
+                                  onBlur={() => {
+                                    setManualMatriculeFiscaleError(
+                                      getMatriculeFiscaleValidationError(
+                                        manualOrderForm.matriculeFiscale
+                                      )
+                                    );
+                                  }}
+                                  placeholder={MATRICULE_FISCALE_FORMAT}
+                                  maxLength={17}
+                                  autoComplete="off"
+                                  inputMode="text"
+                                  className={`${formFieldClass} ${
+                                    manualMatriculeFiscaleError ? formFieldErrorClass : ""
+                                  }`}
+                                  required
+                                />
+                                {manualMatriculeFiscaleError && (
+                                  <p className="mt-1 text-xs text-red-500">
+                                    {manualMatriculeFiscaleError}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                              <div>
+                                <label className={formFieldLabelClass}>Prénom</label>
+                                <input
+                                  type="text"
+                                  value={manualOrderForm.firstName}
+                                  onChange={(e) =>
+                                    setManualOrderForm((prev) => ({
+                                      ...prev,
+                                      firstName: e.target.value,
+                                    }))
+                                  }
+                                  className={formFieldClass}
+                                  required
+                                />
+                              </div>
+                              <div>
+                                <label className={formFieldLabelClass}>Nom</label>
+                                <input
+                                  type="text"
+                                  value={manualOrderForm.lastName}
+                                  onChange={(e) =>
+                                    setManualOrderForm((prev) => ({
+                                      ...prev,
+                                      lastName: e.target.value,
+                                    }))
+                                  }
+                                  className={formFieldClass}
+                                  required
+                                />
+                              </div>
+                            </div>
+                          )}
                           <div>
                             <label className={formFieldLabelClass}>Email (optionnel)</label>
                             <input
@@ -1929,7 +2261,8 @@ export default function AdminOrders({ title }: AdminOrdersProps) {
                           disabled={
                             createOrderMutation.isPending ||
                             Boolean(manualEmailError) ||
-                            Boolean(manualPhoneError)
+                            Boolean(manualPhoneError) ||
+                            Boolean(manualMatriculeFiscaleError)
                           }
                           className="w-full sm:w-auto"
                         >
@@ -1943,7 +2276,7 @@ export default function AdminOrders({ title }: AdminOrdersProps) {
             )}
 
             {/* Orders Table */}
-            <div className={adminTableShellClassName}>
+            <div className={`${adminTableShellClassName} md:w-full`}>
               {isLoading ? (
                 <div className="p-8 text-center">
                   <div className="mx-auto h-8 w-8 animate-spin rounded-full border-b-2 border-green-600"></div>
@@ -1954,7 +2287,15 @@ export default function AdminOrders({ title }: AdminOrdersProps) {
               ) : (
                 <>
                   <div className="space-y-3 p-3 md:hidden">
-                    {ordersData?.orders?.map((order: any) => (
+                    {ordersData?.orders?.map((order: any) => {
+                      const customer = parseCustomerInfo(order.customerInfo);
+                      const displayTotal = getOrderDisplayTotal({
+                        totalAmount: order.totalAmount || 0,
+                        deliveryFee: order.deliveryFee || 0,
+                        installationFee: order.installationFee || 0,
+                        customerInfo: order.customerInfo,
+                      });
+                      return (
                       <div
                         key={`${order._id}-mobile`}
                         id={`admin-order-${order._id}`}
@@ -1964,9 +2305,6 @@ export default function AdminOrders({ title }: AdminOrdersProps) {
                           <div>
                             <p className="font-mono text-sm font-semibold text-gray-900 dark:text-white">
                               #{order._id.slice(-8)}
-                            </p>
-                            <p className="text-sm text-gray-700 dark:text-gray-300">
-                              {getCustomerFullName(order.customerInfo)}
                             </p>
                           </div>
                           <span
@@ -1978,9 +2316,57 @@ export default function AdminOrders({ title }: AdminOrdersProps) {
                             {statusLabels[normalizeStatus(order.status)]}
                           </span>
                         </div>
+                        <dl className="mt-3 grid grid-cols-1 gap-2 text-xs sm:grid-cols-2">
+                          <div>
+                            <dt className="font-medium text-gray-500 dark:text-gray-400">Client</dt>
+                            <dd className="text-gray-900 dark:text-white">{customer.name}</dd>
+                          </div>
+                          <div>
+                            <dt className="font-medium text-gray-500 dark:text-gray-400">Type client</dt>
+                            <dd className="text-gray-900 dark:text-white">
+                              <span
+                                className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${
+                                  customer.customerType === "company"
+                                    ? "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
+                                    : "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300"
+                                }`}
+                              >
+                                {customer.customerTypeLabel}
+                              </span>
+                              {customer.customerType === "company" && (
+                                <span className="mt-1 block text-gray-500 dark:text-gray-400">
+                                  MF {customer.matriculeFiscale}
+                                </span>
+                              )}
+                            </dd>
+                          </div>
+                          <div>
+                            <dt className="font-medium text-gray-500 dark:text-gray-400">Téléphone</dt>
+                            <dd className="text-gray-900 dark:text-white">{customer.phone}</dd>
+                          </div>
+                          <div>
+                            <dt className="font-medium text-gray-500 dark:text-gray-400">Email</dt>
+                            <dd className="break-all text-gray-900 dark:text-white">{customer.email}</dd>
+                          </div>
+                          <div>
+                            <dt className="font-medium text-gray-500 dark:text-gray-400">Adresse</dt>
+                            <dd className="text-gray-900 dark:text-white">{customer.address}</dd>
+                          </div>
+                          <div>
+                            <dt className="font-medium text-gray-500 dark:text-gray-400">Ville</dt>
+                            <dd className="text-gray-900 dark:text-white">{customer.city}</dd>
+                          </div>
+                          <div>
+                            <dt className="font-medium text-gray-500 dark:text-gray-400">Gouvernorat</dt>
+                            <dd className="text-gray-900 dark:text-white">{customer.state}</dd>
+                          </div>
+                          <div>
+                            <dt className="font-medium text-gray-500 dark:text-gray-400">Code postal</dt>
+                            <dd className="text-gray-900 dark:text-white">{customer.postalCode}</dd>
+                          </div>
+                        </dl>
                         <div className="mt-2 space-y-1 text-xs text-gray-600 dark:text-gray-400">
-                          <p>Total: {order.totalAmount?.toFixed(2) || "0.00"} TND</p>
-                          <p>Région: {order.customerInfo?.state || "N/A"}</p>
+                          <p>Total: {displayTotal.toFixed(2)} TND</p>
                           <p>Date: {new Date(order.createdAt).toLocaleDateString()}</p>
                         </div>
                         <div className="mt-3 flex flex-col gap-2">
@@ -2007,72 +2393,73 @@ export default function AdminOrders({ title }: AdminOrdersProps) {
                           </Button>
                         </div>
                       </div>
-                    ))}
+                    );
+                    })}
                   </div>
-                  <div className="hidden md:flex md:justify-center md:overflow-x-auto">
-                    <table className="w-max max-w-full table-auto divide-y divide-gray-200 [&_td]:px-3 [&_th]:px-3 [&_th]:font-semibold [&_th]:tracking-wide sm:[&_td]:px-4 sm:[&_th]:px-4 dark:divide-gray-700">
+                  <div className="hidden w-full overflow-x-auto md:block">
+                    <table className="min-w-max w-full table-auto divide-y divide-gray-200 [&_td]:align-middle [&_th]:font-semibold [&_th]:tracking-wide dark:divide-gray-700">
                     <thead className="bg-gray-50 dark:bg-gray-700">
                       <tr>
-                        <th className="whitespace-nowrap px-3 py-3 sm:px-4 text-center text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-300">
-                          ID Commande
-                        </th>
-                        <th className="whitespace-nowrap px-3 py-3 sm:px-4 text-center text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-300">
-                          Client
-                        </th>
-                        <th className="whitespace-nowrap px-3 py-3 sm:px-4 text-center text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-300">
-                          Produit
-                        </th>
-                        <th className="whitespace-nowrap px-3 py-3 sm:px-4 text-center text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-300">
-                          Dimensions
-                        </th>
-                        <th className="whitespace-nowrap px-3 py-3 sm:px-4 text-center text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-300">
-                          Total
-                        </th>
-                        <th className="whitespace-nowrap px-3 py-3 sm:px-4 text-center text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-300">
-                          Région
-                        </th>
-                        <th className="whitespace-nowrap px-3 py-3 sm:px-4 text-center text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-300">
-                          Pose
-                        </th>
-                        <th className="whitespace-nowrap px-3 py-3 sm:px-4 text-center text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-300">
-                          Statut
-                        </th>
-                        <th className="whitespace-nowrap px-3 py-3 sm:px-4 text-center text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-300">
-                          Date
-                        </th>
-                        <th className="whitespace-nowrap px-3 py-3 sm:px-4 text-center text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-300">
-                          Facture
-                        </th>
+                        <th className={orderTableHeadClass}>ID Commande</th>
+                        <th className={orderTableHeadClass}>Client</th>
+                        <th className={orderTableHeadClass}>Type client</th>
+                        <th className={orderTableHeadClass}>Téléphone</th>
+                        <th className={orderTableHeadClass}>Produit</th>
+                        <th className={orderTableHeadClass}>Dimensions</th>
+                        <th className={orderTableHeadClass}>Total</th>
+                        <th className={orderTableHeadClass}>Pose</th>
+                        <th className={orderTableHeadClass}>Adresse</th>
+                        <th className={orderTableHeadClass}>Gouvernorat</th>
+                        <th className={orderTableHeadClass}>Ville</th>
+                        <th className={orderTableHeadClass}>Code postal</th>
+                        <th className={orderTableHeadClass}>Email</th>
+                        <th className={orderTableHeadClass}>Statut</th>
+                        <th className={orderTableHeadClass}>Date</th>
+                        <th className={orderTableHeadClass}>Facture</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-800">
-                      {ordersData?.orders?.map((order: any) => (
+                      {ordersData?.orders?.map((order: any) => {
+                        const customer = parseCustomerInfo(order.customerInfo);
+                        const displayTotal = getOrderDisplayTotal({
+                          totalAmount: order.totalAmount || 0,
+                          deliveryFee: order.deliveryFee || 0,
+                          installationFee: order.installationFee || 0,
+                          customerInfo: order.customerInfo,
+                        });
+                        return (
                         <tr
                           key={order._id}
                           id={`admin-order-${order._id}`}
                           className={getFocusedOrderClass(order._id)}
                         >
-                          <td className="whitespace-nowrap px-3 py-4 sm:px-4 text-center font-mono text-sm text-gray-900 dark:text-white">
+                          <td className={`${orderTableCellClass} font-mono`}>
                             #{order._id.slice(-8)}
                           </td>
-                          <td className="whitespace-nowrap px-3 py-4 sm:px-4 text-center">
-                            <div className="text-center">
-                              <div className="text-sm font-medium text-gray-900 dark:text-white">
-                                {getCustomerFullName(order.customerInfo)}
-                              </div>
-                            </div>
+                          <td className={orderTableCellClass}>{customer.name}</td>
+                          <td className={orderTableCellClass}>
+                            <span
+                              className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${
+                                customer.customerType === "company"
+                                  ? "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
+                                  : "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300"
+                              }`}
+                            >
+                              {customer.customerTypeLabel}
+                            </span>
                           </td>
-                          <td className="px-3 py-4 sm:px-4 text-center text-sm text-gray-900 dark:text-white">
+                          <td className={orderTableCellClass}>{customer.phone}</td>
+                          <td className={orderTableCellClass}>
                             <div className="space-y-1">
                               {(order.items || []).map((item: any, index: number) => (
                                 <div key={`${order._id}-product-${index}`}>
-                                  {item.curtainTypeName || "N/A"}
+                                  {normalizeCurtainTypeName(item.curtainTypeName)}
                                 </div>
                               ))}
                               {(!order.items || order.items.length === 0) && <div>N/A</div>}
                             </div>
                           </td>
-                          <td className="px-3 py-4 sm:px-4 text-center text-sm text-gray-500 dark:text-gray-400">
+                          <td className={`${orderTableCellClass} text-gray-500 dark:text-gray-400`}>
                             <div className="space-y-1">
                               {(order.items || []).map((item: any, index: number) => (
                                 <div key={`${order._id}-dimension-${index}`}>
@@ -2082,13 +2469,10 @@ export default function AdminOrders({ title }: AdminOrdersProps) {
                               {(!order.items || order.items.length === 0) && <div>N/A</div>}
                             </div>
                           </td>
-                          <td className="whitespace-nowrap px-3 py-4 sm:px-4 text-center text-sm font-medium text-gray-900 dark:text-white">
-                            {order.totalAmount?.toFixed(2) || "0.00"} TND
+                          <td className={`${orderTableCellClass} font-medium`}>
+                            {displayTotal.toFixed(2)} TND
                           </td>
-                          <td className="whitespace-nowrap px-3 py-4 sm:px-4 text-center text-sm text-gray-500 dark:text-gray-400">
-                            {order.customerInfo.state || "N/A"}
-                          </td>
-                          <td className="whitespace-nowrap px-3 py-4 sm:px-4 text-center text-sm text-gray-500 dark:text-gray-400">
+                          <td className={orderTableCellClass}>
                             <span
                               className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${
                                 order.wantsInstallation
@@ -2099,12 +2483,19 @@ export default function AdminOrders({ title }: AdminOrdersProps) {
                               {order.wantsInstallation ? "Oui" : "Non"}
                             </span>
                           </td>
-                          <td className="whitespace-nowrap px-3 py-4 sm:px-4 text-center">
+                          <td className={`${orderTableAddressCellClass} whitespace-normal`}>
+                            {customer.address}
+                          </td>
+                          <td className={orderTableCellClass}>{customer.state}</td>
+                          <td className={orderTableCellClass}>{customer.city}</td>
+                          <td className={orderTableCellClass}>{customer.postalCode}</td>
+                          <td className={orderTableCellClass}>{customer.email}</td>
+                          <td className={orderTableCellClass}>
                             <select
                               value={normalizeStatus(order.status)}
                               onChange={(e) => handleInlineStatusUpdate(order._id, e.target.value)}
                               disabled={updateStatusMutation.isPending}
-                              className={formSelectClass}
+                              className={`${formSelectClass} min-w-[9rem]`}
                             >
                               {statusOptions.map((option) => (
                                 <option key={option.value} value={option.value}>
@@ -2113,16 +2504,17 @@ export default function AdminOrders({ title }: AdminOrdersProps) {
                               ))}
                             </select>
                           </td>
-                          <td className="whitespace-nowrap px-3 py-4 sm:px-4 text-center text-sm text-gray-500 dark:text-gray-400">
+                          <td className={`${orderTableCellClass} text-gray-500 dark:text-gray-400`}>
                             {new Date(order.createdAt).toLocaleDateString()}
                           </td>
-                          <td className="whitespace-nowrap px-3 py-4 sm:px-4 text-center">
+                          <td className={orderTableCellClass}>
                             <Button type="button" size="sm" variant="secondary" onClick={() => printInvoice(order)}>
                               Imprimer
                             </Button>
                           </td>
                         </tr>
-                      ))}
+                      );
+                      })}
                     </tbody>
                     </table>
                   </div>
@@ -2132,25 +2524,31 @@ export default function AdminOrders({ title }: AdminOrdersProps) {
               {/* Pagination */}
               {ordersData?.pagination && (
                 <div className="flex items-center justify-between border-t border-gray-200 bg-white px-4 py-3 dark:border-gray-700 dark:bg-gray-800 sm:px-6">
-                  <div className="flex flex-1 justify-between sm:hidden">
-                    <button
+                  <div className="flex flex-1 justify-between gap-3 sm:hidden">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
                       onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
                       disabled={currentPage === 1}
-                      className="relative inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+                      className="min-w-[7.5rem] justify-center"
                     >
                       Précédent
-                    </button>
-                    <button
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
                       onClick={() =>
                         setCurrentPage(
                           Math.min(ordersData?.pagination?.totalPages || 1, currentPage + 1)
                         )
                       }
                       disabled={currentPage === (ordersData?.pagination?.totalPages || 1)}
-                      className="relative ml-3 inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+                      className="min-w-[7.5rem] justify-center"
                     >
                       Suivant
-                    </button>
+                    </Button>
                   </div>
                   <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
                     <div>
@@ -2162,33 +2560,37 @@ export default function AdminOrders({ title }: AdminOrdersProps) {
                         ({ordersData?.pagination?.totalOrders || 0} commandes au total)
                       </p>
                     </div>
-                    <div>
-                      <nav className="relative z-0 inline-flex -space-x-px rounded-md shadow-sm">
-                        <button
-                          onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                          disabled={currentPage === 1}
-                          className="relative inline-flex items-center rounded-l-md border border-gray-300 bg-white px-2 py-2 text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-400 dark:hover:bg-gray-600"
-                        >
-                          Précédent
-                        </button>
-                        <button
-                          onClick={() =>
-                            setCurrentPage(
-                              Math.min(ordersData?.pagination?.totalPages || 1, currentPage + 1)
-                            )
-                          }
-                          disabled={currentPage === (ordersData?.pagination?.totalPages || 1)}
-                          className="relative inline-flex items-center rounded-r-md border border-gray-300 bg-white px-2 py-2 text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-400 dark:hover:bg-gray-600"
-                        >
-                          Suivant
-                        </button>
-                      </nav>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                        disabled={currentPage === 1}
+                        className="min-w-[7.5rem] justify-center font-semibold"
+                      >
+                        Précédent
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        onClick={() =>
+                          setCurrentPage(
+                            Math.min(ordersData?.pagination?.totalPages || 1, currentPage + 1)
+                          )
+                        }
+                        disabled={currentPage === (ordersData?.pagination?.totalPages || 1)}
+                        className="min-w-[7.5rem] justify-center font-semibold"
+                      >
+                        Suivant
+                      </Button>
                     </div>
                   </div>
                 </div>
               )}
             </div>
-          </motion.div>
+          </div>
         </main>
 
       </div>
@@ -2196,5 +2598,3 @@ export default function AdminOrders({ title }: AdminOrdersProps) {
   );
 }
 
-export const getServerSideProps: GetServerSideProps = async (context) =>
-  requireAdminPage(context, "Gestion des Commandes - Rideaux Bambou Admin");

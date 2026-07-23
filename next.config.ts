@@ -1,25 +1,14 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // ========================================
-  // OVH CLOUD DEPLOYMENT CONFIGURATION
-  // ========================================
+  // Hostinger VPS / PM2 — standalone output (see scripts/prepare-standalone.mjs)
+  output: "standalone",
 
-  // Output configuration for OVH Cloud
-  // Use 'standalone' for optimized Docker/PM2 deployment
-  // output: "standalone", // Temporarily disabled for development
+  experimental: {},
 
-  // Enable both App Router and Pages Router
-  experimental: {
-    // App Router is enabled by default in Next.js 13+
-  },
-
-  // External packages for server components
   serverExternalPackages: ["@prisma/client", "bcryptjs", "nodemailer"],
 
-  // Image optimization for OVH Cloud
   images: {
-    // Use remotePatterns instead of domains (Next.js 15 best practice)
     remotePatterns: [
       {
         protocol: "https",
@@ -38,31 +27,22 @@ const nextConfig: NextConfig = {
       },
     ],
     formats: ["image/webp", "image/avif"],
-    // Optimize for OVH Cloud bandwidth
     deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
     imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
     minimumCacheTTL: 60,
   },
 
-  // TypeScript configuration - Strict for production
   typescript: {
     ignoreBuildErrors: false,
   },
 
-  // ESLint configuration - Disabled for performance optimization
   eslint: {
     ignoreDuringBuilds: true,
   },
 
-  // Compression for OVH Cloud
   compress: true,
-
-  // Power by header removal for security
   poweredByHeader: false,
 
-  // ========================================
-  // SECURITY HEADERS FOR OVH CLOUD
-  // ========================================
   async headers() {
     return [
       {
@@ -116,16 +96,13 @@ const nextConfig: NextConfig = {
           },
           {
             key: "X-Powered-By",
-            value: "", // Remove X-Powered-By header
+            value: "",
           },
         ],
       },
     ];
   },
 
-  // ========================================
-  // REDIRECTS FOR OVH CLOUD
-  // ========================================
   async redirects() {
     return [
       {
@@ -186,39 +163,20 @@ const nextConfig: NextConfig = {
     ];
   },
 
-  // ========================================
-  // REWRITES FOR OVH CLOUD
-  // ========================================
   async rewrites() {
-    return [
-      // Add API rewrites if needed for OVH Cloud
-      // Example: proxy to external services
-    ];
+    return [];
   },
 
-  // ========================================
-  // WEBPACK CONFIGURATION FOR OVH CLOUD
-  // ========================================
   webpack: (config, { isServer }) => {
-    // Optimize for OVH Cloud deployment
-
-    // Handle node modules that need special treatment
     if (isServer) {
       config.externals = [...(config.externals || []), "@prisma/client", "bcryptjs"];
     }
-
-    // Add any custom webpack configuration here
     return config;
   },
 
-  // ========================================
-  // PRODUCTION OPTIMIZATIONS FOR OVH CLOUD
-  // ========================================
-  productionBrowserSourceMaps: false, // Disable source maps in production for security
-  reactStrictMode: true, // Enable React strict mode
-  // Note: swcMinify is enabled by default in Next.js 15+
+  productionBrowserSourceMaps: false,
+  reactStrictMode: true,
 
-  // Optimize bundle size for OVH Cloud
   modularizeImports: {
     "react-icons": {
       transform: "react-icons/{{member}}",

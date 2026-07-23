@@ -176,9 +176,12 @@ export async function updatePanneauPromo(
 ) {
   await ensurePanneauConfigInitialized();
 
-  const existingWidths = await prisma.panneauWidth.findMany({
-    where: { isActive: true },
-  });
+  const [existingWidths, settings] = await Promise.all([
+    prisma.panneauWidth.findMany({
+      where: { isActive: true },
+    }),
+    prisma.panneauSettings.findUnique({ where: { id: "default" } }),
+  ]);
 
   const normalized = widths.map((width) => {
     const widthCm = Math.round(Number(width.widthCm));
@@ -199,26 +202,47 @@ export async function updatePanneauPromo(
 
   validateSalePrices(normalized, isSaleActive);
 
+  const now = new Date();
+
   await prisma.$transaction(async (tx) => {
     await tx.panneauSettings.update({
       where: { id: "default" },
       data: {
         isSaleActive,
         updatedBy,
-        lastUpdated: new Date(),
+        lastUpdated: now,
       },
     });
 
-    for (const width of normalized) {
-      await tx.panneauWidth.update({
-        where: { widthCm: width.widthCm },
-        data: { salePrice: width.salePrice },
-      });
-    }
+    await Promise.all(
+      normalized.map((width) =>
+        tx.panneauWidth.update({
+          where: { widthCm: width.widthCm },
+          data: { salePrice: width.salePrice },
+        })
+      )
+    );
   });
 
-  cachedConfig = null;
-  return getPanneauConfig();
+  const saleByWidth = new Map(normalized.map((width) => [width.widthCm, width.salePrice]));
+
+  cachedConfig = {
+    fixedHeightCm: settings?.fixedHeightCm ?? 220,
+    isSaleActive,
+    lastUpdated: now.toISOString(),
+    widths: mapWidths(
+      existingWidths
+        .map((width) => ({
+          ...width,
+          salePrice: saleByWidth.has(width.widthCm)
+            ? (saleByWidth.get(width.widthCm) ?? null)
+            : width.salePrice,
+        }))
+        .sort((a, b) => a.sortOrder - b.sortOrder || a.widthCm - b.widthCm)
+    ),
+  };
+
+  return cachedConfig;
 }
 
 export async function replacePanneauConfig(
@@ -323,6 +347,158 @@ export async function replacePanneauConfig(
   await syncLegacyPanneauPrices(normalizedWidths);
   cachedConfig = null;
 
+  return getPanneauConfig();
+}
+
+export async function updatePanneauFixedHeight(fixedHeightCm: number, updatedBy: string) {
+  await ensurePanneauConfigInitialized();
+
+  const normalizedFixedHeight = Math.round(Number(fixedHeightCm));
+  if (!Number.isFinite(normalizedFixedHeight) || normalizedFixedHeight <= 0) {
+    throw new Error("La hauteur fixe doit être un nombre positif.");
+  }
+
+  await prisma.panneauSettings.update({
+    where: { id: "default" },
+    data: {
+      fixedHeightCm: normalizedFixedHeight,
+      updatedBy,
+      lastUpdated: new Date(),
+    },
+  });
+
+  cachedConfig = null;
+  return getPanneauConfig();
+}
+
+export async function upsertPanneauWidth(
+  input: { widthCm: number; price: number; previousWidthCm?: number },
+  updatedBy: string
+) {
+  await ensurePanneauConfigInitialized();
+
+  const widthCm = Math.round(Number(input.widthCm));
+  const price = Number(input.price);
+  const previousWidthCm =
+    typeof input.previousWidthCm === "number" ? Math.round(input.previousWidthCm) : null;
+
+  if (!Number.isFinite(widthCm) || widthCm <= 0) {
+    throw new Error("Largeur invalide.");
+  }
+
+  if (!Number.isFinite(price) || price <= 0) {
+    throw new Error("Prix invalide.");
+  }
+
+  const label = cmToPanneauLabel(widthCm);
+  const existingTarget = await prisma.panneauWidth.findUnique({ where: { widthCm } });
+
+  if (previousWidthCm !== null && previousWidthCm !== widthCm) {
+    const previous = await prisma.panneauWidth.findUnique({ where: { widthCm: previousWidthCm } });
+    if (!previous) {
+      throw new Error(`Largeur panneau ${previousWidthCm} cm introuvable.`);
+    }
+
+    if (existingTarget && existingTarget.widthCm !== previousWidthCm) {
+      throw new Error("Cette largeur existe déjà.");
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.panneauWidth.delete({ where: { widthCm: previousWidthCm } });
+      await tx.panneauWidth.create({
+        data: {
+          widthCm,
+          price,
+          salePrice: previous.salePrice,
+          label,
+          sortOrder: previous.sortOrder,
+          isActive: true,
+        },
+      });
+      await tx.panneauSettings.update({
+        where: { id: "default" },
+        data: {
+          updatedBy,
+          lastUpdated: new Date(),
+        },
+      });
+    });
+  } else if (existingTarget) {
+    await prisma.$transaction(async (tx) => {
+      await tx.panneauWidth.update({
+        where: { widthCm },
+        data: {
+          price,
+          label,
+          isActive: true,
+        },
+      });
+      await tx.panneauSettings.update({
+        where: { id: "default" },
+        data: {
+          updatedBy,
+          lastUpdated: new Date(),
+        },
+      });
+    });
+  } else {
+    const maxSort = await prisma.panneauWidth.aggregate({ _max: { sortOrder: true } });
+    await prisma.$transaction(async (tx) => {
+      await tx.panneauWidth.create({
+        data: {
+          widthCm,
+          price,
+          salePrice: null,
+          label,
+          sortOrder: (maxSort._max.sortOrder ?? -1) + 1,
+          isActive: true,
+        },
+      });
+      await tx.panneauSettings.update({
+        where: { id: "default" },
+        data: {
+          updatedBy,
+          lastUpdated: new Date(),
+        },
+      });
+    });
+  }
+
+  await syncLegacyPanneauPrices([{ widthCm, price, salePrice: null, label }]);
+  cachedConfig = null;
+  return getPanneauConfig();
+}
+
+export async function deletePanneauWidth(widthCm: number, updatedBy: string) {
+  await ensurePanneauConfigInitialized();
+
+  const normalizedWidth = Math.round(Number(widthCm));
+  if (!Number.isFinite(normalizedWidth) || normalizedWidth <= 0) {
+    throw new Error("Largeur invalide.");
+  }
+
+  const activeCount = await prisma.panneauWidth.count({ where: { isActive: true } });
+  if (activeCount <= 1) {
+    throw new Error("Au moins une largeur panneau est requise.");
+  }
+
+  const existing = await prisma.panneauWidth.findUnique({ where: { widthCm: normalizedWidth } });
+  if (!existing) {
+    throw new Error(`Largeur panneau ${normalizedWidth} cm introuvable.`);
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.panneauWidth.delete({ where: { widthCm: normalizedWidth } });
+    await tx.panneauSettings.update({
+      where: { id: "default" },
+      data: {
+        updatedBy,
+        lastUpdated: new Date(),
+      },
+    });
+  });
+
+  cachedConfig = null;
   return getPanneauConfig();
 }
 

@@ -1143,12 +1143,12 @@ export default function UserSettings({ title }: UserSettingsProps) {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.6, delay: 0.1 }}
-                  className="group relative overflow-hidden rounded-xl border border-gray-200 bg-gradient-to-br from-blue-50 to-indigo-50 p-6 transition-all duration-300 hover:shadow-lg hover:shadow-blue-100 dark:border-gray-700 dark:from-gray-800 dark:to-gray-700 dark:hover:shadow-gray-900"
+                  className="group relative overflow-hidden rounded-xl border border-gray-200 bg-gradient-to-br from-gray-50 to-white p-6 transition-all duration-300 hover:shadow-lg hover:shadow-gray-200 dark:border-gray-700 dark:from-gray-800 dark:to-gray-700 dark:hover:shadow-gray-900"
                 >
                   <div className="absolute right-4 top-4">
-                    <div className="rounded-full bg-blue-100 p-3 group-hover:bg-blue-200 dark:bg-blue-900 dark:group-hover:bg-blue-800">
+                    <div className="rounded-full bg-gray-100 p-3 group-hover:bg-gray-200 dark:bg-gray-700 dark:group-hover:bg-gray-600">
                       <svg
-                        className="h-6 w-6 text-blue-600 dark:text-blue-400"
+                        className="h-6 w-6 text-gray-700 dark:text-gray-300"
                         fill="none"
                         stroke="currentColor"
                         viewBox="0 0 24 24"
