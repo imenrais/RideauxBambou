@@ -24,6 +24,8 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:migrate:deploy": "prisma migrate deploy",
     "prisma:studio": "prisma studio",
+    "seed:export": "node scripts/export-hostinger-seed.mjs",
+    "seed:import": "node scripts/import-hostinger-seed.mjs",
     "pre-deploy": "npm run type-check && npm run lint && npm run build",
     "hostinger:start": "pm2 start ecosystem.config.cjs",
     "hostinger:reload": "pm2 reload rideaux-bamboux"

@@ -41,3 +41,6 @@ next-env.d.ts
 # uploads
 public/uploads/*
 !public/uploads/.gitkeep
+
+# Hostinger DB seed (contains password hashes — never commit)
+data/

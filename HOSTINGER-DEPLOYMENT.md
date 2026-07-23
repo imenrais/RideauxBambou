@@ -44,6 +44,28 @@ Point your domain to `http://127.0.0.1:3000`, then:
 sudo certbot --nginx -d your-domain.com -d www.your-domain.com
 ```
 
+## Migrate data from your local DB (admin + products, no orders/avis)
+
+On your PC:
+
+```bash
+npm run seed:export
+```
+
+This writes `data/hostinger-seed.json` (gitignored). It includes:
+- users (your admin account)
+- products (with Cloudinary picture URLs)
+- prices, delivery/installation fees, panneau config, newsletter
+
+It **excludes** orders and reviews (avis pictures).
+
+Copy that file to the VPS (`data/hostinger-seed.json`), then:
+
+```bash
+npx prisma migrate deploy
+npm run seed:import
+```
+
 ## Health check
 
 `GET /api/health`
