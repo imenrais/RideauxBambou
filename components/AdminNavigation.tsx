@@ -6,7 +6,9 @@ import { useRouter } from "next/router";
 import { useSession, signOut } from "next-auth/react";
 import { useState, useEffect } from "react";
 
-import DarkModeToggle from "./DarkModeToggle";
+import MobileMenuButton from "./MobileMenuButton";
+import { MobileNavLinkAccent, MobileNavPanel, mobileNavLinkClass } from "./MobileNavPanel";
+import { useDarkMode } from "../contexts/DarkModeContext";
 
 interface AdminOrderNotification {
   orderId: string;
@@ -65,6 +67,7 @@ const writeDismissedNotificationIds = (ids: Set<string>) => {
 export default function AdminNavigation() {
   const { data: session } = useSession();
   const router = useRouter();
+  const { isDarkMode, toggleDarkMode } = useDarkMode();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
@@ -208,20 +211,28 @@ export default function AdminNavigation() {
   };
 
   const toggleMenu = () => {
-    setIsMobileMenuOpen(!isMobileMenuOpen);
+    setIsMobileMenuOpen((open) => {
+      const next = !open;
+      if (next) {
+        setIsProfileOpen(false);
+        setIsNotificationsOpen(false);
+      }
+      return next;
+    });
   };
 
-  // Close profile dropdown when clicking outside
+  // Close dropdowns / mobile menu when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as Element;
-      if (isProfileOpen) {
-        if (!target.closest("[data-profile-dropdown]")) {
-          setIsProfileOpen(false);
-        }
+      if (isProfileOpen && !target.closest("[data-profile-dropdown]")) {
+        setIsProfileOpen(false);
       }
       if (isNotificationsOpen && !target.closest("[data-notification-dropdown]")) {
         setIsNotificationsOpen(false);
+      }
+      if (isMobileMenuOpen && !target.closest("[data-mobile-menu]")) {
+        setIsMobileMenuOpen(false);
       }
     };
 
@@ -229,15 +240,16 @@ export default function AdminNavigation() {
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
-  }, [isProfileOpen, isNotificationsOpen]);
+  }, [isProfileOpen, isNotificationsOpen, isMobileMenuOpen]);
 
   return (
-    <nav className="sticky top-0 z-50 border-b border-gray-200/80 bg-white/90 shadow-[0_1px_0_rgba(17,24,39,0.04)] backdrop-blur-md dark:border-gray-700/80 dark:bg-gray-900/90">
-      <div className="mx-auto max-w-7xl px-3 sm:px-4 lg:px-6">
+    <>
+      <nav className="fixed inset-x-0 top-0 z-50 w-full border-b border-gray-200/80 bg-white/90 shadow-[0_1px_0_rgba(17,24,39,0.04)] backdrop-blur-md dark:border-gray-700/80 dark:bg-gray-900/90">
+      <div className="mx-auto max-w-7xl px-3 sm:px-6 lg:px-8">
         <div className="flex h-16 items-center justify-between">
           {/* Logo */}
-          <Link href="/admin" className="group flex items-center gap-3">
-            <div className="relative h-10 w-10 overflow-hidden rounded-full">
+          <Link href="/admin" className="group flex min-w-0 items-center gap-2 sm:gap-3">
+            <div className="relative h-9 w-9 shrink-0 overflow-hidden rounded-full sm:h-10 sm:w-10">
               <Image
                 src="/images/logo.png"
                 alt="Rideaux Bambou Logo"
@@ -246,11 +258,11 @@ export default function AdminNavigation() {
                 priority
               />
             </div>
-            <div className="flex flex-col">
-              <h1 className="hidden text-xl font-semibold text-gray-900 transition-colors duration-150 group-hover:text-gray-700 sm:block dark:text-white dark:group-hover:text-gray-200">
+            <div className="flex min-w-0 flex-col justify-center">
+              <h1 className="truncate text-base font-semibold leading-tight text-gray-900 transition-colors duration-150 group-hover:text-gray-700 sm:text-xl dark:text-white dark:group-hover:text-gray-200">
                 Rideaux Bambou
               </h1>
-              <span className="hidden text-[11px] font-medium uppercase tracking-[0.14em] text-gray-500 sm:block dark:text-gray-400">
+              <span className="text-[10px] font-medium uppercase leading-tight tracking-[0.12em] text-gray-500 sm:text-[11px] sm:tracking-[0.14em] dark:text-gray-400">
                 Admin
               </span>
             </div>
@@ -289,13 +301,14 @@ export default function AdminNavigation() {
           </div>
 
           {/* Right side actions */}
-          <div className="flex items-center space-x-1.5 sm:space-x-3">
+          <div className="flex shrink-0 items-center gap-1 lg:gap-2">
             {/* Notifications */}
-            <div className="relative" data-notification-dropdown>
+            <div className="relative z-10" data-notification-dropdown>
               <button
                 onClick={() => {
                   setIsNotificationsOpen(!isNotificationsOpen);
                   setIsProfileOpen(false);
+                  setIsMobileMenuOpen(false);
                 }}
                 className="relative rounded-full border border-transparent p-2 text-gray-600 transition-all duration-150 hover:border-gray-200 hover:bg-gray-100/80 hover:text-gray-900 dark:text-gray-300 dark:hover:border-gray-700 dark:hover:bg-gray-800/80 dark:hover:text-white"
                 aria-label="Notifications"
@@ -309,7 +322,7 @@ export default function AdminNavigation() {
                   />
                 </svg>
                 {notifications.filter((item) => !item.read).length > 0 && (
-                  <span className="absolute -right-1 -top-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-600 px-1 text-xs font-semibold text-white">
+                  <span className="absolute -right-1 -top-1 z-20 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-600 px-1 text-xs font-semibold text-white">
                     {notifications.filter((item) => !item.read).length > 9
                       ? "9+"
                       : notifications.filter((item) => !item.read).length}
@@ -320,34 +333,37 @@ export default function AdminNavigation() {
               <AnimatePresence>
                 {isNotificationsOpen && (
                   <motion.div
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    className="absolute right-0 mt-2 w-[92vw] max-w-sm overflow-hidden rounded-2xl border border-gray-200/80 bg-white/95 shadow-xl shadow-gray-900/10 backdrop-blur-md dark:border-gray-700/80 dark:bg-gray-800/95 dark:shadow-black/20"
+                    initial={{ opacity: 0, y: -8, scale: 0.98 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -6, scale: 0.98 }}
+                    transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+                    className="fixed right-3 top-[4.5rem] z-[60] flex max-h-[min(70vh,26rem)] w-[min(17.5rem,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-2xl border border-gray-200/80 bg-white/95 shadow-xl shadow-gray-900/10 backdrop-blur-md dark:border-gray-700/80 dark:bg-gray-800/95 dark:shadow-black/30 sm:absolute sm:right-0 sm:top-auto sm:mt-2 sm:w-[26rem] sm:max-w-[calc(100vw-1.5rem)]"
                   >
-                    <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3 dark:border-gray-700">
-                      <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
+                    <div className="flex shrink-0 flex-col gap-2 border-b border-gray-200/80 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-3 sm:px-4 sm:py-3 dark:border-gray-700/80">
+                      <h3 className="shrink-0 text-sm font-semibold text-gray-900 dark:text-white">
                         Notifications
                       </h3>
-                      <div className="flex items-center gap-3">
+                      <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1 sm:ml-auto sm:flex-nowrap">
                         <button
+                          type="button"
                           onClick={markAllAsRead}
-                          className="text-xs font-medium text-gray-700 transition-colors hover:text-gray-900 dark:text-gray-300 dark:hover:text-white"
+                          className="whitespace-nowrap text-xs font-medium text-gray-700 transition-colors hover:text-gray-900 dark:text-gray-300 dark:hover:text-white"
                         >
                           Tout marquer comme lu
                         </button>
                         <button
+                          type="button"
                           onClick={deleteAllNotifications}
-                          className="text-xs font-medium text-red-700 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
+                          className="whitespace-nowrap text-xs font-medium text-red-700 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
                         >
                           Tout supprimer
                         </button>
                       </div>
                     </div>
 
-                    <div className="max-h-96 overflow-y-auto">
+                    <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
                       {notifications.length === 0 ? (
-                        <div className="px-4 py-5 text-sm text-gray-500 dark:text-gray-400">
+                        <div className="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
                           Aucune notification.
                         </div>
                       ) : (
@@ -361,27 +377,23 @@ export default function AdminNavigation() {
                                 setIsNotificationsOpen(false);
                                 void router.push(`/admin/orders?orderId=${item.orderId}`);
                               }}
-                              className={`group relative w-full cursor-pointer border-b border-gray-100 text-left transition dark:border-gray-700 ${
+                              className={`group relative w-full cursor-pointer border-b border-gray-100 text-left last:border-b-0 dark:border-gray-700/80 ${
                                 isUnread
-                                  ? "bg-gray-900/[0.04] hover:bg-gray-900/[0.07] dark:bg-white/[0.06] dark:hover:bg-white/[0.09]"
+                                  ? "bg-gray-900/[0.04] dark:bg-white/[0.06]"
                                   : "hover:bg-gray-50 dark:hover:bg-gray-700/40"
                               }`}
                             >
                               {isUnread && (
                                 <span
-                                  className="absolute inset-y-0 left-0 w-1 bg-gray-900 dark:bg-white"
+                                  className="absolute inset-y-2 left-1.5 w-1 rounded-full bg-gray-900 dark:bg-white"
                                   aria-hidden="true"
                                 />
                               )}
-                              <div
-                                className={`flex items-start gap-3 px-4 py-3 ${
-                                  isUnread ? "pl-5" : ""
-                                }`}
-                              >
+                              <div className="flex items-start gap-2.5 px-3 py-2.5 pl-4">
                                 <div className="min-w-0 flex-1">
-                                  <div className="flex flex-wrap items-center gap-2">
+                                  <div className="flex items-center gap-2">
                                     <p
-                                      className={`truncate text-sm ${
+                                      className={`truncate text-[13px] ${
                                         isUnread
                                           ? "font-semibold text-gray-900 dark:text-white"
                                           : "font-medium text-gray-700 dark:text-gray-200"
@@ -390,30 +402,24 @@ export default function AdminNavigation() {
                                       Commande #{item.orderId?.slice(-8)}
                                     </p>
                                     {isUnread && (
-                                      <span className="shrink-0 rounded bg-gray-900 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white dark:bg-white dark:text-gray-900">
+                                      <span className="shrink-0 rounded bg-gray-900 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-white dark:bg-white dark:text-gray-900">
                                         Nouveau
                                       </span>
                                     )}
                                   </div>
-                                  <p
-                                    className={`truncate text-xs ${
-                                      isUnread
-                                        ? "font-medium text-gray-700 dark:text-gray-200"
-                                        : "text-gray-600 dark:text-gray-300"
-                                    }`}
-                                  >
+                                  <p className="mt-0.5 truncate text-xs text-gray-600 dark:text-gray-300">
                                     {item.customerName || "Client"}
                                   </p>
-                                  <div className="mt-0.5 flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-                                    <span>{item.totalAmount?.toFixed(2)} TND</span>
-                                    <span aria-hidden="true">·</span>
-                                    <span>
-                                      {new Date(item.createdAt).toLocaleTimeString("fr-FR", {
-                                        hour: "2-digit",
-                                        minute: "2-digit",
-                                      })}
+                                  <p className="mt-0.5 text-[11px] text-gray-500 dark:text-gray-400">
+                                    {item.totalAmount?.toFixed(2)} TND
+                                    <span className="mx-1" aria-hidden="true">
+                                      ·
                                     </span>
-                                  </div>
+                                    {new Date(item.createdAt).toLocaleTimeString("fr-FR", {
+                                      hour: "2-digit",
+                                      minute: "2-digit",
+                                    })}
+                                  </p>
                                 </div>
                                 <button
                                   type="button"
@@ -421,12 +427,12 @@ export default function AdminNavigation() {
                                     e.stopPropagation();
                                     deleteNotification(item.orderId);
                                   }}
-                                  className="shrink-0 rounded-md p-1 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/40 dark:hover:text-red-400"
+                                  className="shrink-0 rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/40 dark:hover:text-red-400"
                                   aria-label="Supprimer la notification"
                                   title="Supprimer"
                                 >
                                   <svg
-                                    className="h-4 w-4"
+                                    className="h-3.5 w-3.5"
                                     fill="none"
                                     stroke="currentColor"
                                     viewBox="0 0 24 24"
@@ -451,14 +457,15 @@ export default function AdminNavigation() {
               </AnimatePresence>
             </div>
 
-            {/* Dark mode toggle */}
-            <DarkModeToggle />
-
             {/* User Profile Dropdown */}
             <div className="relative" data-profile-dropdown>
               <button
-                onClick={() => setIsProfileOpen(!isProfileOpen)}
-                className="flex items-center gap-2 rounded-full border border-transparent p-2 text-gray-600 transition-all duration-150 hover:border-gray-200 hover:bg-gray-100/80 hover:text-gray-900 dark:text-gray-300 dark:hover:border-gray-700 dark:hover:bg-gray-800/80 dark:hover:text-white"
+                onClick={() => {
+                  setIsProfileOpen(!isProfileOpen);
+                  setIsNotificationsOpen(false);
+                  setIsMobileMenuOpen(false);
+                }}
+                className="flex items-center gap-1 rounded-full border border-transparent p-2 text-gray-600 transition-all duration-150 hover:border-gray-200 hover:bg-gray-100/80 hover:text-gray-900 lg:gap-2 dark:text-gray-300 dark:hover:border-gray-700 dark:hover:bg-gray-800/80 dark:hover:text-white"
               >
                 {session ? (
                   <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-900/90 text-white dark:bg-gray-100 dark:text-gray-900">
@@ -502,7 +509,7 @@ export default function AdminNavigation() {
                     initial={{ opacity: 0, y: -10 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -10 }}
-                    className="absolute right-0 mt-2 w-52 rounded-xl border border-gray-200/80 bg-white/95 py-1 shadow-xl shadow-gray-900/10 ring-1 ring-black/5 backdrop-blur-md dark:border-gray-700/80 dark:bg-gray-800/95 dark:shadow-black/20"
+                    className="absolute right-0 mt-2 w-56 rounded-xl border border-gray-200/80 bg-white/95 py-1 shadow-xl shadow-gray-900/10 ring-1 ring-black/5 backdrop-blur-md dark:border-gray-700/80 dark:bg-gray-800/95 dark:shadow-black/20"
                   >
                     {session ? (
                       <>
@@ -510,7 +517,7 @@ export default function AdminNavigation() {
                           <p className="font-medium">
                             {session.user?.firstName} {session.user?.lastName}
                           </p>
-                          <p className="text-gray-500">{session.user?.email}</p>
+                          <p className="break-anywhere text-gray-500">{session.user?.email}</p>
                         </div>
                         <div className="border-t border-gray-100 dark:border-gray-700">
                           <Link
@@ -528,6 +535,34 @@ export default function AdminNavigation() {
                             Paramètres
                           </Link>
                           <button
+                            type="button"
+                            onClick={toggleDarkMode}
+                            className="flex w-full items-center justify-between gap-3 px-4 py-2 text-left text-sm text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+                          >
+                            <span>{isDarkMode ? "Mode clair" : "Mode sombre"}</span>
+                            <span className="text-gray-500 dark:text-gray-400" aria-hidden="true">
+                              {isDarkMode ? (
+                                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"
+                                  />
+                                </svg>
+                              ) : (
+                                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"
+                                  />
+                                </svg>
+                              )}
+                            </span>
+                          </button>
+                          <button
                             onClick={() => {
                               handleSignOut();
                               setIsProfileOpen(false);
@@ -539,10 +574,38 @@ export default function AdminNavigation() {
                         </div>
                       </>
                     ) : (
-                      <div className="px-4 py-2">
+                      <div className="border-t border-gray-100 px-0 py-1 dark:border-gray-700">
+                        <button
+                          type="button"
+                          onClick={toggleDarkMode}
+                          className="flex w-full items-center justify-between gap-3 px-4 py-2 text-left text-sm text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+                        >
+                          <span>{isDarkMode ? "Mode clair" : "Mode sombre"}</span>
+                          <span className="text-gray-500 dark:text-gray-400" aria-hidden="true">
+                            {isDarkMode ? (
+                              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"
+                                />
+                              </svg>
+                            ) : (
+                              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"
+                                />
+                              </svg>
+                            )}
+                          </span>
+                        </button>
                         <Link
                           href="/connexion"
-                          className="block text-sm text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+                          className="block px-4 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
                           onClick={() => setIsProfileOpen(false)}
                         >
                           Se connecter
@@ -554,98 +617,48 @@ export default function AdminNavigation() {
               </AnimatePresence>
             </div>
 
-            {/* Mobile menu button */}
-            <button
-              onClick={toggleMenu}
-              className="rounded-full border border-transparent p-2 text-gray-600 transition-all duration-150 hover:border-gray-200 hover:bg-gray-100/80 hover:text-gray-900 dark:text-gray-300 dark:hover:border-gray-700 dark:hover:bg-gray-800/80 dark:hover:text-white lg:hidden"
-              aria-label="Toggle mobile menu"
-            >
-              <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                {isMobileMenuOpen ? (
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M6 18L18 6M6 6l12 12"
-                  />
-                ) : (
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M4 6h16M4 12h16M4 18h16"
-                  />
-                )}
-              </svg>
-            </button>
+            <div data-mobile-menu className="lg:hidden">
+              <MobileMenuButton open={isMobileMenuOpen} onClick={toggleMenu} />
+            </div>
           </div>
         </div>
 
         {/* Mobile menu */}
-        <AnimatePresence>
-          {isMobileMenuOpen && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              exit={{ opacity: 0, height: 0 }}
-              className="border-t border-gray-200/80 py-4 dark:border-gray-700/80 lg:hidden"
-            >
-              <div className="space-y-4">
-                {/* Mobile Navigation Links */}
-                <div className="space-y-2">
-                  {ADMIN_MENU_ITEMS.map((item) => {
-                    const isActive = isAdminRouteActive(router.pathname, item.href);
-                    return (
-                      <Link
-                        key={item.href}
-                        href={item.href}
-                        aria-current={isActive ? "page" : undefined}
-                        className={`block rounded-xl border px-4 py-2.5 text-[0.95rem] font-medium transition-all duration-150 ease-out ${
-                          isActive
-                            ? "border-gray-300 bg-gray-100/90 text-gray-900 shadow-sm dark:border-gray-500 dark:bg-gray-700/40 dark:text-white"
-                            : "border-transparent text-gray-700 hover:border-gray-200 hover:bg-gray-100/80 dark:text-gray-300 dark:hover:border-gray-700 dark:hover:bg-gray-800/80"
-                        }`}
-                        onClick={() => setIsMobileMenuOpen(false)}
-                      >
-                        {item.label}
-                      </Link>
-                    );
-                  })}
-                </div>
-
-                {/* Mobile Profile Actions */}
-                {session && (
-                  <div className="border-t border-gray-200 px-4 pt-4 dark:border-gray-700">
-                    <Link
-                      href={router.pathname.startsWith("/admin") ? "/" : "/admin"}
-                      className="block py-2 text-sm font-semibold text-gray-900 dark:text-white"
-                      onClick={() => setIsMobileMenuOpen(false)}
-                    >
-                      {router.pathname.startsWith("/admin") ? "Site Web" : "Tableau de Bord"}
-                    </Link>
-                    <Link
-                      href="/admin/settings"
-                      className="block py-2 text-sm text-gray-700 dark:text-gray-300"
-                      onClick={() => setIsMobileMenuOpen(false)}
-                    >
-                      Paramètres
-                    </Link>
-                    <button
-                      onClick={() => {
-                        handleSignOut();
-                        setIsMobileMenuOpen(false);
-                      }}
-                      className="block py-2 text-sm text-gray-700 dark:text-gray-300"
-                    >
-                      Se déconnecter
-                    </button>
-                  </div>
-                )}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        <div data-mobile-menu>
+          <MobileNavPanel open={isMobileMenuOpen}>
+          {ADMIN_MENU_ITEMS.map((item, index) => {
+            const isActive = isAdminRouteActive(router.pathname, item.href);
+            return (
+              <motion.div
+                key={item.href}
+                initial={{ opacity: 0, x: -8 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.2, delay: 0.04 + index * 0.035 }}
+              >
+                <Link
+                  href={item.href}
+                  aria-current={isActive ? "page" : undefined}
+                  className={mobileNavLinkClass(isActive)}
+                  onClick={() => setIsMobileMenuOpen(false)}
+                >
+                  <MobileNavLinkAccent isActive={isActive} />
+                  <span className="flex-1">{item.label}</span>
+                  {isActive && (
+                    <span
+                      aria-hidden="true"
+                      className="h-1.5 w-1.5 rounded-full bg-white/80 dark:bg-gray-900/70"
+                    />
+                  )}
+                </Link>
+              </motion.div>
+            );
+          })}
+        </MobileNavPanel>
+        </div>
       </div>
     </nav>
+      {/* Reserves the fixed navbar height so page content stays aligned */}
+      <div className="h-16 shrink-0" aria-hidden="true" />
+    </>
   );
 }

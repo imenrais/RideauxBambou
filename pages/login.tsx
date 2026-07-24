@@ -110,7 +110,7 @@ export default function LoginPage({ title }: LoginPageProps) {
     <StandardLayout title={title} description="Connexion - Rideaux Bambou" showCartIcon={false}>
       <div className="-mx-4 -my-8 min-h-screen bg-gray-100 px-4 py-8 dark:bg-gray-900">
         {/* Back Button and Main Content */}
-        <div className="px-4 py-6 sm:px-6 sm:py-8">
+        <div className="space-y-6 px-4 py-6 sm:px-6 sm:py-8">
           <BackButton href="/" />
 
           {/* Main Content */}

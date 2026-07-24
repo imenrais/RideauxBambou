@@ -34,6 +34,85 @@ interface PublicProduct {
   isAvailable: boolean;
 }
 
+function ProductCard({
+  item,
+  listPrice,
+  salePricePerM2,
+  isSaleActive,
+  onBuyNow,
+}: {
+  item: PublicProduct;
+  listPrice: number;
+  salePricePerM2?: number | null;
+  isSaleActive: boolean;
+  onBuyNow: (product: PublicProduct) => void;
+}) {
+  const [isImagePopped, setIsImagePopped] = useState(false);
+
+  return (
+    <div className="w-[min(72vw,260px)] shrink-0 md:w-auto md:shrink">
+      <Card
+        padding="none"
+        className={`h-full overflow-hidden transition-transform duration-300 ${
+          isImagePopped ? "scale-[1.02]" : "scale-100"
+        }`}
+      >
+        <div className="overflow-hidden p-4">
+          <div
+            className="relative mb-3 h-40 touch-manipulation overflow-hidden rounded-lg bg-gray-200 dark:bg-gray-600 sm:mb-4 sm:h-52"
+            onMouseEnter={() => setIsImagePopped(true)}
+            onMouseLeave={() => setIsImagePopped(false)}
+            onPointerDown={() => setIsImagePopped(true)}
+            onPointerUp={() => setIsImagePopped(false)}
+            onPointerCancel={() => setIsImagePopped(false)}
+            onPointerLeave={() => setIsImagePopped(false)}
+          >
+            <Image
+              src={item.image || "/images/14.jpeg"}
+              alt={item.name}
+              fill
+              sizes="(max-width: 768px) 72vw, (max-width: 1024px) 45vw, 30vw"
+              draggable={false}
+              className={`select-none object-cover transition-transform duration-300 ease-out ${
+                isImagePopped ? "scale-110" : "scale-100"
+              }`}
+            />
+            {!item.isAvailable && (
+              <div className="absolute inset-0 flex items-center justify-center bg-gray-900/35">
+                <span className="rounded-full bg-white/95 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-red-700 shadow-sm dark:bg-gray-900/95 dark:text-red-300">
+                  Hors stock
+                </span>
+              </div>
+            )}
+          </div>
+          <div className="text-center">
+            <h3 className="truncate text-base font-semibold text-gray-900 dark:text-white sm:text-lg">
+              {item.name}
+            </h3>
+            <div className="flex justify-center">
+              <PriceDisplay
+                pricePerM2={listPrice}
+                salePricePerM2={salePricePerM2}
+                isSaleActive={isSaleActive}
+              />
+            </div>
+            <div className="mt-3 flex justify-center sm:mt-4">
+              <button
+                type="button"
+                onClick={() => onBuyNow(item)}
+                disabled={!item.isAvailable}
+                className="rounded-lg bg-gray-900 px-[1.55rem] py-2 text-sm font-semibold text-white transition-colors hover:bg-gray-800 disabled:cursor-not-allowed disabled:bg-gray-400 disabled:text-gray-100 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-200 dark:disabled:bg-gray-600 dark:disabled:text-gray-300 sm:px-[6.4rem]"
+              >
+                Acheter maintenant
+              </button>
+            </div>
+          </div>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
 export default function Home({ title }: HomeProps) {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -142,23 +221,85 @@ export default function Home({ title }: HomeProps) {
       <div className="min-h-screen bg-gray-100 dark:bg-gray-900">
         <Navigation />
 
+        <div className="overflow-x-clip">
+
         {/* Hero Section */}
         <section
           id={NAV_SECTIONS.accueil}
-          className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8"
+          className="mx-auto max-w-7xl px-3 py-5 sm:px-6 sm:py-10 lg:px-8 lg:py-16"
         >
-          <Card className="overflow-hidden bg-gradient-to-r from-white to-gray-50 dark:from-gray-800 dark:to-gray-700">
-            <div className="grid grid-cols-1 items-center gap-8 lg:grid-cols-2">
+          {/* Phone / tablet: compact photo hero */}
+          <Card
+            padding="none"
+            className="relative overflow-hidden !border-0 bg-gray-900 shadow-md lg:hidden"
+          >
+            <div className="relative aspect-[600/420] w-full overflow-hidden">
+              <Image
+                src="/images/14.jpeg"
+                alt="Rideaux Bambou Collection"
+                fill
+                sizes="100vw"
+                className="object-cover object-center"
+                priority
+              />
+            </div>
+            <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-black/55 via-black/20 to-transparent to-70%" />
+            <motion.div
+              initial={{ opacity: 0, y: 14 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, ease: "easeOut" }}
+              className="absolute inset-0 flex flex-col items-start justify-center px-4 py-4 text-left sm:px-8"
+            >
+              <motion.h1
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.55, delay: 0.08 }}
+                className="mb-3.5 max-w-[17.5rem] text-[1.05rem] font-bold leading-snug tracking-tight text-white [text-shadow:0_1px_8px_rgba(0,0,0,0.55)] sm:mb-4 sm:max-w-sm sm:text-3xl"
+              >
+                Décorez Votre Espace de Rêve{" "}
+                <br className="sm:hidden" />
+                Avec Notre Collection d&apos;Exception
+              </motion.h1>
+              <motion.p
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.55, delay: 0.16 }}
+                className="mb-5 max-w-[15rem] text-[11px] leading-relaxed text-white/95 [text-shadow:0_1px_6px_rgba(0,0,0,0.5)] sm:mb-7 sm:max-w-xs sm:text-base"
+              >
+                Explorez nos collections soigneusement sélectionnées pour découvrir les pièces
+                parfaites pour votre vision unique.
+              </motion.p>
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.55, delay: 0.24 }}
+              >
+                <a
+                  href={`/#${NAV_SECTIONS.boutique}`}
+                  onClick={scrollToBoutique}
+                  className="inline-flex min-h-8 cursor-pointer items-center justify-center rounded-lg bg-white/95 px-3.5 py-1.5 text-xs font-semibold text-gray-900 shadow-sm backdrop-blur-[2px] transition active:scale-[0.98] hover:bg-white sm:min-h-0 sm:px-7 sm:py-3 sm:text-base"
+                >
+                  Demander Devis
+                </a>
+              </motion.div>
+            </motion.div>
+          </Card>
+
+          {/* Desktop: text + picture side by side */}
+          <Card className="hidden overflow-hidden bg-gradient-to-r from-white to-gray-50 dark:from-gray-800 dark:to-gray-700 lg:block">
+            <div className="grid grid-cols-2 items-center gap-8">
               <motion.div
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ duration: 0.8 }}
                 className="px-8 py-12"
               >
-                <h1 className="mb-6 text-4xl font-bold text-gray-900 dark:text-white lg:text-5xl">
-                  Décorez Votre Espace de Rêve Avec Notre Collection d&apos;Exception
+                <h1 className="mb-8 text-4xl font-bold leading-tight text-gray-900 dark:text-white lg:mb-10 lg:text-5xl">
+                  Décorez Votre Espace de Rêve
+                  <br />
+                  Avec Notre Collection&nbsp;d&apos;Exception
                 </h1>
-                <p className="mb-8 text-lg text-gray-600 dark:text-gray-300">
+                <p className="mb-10 text-lg leading-relaxed text-gray-600 dark:text-gray-300 lg:mb-12">
                   Explorez nos collections soigneusement sélectionnées pour découvrir les pièces
                   parfaites pour votre vision unique.
                 </p>
@@ -174,14 +315,14 @@ export default function Home({ title }: HomeProps) {
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ duration: 0.8, delay: 0.2 }}
-                className="relative h-96 lg:h-[500px]"
+                className="relative h-[480px] w-full"
               >
                 <div className="absolute inset-0 rounded-lg bg-gray-200 dark:bg-gray-600">
                   <Image
                     src="/images/14.jpeg"
                     alt="Rideaux Bambou Collection"
                     fill
-                    sizes="(max-width: 1024px) 100vw, 50vw"
+                    sizes="50vw"
                     className="rounded-lg object-cover"
                     priority
                   />
@@ -194,7 +335,7 @@ export default function Home({ title }: HomeProps) {
         {/* Boutique */}
         <section
           id={NAV_SECTIONS.boutique}
-          className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8"
+          className="mx-auto max-w-7xl px-3 py-8 sm:px-6 sm:py-12 lg:px-8"
         >
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -203,59 +344,19 @@ export default function Home({ title }: HomeProps) {
             viewport={{ once: true }}
             className="text-center"
           >
-            <h2 className="mb-12 text-3xl font-bold text-gray-900 dark:text-white">
+            <h2 className="mb-8 text-xl font-bold tracking-tight text-gray-900 dark:text-white sm:mb-12 sm:text-3xl">
               Nos Produits
             </h2>
-            <div className="grid grid-cols-1 gap-8 md:grid-cols-3">
-              {products.map((item, index) => (
-                <motion.div
+            <div className="-mx-3 flex gap-3 overflow-x-auto overflow-y-hidden overscroll-x-contain px-3 pb-2 touch-pan-x [-ms-overflow-style:none] [scrollbar-width:none] md:mx-0 md:grid md:grid-cols-2 md:gap-8 md:overflow-visible md:overscroll-auto md:px-0 md:pb-0 md:touch-auto md:[-ms-overflow-style:auto] md:[scrollbar-width:auto] lg:grid-cols-3 [&::-webkit-scrollbar]:hidden md:[&::-webkit-scrollbar]:block">
+              {products.map((item) => (
+                <ProductCard
                   key={item._id}
-                  initial={{ opacity: 0, y: 20 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.6, delay: index * 0.1 }}
-                  viewport={{ once: true }}
-                >
-                  <Card
-                    padding="none"
-                    className="group overflow-hidden transition-transform hover:scale-105"
-                  >
-                    <div className="p-4">
-                      <div className="relative mb-4 h-64 overflow-hidden rounded-lg bg-gray-200 dark:bg-gray-600">
-                        <Image
-                          src={item.image || "/images/14.jpeg"}
-                          alt={item.name}
-                          fill
-                          sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                          className="object-cover transition-transform group-hover:scale-110"
-                        />
-                        {!item.isAvailable && (
-                          <div className="absolute inset-0 flex items-center justify-center bg-gray-900/35">
-                            <span className="rounded-full bg-white/95 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-red-700 shadow-sm dark:bg-gray-900/95 dark:text-red-300">
-                              Hors stock
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                      <div>
-                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{item.name}</h3>
-                        <PriceDisplay
-                          pricePerM2={listPrice}
-                          salePricePerM2={globalPriceData?.salePricePerM2}
-                          isSaleActive={globalPriceData?.isSaleActive === true}
-                        />
-                        <div className="mt-4">
-                          <button
-                            onClick={() => handleBuyNow(item)}
-                            disabled={!item.isAvailable}
-                            className="w-full rounded-lg bg-gray-900 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-gray-800 disabled:cursor-not-allowed disabled:bg-gray-400 disabled:text-gray-100 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-200 dark:disabled:bg-gray-600 dark:disabled:text-gray-300"
-                          >
-                            Acheter maintenant
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </Card>
-                </motion.div>
+                  item={item}
+                  listPrice={listPrice}
+                  salePricePerM2={globalPriceData?.salePricePerM2}
+                  isSaleActive={globalPriceData?.isSaleActive === true}
+                  onBuyNow={handleBuyNow}
+                />
               ))}
             </div>
             {products.length === 0 && (
@@ -271,333 +372,203 @@ export default function Home({ title }: HomeProps) {
         {/* About Us */}
         <section
           id={NAV_SECTIONS.aPropos}
-          className="relative overflow-hidden py-20 sm:py-24"
+          className="relative overflow-hidden py-8 sm:py-12 lg:py-16"
         >
-          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,_rgba(17,24,39,0.04),_transparent_55%)] dark:bg-[radial-gradient(ellipse_at_top,_rgba(255,255,255,0.05),_transparent_55%)]" />
-
-          <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="relative mx-auto max-w-7xl px-3 sm:px-6 lg:px-8">
             <motion.div
-              initial={{ opacity: 0, y: 20 }}
+              initial={{ opacity: 0, y: 14 }}
               whileInView={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.7 }}
+              transition={{ duration: 0.45 }}
               viewport={{ once: true }}
-              className="mb-20 text-center sm:mb-24"
+              className="mb-5 text-center sm:mb-8"
             >
-              <h2 className="text-3xl font-bold tracking-tight text-gray-900 dark:text-white sm:text-4xl">
+              <h2 className="text-xl font-bold tracking-tight text-gray-900 dark:text-white sm:text-3xl">
                 À Propos
               </h2>
+              <p className="mx-auto mt-1.5 max-w-sm text-xs leading-relaxed text-gray-600 dark:text-gray-300 sm:mt-2 sm:text-base">
+                Bambou naturel, sur mesure — pour un intérieur plus beau et plus confortable.
+              </p>
             </motion.div>
 
-            <div className="space-y-20 sm:space-y-24">
-              <div>
-                <motion.div
-                  initial={{ opacity: 0, y: 24 }}
+            {/* Core benefits — image-led, short copy */}
+            <div className="-mx-3 flex gap-2.5 overflow-x-auto overflow-y-hidden overscroll-x-contain px-3 py-2 touch-pan-x [-ms-overflow-style:none] [scrollbar-width:none] sm:mx-0 sm:grid sm:grid-cols-2 sm:gap-4 sm:overflow-visible sm:overscroll-auto sm:px-0 sm:py-0 sm:touch-auto lg:grid-cols-4 [&::-webkit-scrollbar]:hidden">
+              {[
+                {
+                  src: "/images/1.jpeg",
+                  title: "Qualité premium",
+                  text: "Bambou naturel, solide et durable.",
+                },
+                {
+                  src: "/images/8.jpeg",
+                  title: "Fabrication sur mesure",
+                  text: "Adaptés parfaitement à vos dimensions.",
+                },
+                {
+                  src: "/images/4.jpeg",
+                  title: "Design élégant",
+                  text: "Touche naturelle, moderne et chaleureuse.",
+                },
+                {
+                  src: "/images/9.jpeg",
+                  title: "Filtrent la lumière",
+                  text: "Moins d’éblouissement, belle luminosité.",
+                },
+                {
+                  src: "/images/7.jpeg",
+                  title: "Améliorent le confort",
+                  text: "Moins de soleil direct, espace plus agréable.",
+                },
+                {
+                  src: "/images/6.jpeg",
+                  title: "Entretien facile",
+                  text: "Nettoyage simple et rapide.",
+                },
+                {
+                  src: "/images/2.jpeg",
+                  title: "Durables",
+                  text: "Conçus pour un usage quotidien.",
+                },
+                {
+                  src: "/images/5.jpeg",
+                  title: "Polyvalents",
+                  text: "Parfaits pour tous les espaces.",
+                },
+              ].map((item, index) => (
+                <motion.article
+                  key={item.title}
+                  initial={{ opacity: 0, y: 12 }}
                   whileInView={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.6 }}
+                  transition={{ duration: 0.35, delay: Math.min(index * 0.05, 0.3) }}
                   viewport={{ once: true }}
-                  className="mx-auto mb-12 max-w-2xl text-center sm:mb-16"
+                  className="group relative z-0 w-[68vw] max-w-[240px] shrink-0 origin-center overflow-hidden rounded-2xl shadow-sm transition duration-300 hover:z-20 hover:scale-105 hover:shadow-xl active:z-20 active:scale-105 active:shadow-xl sm:w-auto sm:max-w-none sm:hover:-translate-y-1.5"
                 >
-                  <h3 className="text-2xl font-semibold tracking-tight text-gray-900 dark:text-white sm:text-3xl lg:text-3xl">
-                    Pourquoi choisir nos rideaux en bambou&nbsp;?
-                  </h3>
-                </motion.div>
-
-                <div className="space-y-20 sm:space-y-24">
-              {/* Pics 1 & 2 — captions under */}
-              <motion.div
-                initial={{ opacity: 0, y: 24 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6 }}
-                viewport={{ once: true }}
-                className="mx-auto grid max-w-[61.6rem] grid-cols-1 gap-10 sm:grid-cols-2 sm:gap-8 lg:gap-10"
-              >
-                <div>
-                  <div className="overflow-hidden transition duration-500 ease-out hover:z-10 hover:scale-[1.04] hover:shadow-lg">
+                  <div className="relative aspect-[3/4] sm:aspect-[4/5]">
                     <Image
-                      src="/images/1.jpeg"
-                      alt="Qualité premium"
-                      width={800}
-                      height={1000}
-                      className="h-auto w-full object-contain"
+                      src={item.src}
+                      alt={item.title}
+                      fill
+                      sizes="(max-width: 640px) 70vw, (max-width: 1024px) 45vw, 25vw"
+                      className="object-cover transition duration-500 group-hover:scale-110 group-active:scale-110"
+                      draggable={false}
                     />
-                  </div>
-                  <h3 className="mt-5 text-xl font-semibold tracking-tight text-gray-900 dark:text-white sm:text-2xl">
-                    Qualité premium
-                  </h3>
-                  <p className="mt-2 text-sm leading-relaxed text-gray-600 dark:text-gray-300 sm:text-base">
-                    Bambou naturel, solide et durable.
-                  </p>
-                </div>
-                <div>
-                  <div className="overflow-hidden transition duration-500 ease-out hover:z-10 hover:scale-[1.04] hover:shadow-lg">
-                    <Image
-                      src="/images/8.jpeg"
-                      alt="Fabrication sur mesure"
-                      width={800}
-                      height={1000}
-                      className="h-auto w-full object-contain"
-                    />
-                  </div>
-                  <h3 className="mt-5 text-xl font-semibold tracking-tight text-gray-900 dark:text-white sm:text-2xl">
-                    Fabrication sur mesure
-                  </h3>
-                  <p className="mt-2 text-sm leading-relaxed text-gray-600 dark:text-gray-300 sm:text-base">
-                    Adaptés parfaitement à vos dimensions.
-                  </p>
-                </div>
-              </motion.div>
-
-              {/* Design & lumière — text beside pics 4 & 9 */}
-              <motion.div
-                initial={{ opacity: 0, y: 24 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6 }}
-                viewport={{ once: true }}
-                className="grid items-center gap-6 lg:grid-cols-[1fr_minmax(0,20rem)_minmax(0,20rem)] lg:justify-items-stretch lg:gap-8 xl:grid-cols-[1fr_minmax(0,24rem)_minmax(0,24rem)]"
-              >
-                <div className="space-y-8">
-                  <div>
-                    <h3 className="text-xl font-semibold tracking-tight text-gray-900 dark:text-white sm:text-2xl">
-                      Design élégant
-                    </h3>
-                    <p className="mt-2 text-sm leading-relaxed text-gray-600 dark:text-gray-300 sm:text-base">
-                      Apporte une touche naturelle, moderne et chaleureuse.
-                    </p>
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-semibold tracking-tight text-gray-900 dark:text-white sm:text-2xl">
-                      Filtrent la lumière
-                    </h3>
-                    <p className="mt-2 text-sm leading-relaxed text-gray-600 dark:text-gray-300 sm:text-base">
-                      Réduisent l’éblouissement tout en conservant une belle luminosité.
-                    </p>
-                  </div>
-                </div>
-                <div className="relative aspect-[4/5] w-full overflow-hidden transition duration-500 ease-out hover:z-10 hover:scale-[1.04] hover:shadow-lg">
-                  <Image
-                    src="/images/4.jpeg"
-                    alt="Design élégant"
-                    fill
-                    sizes="(max-width: 1024px) 100vw, 24rem"
-                    className="object-cover object-top"
-                  />
-                </div>
-                <div className="relative aspect-[4/5] w-full overflow-hidden transition duration-500 ease-out hover:z-10 hover:scale-[1.04] hover:shadow-lg">
-                  <Image
-                    src="/images/9.jpeg"
-                    alt="Filtrent la lumière"
-                    fill
-                    sizes="(max-width: 1024px) 100vw, 24rem"
-                    className="object-cover object-top"
-                  />
-                </div>
-              </motion.div>
-
-              {/* Confort & entretien — pics 7 & 6, text beside */}
-              <motion.div
-                initial={{ opacity: 0, y: 24 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6 }}
-                viewport={{ once: true }}
-                className="grid items-center gap-6 lg:grid-cols-[minmax(0,20rem)_minmax(0,20rem)_1fr] lg:justify-items-stretch lg:gap-8 xl:grid-cols-[minmax(0,24rem)_minmax(0,24rem)_1fr]"
-              >
-                <div className="relative aspect-[4/5] w-full overflow-hidden transition duration-500 ease-out hover:z-10 hover:scale-[1.04] hover:shadow-lg">
-                  <Image
-                    src="/images/7.jpeg"
-                    alt="Améliorent le confort"
-                    fill
-                    sizes="(max-width: 1024px) 100vw, 24rem"
-                    className="object-cover object-top"
-                  />
-                </div>
-                <div className="relative aspect-[4/5] w-full overflow-hidden transition duration-500 ease-out hover:z-10 hover:scale-[1.04] hover:shadow-lg">
-                  <Image
-                    src="/images/6.jpeg"
-                    alt="Entretien facile"
-                    fill
-                    sizes="(max-width: 1024px) 100vw, 24rem"
-                    className="object-cover object-top"
-                  />
-                </div>
-                <div className="space-y-8 text-center sm:px-2 sm:text-left">
-                  <div>
-                    <h3 className="text-xl font-semibold tracking-tight text-gray-900 dark:text-white sm:text-2xl">
-                      Améliorent le confort
-                    </h3>
-                    <p className="mt-2 text-sm leading-relaxed text-gray-600 dark:text-gray-300 sm:text-base">
-                      Limitent les rayons directs du soleil et aident à garder un espace plus
-                      agréable.
-                    </p>
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-semibold tracking-tight text-gray-900 dark:text-white sm:text-2xl">
-                      Entretien facile
-                    </h3>
-                    <p className="mt-2 text-sm leading-relaxed text-gray-600 dark:text-gray-300 sm:text-base">
-                      Nettoyage simple et rapide.
-                    </p>
-                  </div>
-                </div>
-              </motion.div>
-
-              {/* Durables & Polyvalents — same frame as pics 1 & 2 */}
-              <motion.div
-                initial={{ opacity: 0, y: 24 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6 }}
-                viewport={{ once: true }}
-                className="mx-auto grid max-w-[61.6rem] grid-cols-1 gap-10 sm:grid-cols-2 sm:gap-8 lg:gap-10"
-              >
-                <div>
-                  <div className="overflow-hidden transition duration-500 ease-out hover:z-10 hover:scale-[1.04] hover:shadow-lg">
-                    <Image
-                      src="/images/2.jpeg"
-                      alt="Durables"
-                      width={800}
-                      height={1000}
-                      className="h-auto w-full object-contain"
-                    />
-                  </div>
-                  <h3 className="mt-5 text-xl font-semibold tracking-tight text-gray-900 dark:text-white sm:text-2xl">
-                    Durables
-                  </h3>
-                  <p className="mt-2 text-sm leading-relaxed text-gray-600 dark:text-gray-300 sm:text-base">
-                    Conçus pour résister à un usage quotidien.
-                  </p>
-                </div>
-                <div>
-                  <div className="overflow-hidden transition duration-500 ease-out hover:z-10 hover:scale-[1.04] hover:shadow-lg">
-                    <Image
-                      src="/images/5.jpeg"
-                      alt="Polyvalents"
-                      width={800}
-                      height={1000}
-                      className="h-auto w-full object-contain"
-                    />
-                  </div>
-                  <h3 className="mt-5 text-xl font-semibold tracking-tight text-gray-900 dark:text-white sm:text-2xl">
-                    Polyvalents
-                  </h3>
-                  <p className="mt-2 text-sm leading-relaxed text-gray-600 dark:text-gray-300 sm:text-base">
-                    Parfaits pour tous les espaces.
-                  </p>
-                </div>
-              </motion.div>
-                </div>
-              </div>
-
-              {/* Espaces */}
-              <motion.div
-                initial={{ opacity: 0, y: 24 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6 }}
-                viewport={{ once: true }}
-              >
-                <div className="mx-auto max-w-2xl text-center">
-                  <h3 className="text-2xl font-semibold tracking-tight text-gray-900 dark:text-white sm:text-3xl lg:text-3xl">
-                    Pour chaque espace
-                  </h3>
-                  <p className="mt-3 text-sm leading-relaxed text-gray-600 dark:text-gray-300 sm:text-base">
-                    Restaurants, bureaux, boutiques ou maison — le même bambou, le bon effet.
-                  </p>
-                </div>
-
-                <div className="mt-14 grid grid-cols-1 gap-x-10 gap-y-12 sm:grid-cols-2 lg:grid-cols-3">
-                  {[
-                    {
-                      title: "Restaurants & cafés",
-                      text: "Ambiance accueillante, confort des clients, style naturel haut de gamme.",
-                    },
-                    {
-                      title: "Bureaux",
-                      text: "Moins de reflets sur les écrans, confort visuel et décoration professionnelle.",
-                    },
-                    {
-                      title: "Boutiques",
-                      text: "Produits mis en valeur, vitrine soignée, image moderne qui attire le regard.",
-                    },
-                    {
-                      title: "Cuisines",
-                      text: "Protection solaire, décoration naturelle, entretien facile au quotidien.",
-                    },
-                    {
-                      title: "Chambres",
-                      text: "Lumière filtrée, intimité préservée, atmosphère calme et élégante.",
-                    },
-                    {
-                      title: "Vérandas",
-                      text: "Moins de chaleur, belle luminosité, un espace agréable toute l’année.",
-                    },
-                  ].map((space, index) => (
-                    <motion.div
-                      key={space.title}
-                      initial={{ opacity: 0, y: 16 }}
-                      whileInView={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.45, delay: index * 0.06 }}
-                      viewport={{ once: true }}
-                      className="group border-t border-gray-300 pt-6 dark:border-gray-600"
-                    >
-                      <h4 className="text-lg font-semibold tracking-tight text-gray-900 transition-colors group-hover:text-gray-700 dark:text-white dark:group-hover:text-gray-200">
-                        {space.title}
-                      </h4>
-                      <p className="mt-2 text-sm leading-relaxed text-gray-600 dark:text-gray-300">
-                        {space.text}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/20 to-transparent transition duration-300 group-hover:from-black/65" />
+                    <div className="absolute inset-x-0 bottom-0 p-3 sm:p-4">
+                      <h3 className="text-sm font-semibold text-white sm:text-base">{item.title}</h3>
+                      <p className="mt-0.5 text-[11px] leading-snug text-white/85 sm:text-sm">
+                        {item.text}
                       </p>
-                    </motion.div>
-                  ))}
-                </div>
-              </motion.div>
+                    </div>
+                  </div>
+                </motion.article>
+              ))}
+            </div>
 
-              {/* Confiance */}
-              <motion.div
-                initial={{ opacity: 0, y: 24 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6 }}
-                viewport={{ once: true }}
-                className="overflow-hidden rounded-2xl bg-gray-900 px-6 py-12 dark:bg-gray-800 sm:px-10 sm:py-14"
-              >
-                <div className="mx-auto max-w-2xl text-center">
-                  <h3 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl lg:text-3xl">
-                    Pourquoi nous faire confiance&nbsp;?
-                  </h3>
-                </div>
+            {/* Spaces — compact labels */}
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.45 }}
+              viewport={{ once: true }}
+              className="mt-8 text-center sm:mt-10"
+            >
+              <p className="text-xs font-medium uppercase tracking-[0.14em] text-gray-500 dark:text-gray-400 sm:text-sm">
+                Parfait pour
+              </p>
+              <div className="mt-3 flex flex-wrap items-center justify-center gap-2 sm:mt-4 sm:gap-2.5">
+                {["Maison", "Restaurants", "Bureaux", "Boutiques", "Vérandas"].map((space) => (
+                  <span
+                    key={space}
+                    className="rounded-lg bg-white px-3 py-1.5 text-xs font-medium text-gray-800 ring-1 ring-gray-200/90 dark:bg-gray-800 dark:text-gray-100 dark:ring-gray-700 sm:px-4 sm:py-2 sm:text-sm"
+                  >
+                    {space}
+                  </span>
+                ))}
+              </div>
+            </motion.div>
 
-                <ul className="mx-auto mt-10 grid max-w-3xl grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5">
-                  {[
-                    "Découpe 100 % sur mesure.",
-                    "Matériaux de qualité.",
-                    "Prix compétitifs.",
-                    "Finition soignée.",
-                    "Livraison rapide.",
-                    "Satisfaction client au cœur de nos priorités.",
-                  ].map((item) => (
-                    <li
-                      key={item}
-                      className="flex items-start gap-3 rounded-xl bg-white/5 px-4 py-3.5 ring-1 ring-white/10"
-                    >
+            {/* Trust — short, punchy */}
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.45 }}
+              viewport={{ once: true }}
+              className="mt-8 sm:mt-10"
+            >
+              <div className="grid grid-cols-2 overflow-hidden rounded-2xl bg-gray-900 dark:bg-gray-800 sm:grid-cols-4">
+                {[
+                  {
+                    label: "Découpe 100 % sur mesure",
+                    icon: (
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M4 7h16M4 12h10M4 17h7"
+                      />
+                    ),
+                  },
+                  {
+                    label: "Matériaux de qualité",
+                    icon: (
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M12 3l2.2 4.5 5 .7-3.6 3.5.9 5.1L12 14.8 7.5 16.8l.9-5.1L4.8 8.2l5-.7L12 3z"
+                      />
+                    ),
+                  },
+                  {
+                    label: "Prix compétitifs",
+                    icon: (
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M12 3v18M16 7.5c0-1.7-1.8-3-4-3s-4 1.3-4 3 1.8 3 4 3 4 1.3 4 3-1.8 3-4 3-4-1.3-4-3"
+                      />
+                    ),
+                  },
+                  {
+                    label: "Livraison rapide",
+                    icon: (
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M3 7h11v8H3V7zm11 2h4l3 3v3h-7V9zM6.5 18.5a1.5 1.5 0 100-3 1.5 1.5 0 000 3zm10 0a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"
+                      />
+                    ),
+                  },
+                ].map((item, index) => (
+                  <div
+                    key={item.label}
+                    className={`flex flex-col items-center justify-center gap-2 px-3 py-5 text-center sm:gap-2.5 sm:px-4 sm:py-6 ${
+                      index % 2 === 0 ? "border-r border-white/10" : ""
+                    } ${index < 2 ? "border-b border-white/10 sm:border-b-0" : ""} ${
+                      index < 3 ? "sm:border-r sm:border-white/10" : "sm:border-r-0"
+                    }`}
+                  >
+                    <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/10 sm:h-10 sm:w-10">
                       <svg
                         aria-hidden
-                        className="mt-0.5 h-5 w-5 shrink-0 text-white"
+                        className="h-4 w-4 text-white sm:h-[18px] sm:w-[18px]"
                         fill="none"
                         viewBox="0 0 24 24"
                         stroke="currentColor"
-                        strokeWidth={2}
+                        strokeWidth={1.75}
                       >
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                        {item.icon}
                       </svg>
-                      <span className="text-sm leading-relaxed text-gray-200 sm:text-base">
-                        {item}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </motion.div>
-            </div>
+                    </span>
+                    <span className="text-[11px] font-semibold leading-snug text-white sm:text-sm">
+                      {item.label}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
           </div>
         </section>
 
-        {/* Reviews */}
-        <section className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
+        {/* Reviews — includes space formerly between newsletter and footer */}
+        <section className="mx-auto max-w-7xl px-3 pt-8 pb-36 sm:px-6 sm:pt-12 sm:pb-44 lg:px-8 lg:pb-48">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
@@ -605,42 +576,42 @@ export default function Home({ title }: HomeProps) {
             viewport={{ once: true }}
             className="text-center"
           >
-            <h2 className="mb-12 text-3xl font-bold text-gray-900 dark:text-white">
+            <h2 className="mb-8 text-xl font-bold tracking-tight text-gray-900 dark:text-white sm:mb-12 sm:text-3xl">
               Avis Clients
             </h2>
             {reviewImages.length > 0 ? (
-              <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-                {reviewImages.map((review, index) => (
-                  <motion.div
+              <div className="-mx-3 flex gap-3 overflow-x-auto overflow-y-hidden overscroll-x-contain px-3 pb-2 touch-pan-x [-ms-overflow-style:none] [scrollbar-width:none] md:mx-0 md:grid md:grid-cols-2 md:gap-6 md:overflow-visible md:overscroll-auto md:px-0 md:pb-0 md:touch-auto md:[-ms-overflow-style:auto] md:[scrollbar-width:auto] lg:grid-cols-3 [&::-webkit-scrollbar]:hidden md:[&::-webkit-scrollbar]:block">
+                {reviewImages.map((review) => (
+                  <div
                     key={review._id}
-                    initial={{ opacity: 0, y: 20 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.6, delay: index * 0.1 }}
-                    viewport={{ once: true }}
+                    className="w-[min(72vw,260px)] shrink-0 md:w-auto md:shrink"
                   >
                     <Card padding="none" className="h-full overflow-hidden">
-                      <div className="p-4">
+                      <div className="overflow-hidden p-4">
                         <div
-                          className={`relative h-64 overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-700 ${
-                            review.caption ? "mb-4" : ""
+                          className={`relative h-40 overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-700 sm:h-56 ${
+                            review.caption ? "mb-3 sm:mb-4" : ""
                           }`}
                         >
                           <Image
                             src={review.image}
                             alt="Capture d'ecran d'avis client"
                             fill
-                            sizes="(max-width: 768px) 100vw, 25vw"
-                            className="object-cover"
+                            sizes="(max-width: 768px) 72vw, (max-width: 1024px) 45vw, 30vw"
+                            draggable={false}
+                            className="pointer-events-none select-none object-cover md:pointer-events-auto"
                           />
                         </div>
                         <div className="text-left">
                           {review.caption && (
-                            <p className="text-sm text-gray-600 dark:text-gray-300">{review.caption}</p>
+                            <p className="line-clamp-3 text-sm text-gray-600 dark:text-gray-300">
+                              {review.caption}
+                            </p>
                           )}
                         </div>
                       </div>
                     </Card>
-                  </motion.div>
+                  </div>
                 ))}
               </div>
             ) : (
@@ -653,15 +624,18 @@ export default function Home({ title }: HomeProps) {
           </motion.div>
         </section>
 
-        {/* Newsletter */}
-        <section className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
+        {/* Newsletter — bottom padding matches footer top padding above "Rideaux Bambou" */}
+        <section className="mx-auto max-w-7xl px-3 pt-2 pb-6 sm:px-6 sm:pt-3 sm:pb-12 lg:px-8 lg:pt-4 lg:pb-12">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8 }}
             viewport={{ once: true }}
           >
-            <Card className="relative overflow-hidden bg-gradient-to-r from-gray-900 to-gray-800 dark:from-gray-700 dark:to-gray-600">
+            <Card
+              padding="none"
+              className="relative overflow-hidden !border-0 bg-gradient-to-r from-gray-900 to-gray-800 shadow-md dark:from-gray-700 dark:to-gray-600"
+            >
               <div className="absolute inset-0">
                 <Image
                   src="/images/3.jpeg"
@@ -670,18 +644,18 @@ export default function Home({ title }: HomeProps) {
                   sizes="(max-width: 1280px) 100vw, 1280px"
                   className="object-cover object-center opacity-45"
                 />
-                <div className="absolute inset-0 bg-gradient-to-r from-gray-900/75 via-gray-900/55 to-gray-900/70" />
+                <div className="absolute inset-0 bg-gradient-to-r from-gray-900/80 via-gray-900/60 to-gray-900/70" />
               </div>
-              <div className="relative px-8 py-12 text-center">
-                <h2 className="mb-4 text-3xl font-bold text-white lg:text-4xl">
+              <div className="relative px-4 py-5 text-center sm:px-8 sm:py-12 lg:px-12 lg:py-16">
+                <h2 className="mb-2 text-lg font-bold leading-snug text-white sm:mb-4 sm:text-3xl lg:text-4xl">
                   Restez Informé des Offres Exclusives !
                 </h2>
-                <p className="mb-8 text-lg text-gray-200">
+                <p className="mx-auto mb-5 max-w-sm text-xs leading-relaxed text-gray-200 sm:mb-8 sm:max-w-xl sm:text-base lg:text-lg">
                   Abonnez-vous à notre newsletter pour être le premier à recevoir nos offres
-                  exclusives. Découvrez les tendances et décorez votre espace de rêve avec nous.
+                  exclusives.
                 </p>
                 <form
-                  className="mx-auto flex w-full max-w-md flex-col gap-4 sm:flex-row"
+                  className="mx-auto w-full max-w-md"
                   onSubmit={async (event) => {
                       event.preventDefault();
                       const normalizedEmail = normalizeEmailValue(newsletterEmail);
@@ -724,40 +698,44 @@ export default function Home({ title }: HomeProps) {
                       }
                     }}
                   >
-                  <input
-                    type="email"
-                    placeholder="Entrez votre email"
-                    value={newsletterEmail}
-                    onChange={(e) => {
-                      const nextEmail = e.target.value;
-                      setNewsletterEmail(nextEmail);
-                      if (newsletterEmailError) {
-                        setNewsletterEmailError(getEmailValidationError(nextEmail, { required: true }));
-                      }
-                    }}
-                    onBlur={() => {
-                      const normalizedEmail = normalizeEmailValue(newsletterEmail);
-                      setNewsletterEmail(normalizedEmail);
-                      setNewsletterEmailError(
-                        getEmailValidationError(normalizedEmail, { required: true })
-                      );
-                    }}
-                    className={`flex-1 ${formFieldClass}`}
-                  />
-                  <Button
-                    type="submit"
-                    disabled={Boolean(newsletterEmailError) || newsletterStatus === "loading"}
-                    className="!bg-green-600 px-8 py-3 font-semibold !text-white hover:!bg-green-700 focus:!ring-green-500/50 disabled:opacity-60 dark:!bg-green-600 dark:!text-white dark:hover:!bg-green-700"
-                  >
-                    {newsletterStatus === "loading" ? "Inscription..." : "S'abonner"}
-                  </Button>
+                  <div className="mx-auto flex w-[80%] items-center gap-1.5 sm:w-full sm:gap-4">
+                    <input
+                      type="email"
+                      placeholder="Votre email"
+                      value={newsletterEmail}
+                      onChange={(e) => {
+                        const nextEmail = e.target.value;
+                        setNewsletterEmail(nextEmail);
+                        if (newsletterEmailError) {
+                          setNewsletterEmailError(getEmailValidationError(nextEmail, { required: true }));
+                        }
+                      }}
+                      onBlur={() => {
+                        const normalizedEmail = normalizeEmailValue(newsletterEmail);
+                        setNewsletterEmail(normalizedEmail);
+                        setNewsletterEmailError(
+                          getEmailValidationError(normalizedEmail, { required: true })
+                        );
+                      }}
+                      className={`${formFieldClass} !h-8 !min-h-0 min-w-0 !flex-1 !rounded-lg !px-2.5 !py-1.5 !text-xs sm:!h-auto sm:!px-3 sm:!py-2 sm:!text-sm`}
+                    />
+                    <Button
+                      type="submit"
+                      size="sm"
+                      loading={newsletterStatus === "loading"}
+                      disabled={Boolean(newsletterEmailError) || newsletterStatus === "loading"}
+                      className="!h-8 !min-h-0 shrink-0 !rounded-lg !bg-green-600 !px-2.5 !py-1.5 !text-[11px] font-semibold !text-white hover:!bg-green-700 focus:!ring-green-500/50 disabled:opacity-60 sm:!h-auto sm:!px-8 sm:!py-3 sm:!text-base dark:!bg-green-600 dark:!text-white dark:hover:!bg-green-700"
+                    >
+                      S&apos;abonner
+                    </Button>
+                  </div>
                 </form>
                 {newsletterEmailError && (
-                  <p className="mt-2 text-sm text-red-200">{newsletterEmailError}</p>
+                  <p className="mt-2 text-xs text-red-200 sm:text-sm">{newsletterEmailError}</p>
                 )}
                 {newsletterMessage && (
                   <p
-                    className={`mt-2 text-sm ${
+                    className={`mt-2 text-xs sm:text-sm ${
                       newsletterStatus === "success" ? "text-green-200" : "text-red-200"
                     }`}
                   >
@@ -768,6 +746,7 @@ export default function Home({ title }: HomeProps) {
             </Card>
           </motion.div>
         </section>
+        </div>
 
         <Footer />
       </div>

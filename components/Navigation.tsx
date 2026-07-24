@@ -10,6 +10,9 @@ import { NAV_SECTIONS, scrollToSection, type NavSectionId } from "../lib/scroll-
 
 import CartPopover from "./CartPopover";
 import DarkModeToggle from "./DarkModeToggle";
+import MobileMenuButton from "./MobileMenuButton";
+import { MobileNavLinkAccent, MobileNavPanel, mobileNavLinkClass } from "./MobileNavPanel";
+import { useDarkMode } from "../contexts/DarkModeContext";
 
 interface NavigationProps {
   showCartIcon?: boolean;
@@ -42,6 +45,7 @@ export default function Navigation({ showCartIcon = true }: NavigationProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [activeSection, setActiveSection] = useState<NavSectionId | null>(NAV_SECTIONS.accueil);
   const { getTotalItems, isCartOpen, toggleCart, closeCart } = useSimpleCart();
+  const { isDarkMode, toggleDarkMode } = useDarkMode();
   const isAdmin = session?.user?.role === "admin";
 
   const navigateToSection = useCallback(
@@ -170,26 +174,26 @@ export default function Navigation({ showCartIcon = true }: NavigationProps) {
 
   return (
     <>
-      <nav className="sticky top-0 z-50 border-b border-gray-200/80 bg-gray-100/90 shadow-[0_1px_0_rgba(17,24,39,0.04)] backdrop-blur-md dark:border-gray-700/80 dark:bg-gray-900/90">
-        <div className="mx-auto max-w-7xl px-3 sm:px-4 lg:px-6">
+      <nav className="fixed inset-x-0 top-0 z-50 w-full border-b border-gray-200/80 bg-gray-100/90 shadow-[0_1px_0_rgba(17,24,39,0.04)] backdrop-blur-md dark:border-gray-700/80 dark:bg-gray-900/90">
+        <div className="mx-auto max-w-7xl px-3 sm:px-6 lg:px-8">
           <div className="relative flex h-16 items-center justify-between">
-          <div className="flex items-center">
+          <div className="flex min-w-0 items-center">
             {/* Logo */}
             <Link
               href="/#accueil"
               onClick={handleLogoClick}
-              className="group flex items-center gap-3"
+              className="group flex min-w-0 items-center gap-2 sm:gap-3"
             >
               <Image
                 src="/images/logo.png"
                 alt="Rideaux Bambou Logo"
                 width={80}
                 height={80}
-                className="h-10 w-10 rounded-full object-cover"
+                className="h-9 w-9 shrink-0 rounded-full object-cover sm:h-10 sm:w-10"
                 quality={100}
                 priority
               />
-              <h1 className="hidden text-xl font-semibold text-gray-900 transition-colors duration-150 group-hover:text-gray-700 sm:block dark:text-white dark:group-hover:text-gray-200">
+              <h1 className="truncate text-base font-semibold text-gray-900 transition-colors duration-150 group-hover:text-gray-700 sm:text-xl dark:text-white dark:group-hover:text-gray-200">
                 Rideaux Bambou
               </h1>
             </Link>
@@ -232,9 +236,9 @@ export default function Navigation({ showCartIcon = true }: NavigationProps) {
           </div>
 
           {/* Right side actions */}
-          <div className="flex items-center space-x-1.5 sm:space-x-3">
+          <div className="flex shrink-0 items-center gap-1 lg:gap-2">
             {showCartIcon && (
-              <div className="relative" data-cart-dropdown>
+              <div className="relative z-10" data-cart-dropdown>
                 <button
                   type="button"
                   onClick={handleToggleCart}
@@ -251,7 +255,7 @@ export default function Navigation({ showCartIcon = true }: NavigationProps) {
                     />
                   </svg>
                   {getTotalItems() > 0 && (
-                    <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-gray-900 px-1 text-[10px] font-semibold text-white dark:bg-gray-100 dark:text-gray-900">
+                    <span className="absolute -right-1 -top-1 z-20 flex h-5 min-w-5 items-center justify-center rounded-full bg-gray-900 px-1 text-[10px] font-semibold text-white dark:bg-gray-100 dark:text-gray-900">
                       {getTotalItems()}
                     </span>
                   )}
@@ -260,14 +264,14 @@ export default function Navigation({ showCartIcon = true }: NavigationProps) {
               </div>
             )}
 
-            <DarkModeToggle />
+            {!isAdmin && <DarkModeToggle />}
 
             {/* Profile Dropdown (authenticated users only) */}
             {session && (
               <div className="relative" data-profile-dropdown>
                 <button
                   onClick={toggleProfile}
-                  className="flex items-center gap-2 rounded-full border border-transparent p-2 text-gray-600 transition-all duration-150 hover:border-gray-200 hover:bg-gray-100/80 hover:text-gray-900 dark:text-gray-300 dark:hover:border-gray-700 dark:hover:bg-gray-800/80 dark:hover:text-white"
+                  className="flex items-center gap-1 rounded-full border border-transparent p-2 text-gray-600 transition-all duration-150 hover:border-gray-200 hover:bg-gray-100/80 hover:text-gray-900 lg:gap-2 dark:text-gray-300 dark:hover:border-gray-700 dark:hover:bg-gray-800/80 dark:hover:text-white"
                 >
                   <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-900/90 text-white dark:bg-gray-100 dark:text-gray-900">
                     <span className="text-sm font-medium">
@@ -300,13 +304,13 @@ export default function Navigation({ showCartIcon = true }: NavigationProps) {
                       initial={{ opacity: 0, y: -10 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: -10 }}
-                      className="absolute right-0 mt-2 w-52 rounded-xl border border-gray-200/80 bg-white/95 py-1 shadow-xl shadow-gray-900/10 ring-1 ring-black/5 backdrop-blur-md dark:border-gray-700/80 dark:bg-gray-800/95 dark:shadow-black/20"
+                      className="absolute right-0 z-[70] mt-2 w-56 overflow-hidden rounded-xl border border-gray-200/80 bg-white/95 py-1 shadow-xl shadow-gray-900/10 ring-1 ring-black/5 backdrop-blur-md dark:border-gray-700/80 dark:bg-gray-800/95 dark:shadow-black/20"
                     >
                       <div className="px-4 py-2 text-sm text-gray-700 dark:text-gray-300">
                         <p className="font-medium">
                           {session.user?.firstName} {session.user?.lastName}
                         </p>
-                        <p className="text-gray-500">{session.user?.email}</p>
+                        <p className="break-anywhere text-gray-500">{session.user?.email}</p>
                       </div>
                       <div className="border-t border-gray-100 dark:border-gray-700">
                         {isAdmin ? (
@@ -325,6 +329,34 @@ export default function Navigation({ showCartIcon = true }: NavigationProps) {
                             >
                               Paramètres
                             </Link>
+                            <button
+                              type="button"
+                              onClick={toggleDarkMode}
+                              className="flex w-full items-center justify-between gap-3 px-4 py-2 text-left text-sm text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+                            >
+                              <span>{isDarkMode ? "Mode clair" : "Mode sombre"}</span>
+                              <span className="text-gray-500 dark:text-gray-400" aria-hidden="true">
+                                {isDarkMode ? (
+                                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      strokeWidth={2}
+                                      d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"
+                                    />
+                                  </svg>
+                                ) : (
+                                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      strokeWidth={2}
+                                      d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"
+                                    />
+                                  </svg>
+                                )}
+                              </span>
+                            </button>
                           </>
                         ) : (
                           <>
@@ -360,128 +392,50 @@ export default function Navigation({ showCartIcon = true }: NavigationProps) {
               </div>
             )}
 
-            {/* Mobile menu button */}
-            <button
-              onClick={toggleMobileMenu}
-              className="rounded-full border border-transparent p-2 text-gray-600 transition-all duration-150 hover:border-gray-200 hover:bg-gray-100/80 hover:text-gray-900 dark:text-gray-300 dark:hover:border-gray-700 dark:hover:bg-gray-800/80 dark:hover:text-white lg:hidden"
-              aria-label="Toggle mobile menu"
-            >
-              <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                {isMobileMenuOpen ? (
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M6 18L18 6M6 6l12 12"
-                  />
-                ) : (
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M4 6h16M4 12h16M4 18h16"
-                  />
-                )}
-              </svg>
-            </button>
+            <MobileMenuButton open={isMobileMenuOpen} onClick={toggleMobileMenu} />
+          </div>
           </div>
 
           {/* Mobile menu */}
-          <AnimatePresence>
-            {isMobileMenuOpen && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                exit={{ opacity: 0, height: 0 }}
-                className="border-t border-gray-200/80 py-4 dark:border-gray-700/80 lg:hidden"
-              >
-                <div className="space-y-4">
-                  {/* Mobile Navigation Links */}
-                  <div className="space-y-2">
-                    {CLIENT_MENU_ITEMS.map((item) => {
-                      const isActive = activeSection === item.sectionId;
-                      return (
-                        <a
-                          key={item.sectionId}
-                          href={`/#${item.sectionId}`}
-                          aria-current={isActive ? "page" : undefined}
-                          className={`block cursor-pointer rounded-xl border px-4 py-2.5 text-[0.95rem] font-medium transition-all duration-150 ease-out ${
-                            isActive
-                            ? "border-gray-300 bg-gray-100/90 text-gray-900 shadow-sm dark:border-gray-500 dark:bg-gray-700/40 dark:text-white"
-                              : "border-transparent text-gray-700 hover:border-gray-200 hover:bg-gray-100/80 dark:text-gray-300 dark:hover:border-gray-700 dark:hover:bg-gray-800/80"
-                          }`}
-                          onClick={(e) => {
-                            e.preventDefault();
-                            navigateToSection(item.sectionId, true);
-                          }}
-                        >
-                          {item.label}
-                        </a>
-                      );
-                    })}
-                  </div>
-
-                  {session && (
-                    <div className="border-t border-gray-200 px-4 pt-4 dark:border-gray-700">
-                      {isAdmin ? (
-                        <>
-                          <Link
-                            href="/admin"
-                            className="block py-2 text-sm font-semibold text-gray-900 dark:text-white"
-                            onClick={() => setIsMobileMenuOpen(false)}
-                          >
-                            Tableau de Bord
-                          </Link>
-                          <Link
-                            href="/admin/settings"
-                            className="block py-2 text-sm text-gray-700 dark:text-gray-300"
-                            onClick={() => setIsMobileMenuOpen(false)}
-                          >
-                            Paramètres
-                          </Link>
-                        </>
-                      ) : (
-                        <>
-                          <Link
-                            href="/profile/settings"
-                            className="block py-2 text-sm text-gray-700 dark:text-gray-300"
-                            onClick={() => setIsMobileMenuOpen(false)}
-                          >
-                            Paramètres
-                          </Link>
-                          <Link
-                            href="/profil/commandes"
-                            className="block py-2 text-sm text-gray-700 dark:text-gray-300"
-                            onClick={() => setIsMobileMenuOpen(false)}
-                          >
-                            Mes Commandes
-                          </Link>
-                        </>
-                      )}
-                      <button
-                        onClick={() => {
-                          handleSignOut();
-                          setIsMobileMenuOpen(false);
-                        }}
-                        className="block py-2 text-sm text-gray-700 dark:text-gray-300"
-                      >
-                        Se déconnecter
-                      </button>
-                    </div>
+          <MobileNavPanel open={isMobileMenuOpen}>
+            {CLIENT_MENU_ITEMS.map((item, index) => {
+              const isActive = activeSection === item.sectionId;
+              return (
+                <motion.a
+                  key={item.sectionId}
+                  href={`/#${item.sectionId}`}
+                  aria-current={isActive ? "page" : undefined}
+                  initial={{ opacity: 0, x: -8 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.2, delay: 0.04 + index * 0.04 }}
+                  className={mobileNavLinkClass(isActive)}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    navigateToSection(item.sectionId, true);
+                  }}
+                >
+                  <MobileNavLinkAccent isActive={isActive} />
+                  <span className="flex-1">{item.label}</span>
+                  {isActive && (
+                    <span
+                      aria-hidden="true"
+                      className="h-1.5 w-1.5 rounded-full bg-white/80 dark:bg-gray-900/70"
+                    />
                   )}
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
+                </motion.a>
+              );
+            })}
+          </MobileNavPanel>
         </div>
       </nav>
+      {/* Reserves the fixed navbar height so page content stays aligned */}
+      <div className="h-16 shrink-0" aria-hidden="true" />
 
       {router.pathname === "/" && (
         <button
           type="button"
           onClick={() => navigateToSection(NAV_SECTIONS.boutique)}
-          className="fixed bottom-4 right-4 z-[60] inline-flex min-w-[220px] items-center justify-center rounded-full bg-gradient-to-r from-gray-900 to-gray-800 px-8 py-3.5 text-lg font-extrabold text-white shadow-[0_12px_30px_rgba(17,24,39,0.3)] transition duration-200 hover:scale-105 hover:from-gray-800 hover:to-gray-700 sm:bottom-6 sm:right-6 sm:min-w-[280px] sm:px-10 sm:py-4 sm:text-xl lg:min-w-[320px] lg:px-12 lg:py-4 lg:text-2xl dark:from-white dark:to-gray-100 dark:text-gray-900 dark:shadow-[0_12px_28px_rgba(0,0,0,0.35)] dark:hover:from-gray-100 dark:hover:to-white"
+          className="fixed bottom-4 right-4 z-[60] inline-flex min-w-0 items-center justify-center rounded-full bg-gradient-to-r from-gray-900 to-gray-800 px-4 py-2.5 text-sm font-bold text-white shadow-[0_10px_24px_rgba(17,24,39,0.28)] transition duration-200 hover:scale-105 hover:from-gray-800 hover:to-gray-700 sm:bottom-6 sm:right-6 sm:min-w-[200px] sm:px-8 sm:py-3.5 sm:text-lg sm:font-extrabold lg:min-w-[260px] lg:px-10 lg:py-4 lg:text-xl dark:from-white dark:to-gray-100 dark:text-gray-900 dark:shadow-[0_12px_28px_rgba(0,0,0,0.35)] dark:hover:from-gray-100 dark:hover:to-white"
         >
           Demander Devis
         </button>

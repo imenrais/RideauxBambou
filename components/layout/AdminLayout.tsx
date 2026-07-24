@@ -2,6 +2,7 @@ import Head from "next/head";
 import { ReactNode } from "react";
 
 import AdminNavigation from "../AdminNavigation";
+import Footer from "../Footer";
 
 interface AdminLayoutProps {
   title: string;
@@ -27,7 +28,11 @@ export default function AdminLayout({
       <div className="min-h-screen bg-gray-100 dark:bg-gray-900">
         <AdminNavigation />
 
-        <main className="mx-auto max-w-7xl px-3 py-6 sm:px-6 sm:py-8 lg:px-8">{children}</main>
+        <main className="mx-auto max-w-7xl overflow-x-clip px-3 py-5 sm:px-6 sm:py-8 lg:px-8">
+          {children}
+        </main>
+
+        <Footer />
       </div>
     </>
   );

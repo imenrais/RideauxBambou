@@ -69,7 +69,7 @@ export default function WorkerLoginPage({ title }: WorkerLoginPageProps) {
   return (
     <StandardLayout title={title} description="Connexion Travailleur - Rideaux Bambou">
       <div className="-mx-4 -my-8 min-h-screen bg-gray-100 px-4 py-8 dark:bg-gray-900">
-        <div className="px-4 py-6 sm:px-6 sm:py-8">
+        <div className="space-y-6 px-4 py-6 sm:px-6 sm:py-8">
           <BackButton href="/" />
 
           <main className="mx-auto w-full max-w-md px-0 pb-12 sm:px-6">

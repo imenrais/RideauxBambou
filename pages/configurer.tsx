@@ -306,7 +306,7 @@ export default function ConfigurerProduitPage() {
       <div className="min-h-screen bg-gray-100 dark:bg-gray-900">
         <Navigation />
 
-        <main className="mx-auto grid max-w-5xl grid-cols-1 gap-4 px-4 py-6 sm:gap-6 sm:py-10 lg:grid-cols-2">
+        <main className="mx-auto grid max-w-5xl grid-cols-1 gap-3 px-3 py-5 sm:gap-6 sm:px-4 sm:py-6 lg:grid-cols-2 lg:py-10">
           {isProductsLoading ? (
             <Card className="lg:col-span-2">
               <p className="text-gray-700 dark:text-gray-300">Chargement des références...</p>
@@ -316,7 +316,7 @@ export default function ConfigurerProduitPage() {
               <Card className="h-fit">
                 {product ? (
                   <>
-                    <div className="relative mb-4 h-56 overflow-hidden rounded-lg bg-gray-100 sm:h-72 dark:bg-gray-700">
+                    <div className="relative mb-3 h-48 overflow-hidden rounded-lg bg-gray-100 sm:mb-4 sm:h-72 dark:bg-gray-700">
                       <Image
                         src={product.productImage}
                         alt={product.productName}
@@ -331,7 +331,7 @@ export default function ConfigurerProduitPage() {
                         </div>
                       )}
                     </div>
-                    <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+                    <h1 className="text-xl font-bold text-gray-900 sm:text-2xl dark:text-white">
                       {product.productName}
                     </h1>
                     {!product.isAvailable && (
@@ -369,23 +369,31 @@ export default function ConfigurerProduitPage() {
                         <option
                           key={item._id}
                           value={item._id}
-                          disabled={!item.isAvailable}
+                          disabled={item.isAvailable === false}
                         >
                           {item.name}
-                          {!item.isAvailable ? ` — ${OUT_OF_STOCK_CLIENT_MESSAGE}` : ""}
+                          {item.isAvailable === false ? " — rupture de stock" : ""}
                         </option>
                       ))}
                     </select>
-                    {curtainType === "panneau" && productsForCurtainType.length === 0 && (
+                    {curtainType === "panneau" &&
+                      panneauProductsAll.length > 0 &&
+                      panneauProductsAll.length < products.length && (
+                        <p className="mt-1 text-xs text-gray-600 dark:text-gray-400">
+                          Références disponibles en panneau :{" "}
+                          {panneauProductsAll.map((item) => item.name).join(", ")}
+                        </p>
+                      )}
+                    {curtainType === "panneau" && panneauProductsAll.length === 0 && (
                       <p className="mt-1 text-xs text-red-600 dark:text-red-400">
-                        Aucune référence panneau configurée.
+                        Aucune référence panneau n&apos;est configurée pour le moment.
                       </p>
                     )}
                     {curtainType === "panneau" &&
                       productsForCurtainType.length > 0 &&
                       availableProductsForCurtainType.length === 0 && (
                         <p className="mt-1 text-xs text-red-600 dark:text-red-400">
-                          Toutes les références panneau sont en {OUT_OF_STOCK_CLIENT_MESSAGE.toLowerCase()}.
+                          Toutes les références panneau sont en rupture de stock.
                         </p>
                       )}
                   </div>
@@ -567,7 +575,7 @@ export default function ConfigurerProduitPage() {
                     />
                   )}
 
-                  <div className="rounded-lg bg-gray-50 p-4 dark:bg-gray-700">
+                  <div className="rounded-lg bg-gray-50 p-3 sm:p-4 dark:bg-gray-700">
                     <div className="space-y-1 text-sm text-gray-600 dark:text-gray-300">
                       <div className="flex justify-between">
                         <span>

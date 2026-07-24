@@ -15,8 +15,6 @@ import {
   TableRow,
   TableHead,
   TableCell,
-  adminTableComfortableSpacingClassName,
-  adminTableShellClassName,
 } from "../../components/ui/Table";
 
 interface DeliveryFeesResponse {
@@ -301,42 +299,42 @@ export default function AdminDeliveryFees() {
       title="Frais de Livraison - Rideaux Bambou Admin"
       description="Gestion des frais de livraison par gouvernorat - Rideaux Bambou Admin"
     >
-      <div className="mb-6">
+      <div className="mb-4 sm:mb-6">
         <BackButton href="/admin" />
       </div>
 
-      <div className="mb-14 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+      <div className="mb-4 sm:mb-10 lg:mb-14">
+        <div className="flex items-start justify-between gap-2 sm:items-center sm:gap-3">
+          <h1 className="min-w-0 flex-1 text-xl font-bold leading-snug tracking-tight text-gray-900 dark:text-white sm:text-3xl sm:leading-tight">
             Gestion des Frais de Livraison
           </h1>
-          <p className="mt-2 text-gray-600 dark:text-gray-400">
-            Configurez les frais de livraison pour chaque gouvernorat de Tunisie
-          </p>
-        </div>
-        <label className="inline-flex shrink-0 cursor-pointer items-center gap-3">
-          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-            Livraison gratuite
-          </span>
-          <span
-            className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors duration-200 ${
-              isFreeDeliveryActive ? "bg-green-500" : "bg-gray-300 dark:bg-gray-600"
-            } ${isFreeDeliveryMutationPending || updateFeeMutation.isPending ? "opacity-60" : ""}`}
-          >
-            <input
-              type="checkbox"
-              checked={isFreeDeliveryActive}
-              onChange={handleFreeDeliveryToggle}
-              disabled={isFreeDeliveryMutationPending || updateFeeMutation.isPending}
-              className="sr-only"
-            />
+          <label className="inline-flex max-w-[9.5rem] shrink-0 cursor-pointer items-center gap-2 sm:max-w-none sm:gap-3">
+            <span className="text-left text-[11px] font-medium leading-tight text-gray-700 dark:text-gray-300 sm:text-sm">
+              Livraison gratuite
+            </span>
             <span
-              className={`inline-block h-6 w-6 transform rounded-full bg-white shadow transition-transform duration-200 ${
-                isFreeDeliveryActive ? "translate-x-5" : "translate-x-0.5"
-              }`}
-            />
-          </span>
-        </label>
+              className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors duration-200 ${
+                isFreeDeliveryActive ? "bg-green-500" : "bg-gray-300 dark:bg-gray-600"
+              } ${isFreeDeliveryMutationPending || updateFeeMutation.isPending ? "opacity-60" : ""}`}
+            >
+              <input
+                type="checkbox"
+                checked={isFreeDeliveryActive}
+                onChange={handleFreeDeliveryToggle}
+                disabled={isFreeDeliveryMutationPending || updateFeeMutation.isPending}
+                className="sr-only"
+              />
+              <span
+                className={`inline-block h-6 w-6 transform rounded-full bg-white shadow transition-transform duration-200 ${
+                  isFreeDeliveryActive ? "translate-x-5" : "translate-x-0.5"
+                }`}
+              />
+            </span>
+          </label>
+        </div>
+        <p className="mt-1 text-xs text-gray-600 dark:text-gray-400 sm:mt-2 sm:text-base">
+          Configurez les frais de livraison pour chaque gouvernorat de Tunisie
+        </p>
       </div>
 
       {isLoading ? (
@@ -344,9 +342,59 @@ export default function AdminDeliveryFees() {
           <Loading text="Chargement des frais de livraison..." />
         </div>
       ) : (
-        <>
-          <div className={adminTableShellClassName}>
-            <Table className={adminTableComfortableSpacingClassName}>
+        <div className="mx-auto w-full max-w-full overflow-visible rounded-lg bg-white shadow-lg dark:bg-gray-800 md:max-w-2xl md:overflow-x-auto">
+          <div className="space-y-2.5 overflow-visible p-2.5 md:hidden">
+            {feesByGovernorate.map((fee) => (
+              <div
+                key={`${fee.state}-mobile`}
+                className="rounded-xl border border-gray-200/90 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 bg-gray-50/90 px-3 py-2.5 dark:border-gray-800 dark:bg-gray-800/60">
+                  <div className="min-w-0 flex-1">
+                    <p className="break-words text-sm font-semibold text-gray-900 dark:text-white">
+                      {fee.state}
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      {fee.lastUpdated
+                        ? new Date(fee.lastUpdated).toLocaleDateString("fr-FR")
+                        : "—"}
+                    </p>
+                  </div>
+                  <span
+                    className={`inline-flex max-w-[7.5rem] shrink-0 whitespace-normal rounded-full px-2.5 py-1 text-center text-[11px] font-semibold leading-tight ${
+                      isFreeDeliveryActive
+                        ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+                        : "bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-200"
+                    }`}
+                  >
+                    {isFreeDeliveryActive ? "Livraison gratuite" : fee.stateCode}
+                  </span>
+                </div>
+
+                <div className="space-y-3 p-3">
+                  <div className="rounded-lg bg-gray-50 p-2.5 dark:bg-gray-800/50">
+                    <p className="text-xs font-medium text-gray-500 dark:text-gray-400">
+                      Frais (TND)
+                    </p>
+                    <div className="mt-1.5 flex items-center gap-2">
+                      <Input
+                        type="text"
+                        inputMode="decimal"
+                        pattern="^[0-9]+([.,][0-9]{1,2})?$"
+                        value={feeDrafts[fee.state] ?? fee.fee.toFixed(2)}
+                        onChange={(e) => handleFeeChange(fee.state, e.target.value)}
+                        className="!h-9 w-[4.2rem] !rounded-lg !px-1.5 !py-0 text-center !text-sm"
+                      />
+                      <span className="text-sm font-medium text-gray-900 dark:text-white">TND</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="hidden w-full md:block">
+            <Table className="!w-full [&_th]:!px-3 [&_th]:!py-3 [&_td]:!px-3 [&_td]:!py-3.5">
               <TableHeader>
                 <TableRow>
                   <TableHead>Gouvernorat</TableHead>
@@ -356,9 +404,11 @@ export default function AdminDeliveryFees() {
               </TableHeader>
               <TableBody>
                 {feesByGovernorate.map((fee) => (
-                  <TableRow key={fee.state}>
+                  <TableRow key={fee.state} hover className="transition-colors">
                     <TableCell align="center">
-                      <div className="font-medium text-gray-900 dark:text-white">{fee.state}</div>
+                      <div className="text-sm font-medium text-gray-900 dark:text-white">
+                        {fee.state}
+                      </div>
                     </TableCell>
                     <TableCell align="center">
                       <div className="flex items-center justify-center gap-2">
@@ -368,7 +418,7 @@ export default function AdminDeliveryFees() {
                           pattern="^[0-9]+([.,][0-9]{1,2})?$"
                           value={feeDrafts[fee.state] ?? fee.fee.toFixed(2)}
                           onChange={(e) => handleFeeChange(fee.state, e.target.value)}
-                          className="w-20 text-center"
+                          className="w-20 text-center text-sm"
                         />
                         <span className="text-sm text-gray-900 dark:text-white">TND</span>
                       </div>
@@ -384,18 +434,21 @@ export default function AdminDeliveryFees() {
                 ))}
               </TableBody>
             </Table>
-            <div className="flex justify-end border-t border-gray-200 bg-white px-4 py-3 dark:border-gray-700 dark:bg-gray-800 sm:px-6">
-              <Button
-                type="button"
-                onClick={handleSaveAll}
-                disabled={updateFeeMutation.isPending}
-                loading={updateFeeMutation.isPending}
-              >
-                {updateFeeMutation.isPending ? "Enregistrement..." : "Enregistrer"}
-              </Button>
-            </div>
           </div>
-        </>
+
+          <div className="flex justify-center border-t border-gray-200 bg-white px-4 py-3 dark:border-gray-700 dark:bg-gray-800 sm:px-6 md:justify-end">
+            <Button
+              type="button"
+              size="sm"
+              onClick={handleSaveAll}
+              disabled={updateFeeMutation.isPending}
+              loading={updateFeeMutation.isPending}
+              className="shrink-0 !inline-flex !items-center !leading-none rounded-lg px-2.5 py-1.5 text-xs shadow-md sm:rounded-xl sm:px-4 sm:py-2 sm:text-sm sm:shadow-lg"
+            >
+              {updateFeeMutation.isPending ? "Enregistrement..." : "Enregistrer"}
+            </Button>
+          </div>
+        </div>
       )}
 
       {confirmModal && (

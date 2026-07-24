@@ -75,8 +75,8 @@ export default function SimpleCartPage() {
       <div className="min-h-screen bg-gray-100 dark:bg-gray-900">
         <Navigation />
 
-        <main className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
-          <div className="px-4 py-6 sm:px-0">
+        <main className="mx-auto max-w-7xl px-3 py-5 sm:px-6 sm:py-8 lg:px-8">
+          <div className="sm:px-0">
             <div className="mb-6">
               <BackButton href="/#boutique" />
             </div>
@@ -87,7 +87,7 @@ export default function SimpleCartPage() {
               transition={{ duration: 0.6 }}
               className="mb-8"
             >
-              <h1 className="mb-2 text-3xl font-bold text-gray-900 dark:text-white">
+              <h1 className="mb-2 text-2xl font-bold sm:text-3xl text-gray-900 dark:text-white">
                 Votre Panier
               </h1>
               {items.length > 0 && (
@@ -109,9 +109,9 @@ export default function SimpleCartPage() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.6, delay: 0.2 }}
-                className="mx-auto max-w-xl rounded-2xl border border-gray-200 bg-white p-10 text-center shadow-sm dark:border-gray-700 dark:bg-gray-800"
+                className="mx-auto max-w-xl rounded-2xl border border-gray-200 bg-white p-6 text-center sm:p-10 shadow-sm dark:border-gray-700 dark:bg-gray-800"
               >
-                <div className="mb-5 text-6xl">🛒</div>
+                <div className="mb-4 text-4xl sm:mb-5 sm:text-6xl">🛒</div>
                 <h2 className="mb-3 text-2xl font-bold text-gray-900 dark:text-white">
                   Votre panier est vide
                 </h2>
@@ -127,7 +127,7 @@ export default function SimpleCartPage() {
               </motion.div>
             ) : (
               /* Cart Items */
-              <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
+              <div className="grid grid-cols-1 gap-5 sm:gap-8 lg:grid-cols-3">
                 {/* Cart Items */}
                 <div className="lg:col-span-2">
                   <motion.div
@@ -142,12 +142,12 @@ export default function SimpleCartPage() {
                         initial={{ opacity: 0, x: -20 }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ duration: 0.5, delay: 0.1 * index }}
-                        className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800"
+                        className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm sm:p-6 dark:border-gray-700 dark:bg-gray-800"
                       >
                         <div className="flex items-start justify-between">
                           <div className="flex flex-1 space-x-4">
                             {/* Product Image */}
-                            <div className="relative h-20 w-20 flex-shrink-0">
+                            <div className="relative h-16 w-16 shrink-0 sm:h-20 sm:w-20">
                               <Image
                                 src={item.productImage}
                                 alt={item.productName}
@@ -158,7 +158,7 @@ export default function SimpleCartPage() {
 
                             {/* Product Details */}
                             <div className="flex-1">
-                              <h3 className="mb-2 text-lg font-semibold text-gray-900 dark:text-white">
+                              <h3 className="mb-1 text-base font-semibold sm:mb-2 sm:text-lg text-gray-900 dark:text-white">
                                 {item.productName}
                               </h3>
                               <div className="space-y-1 text-sm text-gray-600 dark:text-gray-400">
@@ -264,7 +264,7 @@ export default function SimpleCartPage() {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.6, delay: 0.3 }}
-                    className="sticky top-6 rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800"
+                    className="sticky top-6 rounded-lg border border-gray-200 bg-white p-4 shadow-sm sm:p-6 dark:border-gray-700 dark:bg-gray-800"
                   >
                     <h2 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
                       Résumé de la commande

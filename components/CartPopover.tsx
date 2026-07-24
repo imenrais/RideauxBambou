@@ -2,7 +2,8 @@ import { AnimatePresence, motion } from "framer-motion";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/router";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 
 import { useSimpleCart } from "../contexts/SimpleCartContext";
 import { getCurtainLineTotal } from "../lib/order-pricing";
@@ -19,6 +20,7 @@ function formatPrice(price: number) {
 /** Mini-cart dropdown under the nav cart icon */
 export default function CartPopover() {
   const router = useRouter();
+  const [mounted, setMounted] = useState(false);
   const {
     items,
     isCartOpen,
@@ -46,6 +48,10 @@ export default function CartPopover() {
   );
 
   useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
     if (!isCartOpen) {
       return;
     }
@@ -66,19 +72,24 @@ export default function CartPopover() {
     return () => router.events.off("routeChangeStart", handleRouteChange);
   }, [router.events, closeCart]);
 
-  return (
+  if (!mounted) {
+    return null;
+  }
+
+  return createPortal(
     <AnimatePresence>
       {isCartOpen && (
         <motion.div
+          data-cart-dropdown
           initial={{ opacity: 0, y: -8, scale: 0.98 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: -8, scale: 0.98 }}
           transition={{ duration: 0.18, ease: "easeOut" }}
           role="dialog"
           aria-label="Aperçu du panier"
-          className="absolute right-0 z-[80] mt-2 w-[min(22.5rem,calc(100vw-1.5rem))] overflow-hidden rounded-2xl border border-gray-200/90 bg-white shadow-2xl shadow-gray-900/15 ring-1 ring-black/5 dark:border-gray-700 dark:bg-gray-900 dark:shadow-black/40 dark:ring-white/5"
+          className="fixed inset-x-3 top-[4.25rem] z-[80] flex max-h-[min(28rem,calc(100dvh-5rem))] w-auto flex-col overflow-hidden rounded-2xl border border-gray-200/90 bg-white shadow-2xl shadow-gray-900/15 ring-1 ring-black/5 sm:inset-x-auto sm:right-4 sm:max-h-[min(32rem,calc(100vh-5rem))] sm:w-[min(22.5rem,calc(100vw-2rem))] dark:border-gray-700 dark:bg-gray-900 dark:shadow-black/40 dark:ring-white/5"
         >
-          <div className="border-b border-gray-100 px-4 py-3 dark:border-gray-800">
+          <div className="shrink-0 border-b border-gray-100 px-4 py-3 dark:border-gray-800">
             <p className="text-sm font-semibold text-gray-900 dark:text-white">Panier</p>
             {items.length > 0 && (
               <p className="text-xs text-gray-500 dark:text-gray-400">
@@ -105,7 +116,7 @@ export default function CartPopover() {
             </div>
           ) : (
             <>
-              <div className="max-h-72 overflow-y-auto">
+              <div className="min-h-0 flex-1 overflow-y-auto">
                 {hasUnavailableItems && (
                   <div className="mx-3 mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[11px] leading-snug text-red-700 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-300">
                     Un article est en {OUT_OF_STOCK_CLIENT_MESSAGE.toLowerCase()}.
@@ -186,7 +197,7 @@ export default function CartPopover() {
                 </ul>
               </div>
 
-              <div className="border-t border-gray-100 bg-gray-50 px-4 py-3 dark:border-gray-800 dark:bg-gray-800/60">
+              <div className="shrink-0 border-t border-gray-100 bg-gray-50 px-4 py-3 dark:border-gray-800 dark:bg-gray-800/60">
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-gray-600 dark:text-gray-300">Total</span>
                   <span className="text-base font-semibold tabular-nums text-gray-900 dark:text-white">
@@ -195,7 +206,7 @@ export default function CartPopover() {
                 </div>
               </div>
 
-              <div className="space-y-2 border-t border-gray-100 p-3 dark:border-gray-800">
+              <div className="shrink-0 space-y-2 border-t border-gray-100 p-3 dark:border-gray-800">
                 <Link
                   href="/panier"
                   onClick={closeCart}
@@ -224,6 +235,7 @@ export default function CartPopover() {
           )}
         </motion.div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body
   );
 }

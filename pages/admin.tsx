@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react";
 import { useState, useEffect, useRef } from "react";
 
 import AdminNavigation from "../components/AdminNavigation";
+import Footer from "../components/Footer";
 import Button from "../components/ui/Button";
 import Card from "../components/ui/Card";
 import Input from "../components/ui/Input";
@@ -1135,7 +1136,7 @@ export default function AdminDashboard() {
         <AdminNavigation />
 
         {/* Main Content */}
-        <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        <main className="mx-auto max-w-7xl overflow-x-clip px-3 py-5 sm:px-6 sm:py-8 lg:px-8">
           <div className="space-y-8">
             {/* Unified management section */}
             <Card className="overflow-hidden border-0 bg-gradient-to-br from-slate-50 via-white to-slate-100 p-0 shadow-xl dark:from-gray-800 dark:via-gray-800 dark:to-gray-900">
@@ -1148,19 +1149,19 @@ export default function AdminDashboard() {
                 </p>
               </div>
 
-              <div className="p-6">
-                <div className="mb-6">
-                  <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
+              <div className="p-3 sm:p-6">
+                <div className="mb-4 sm:mb-6">
+                  <h3 className="text-base font-semibold text-gray-900 dark:text-white sm:text-xl">
                     Gestion des Prix et Frais
                   </h3>
-                  <p className="mt-1.5 text-base text-gray-600 dark:text-gray-400">
+                  <p className="mt-1 text-xs leading-relaxed text-gray-600 dark:text-gray-400 sm:mt-1.5 sm:text-base">
                     Tarifs store, panneau, promotions et frais de pose affichés sur la boutique.
                   </p>
                 </div>
 
-                <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-4 lg:items-stretch">
-                  <div className="flex min-h-[5.5rem] flex-col rounded-xl border border-green-200/80 border-l-4 border-l-green-600 bg-white px-4 py-3 dark:border-green-900/50 dark:border-l-green-500 dark:bg-gray-900/50">
-                    <p className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                <div className="mb-5 grid grid-cols-2 gap-2 sm:mb-6 sm:gap-3 lg:grid-cols-3 xl:grid-cols-4 lg:items-stretch">
+                  <div className="flex min-h-0 flex-col justify-between rounded-xl border border-green-200/80 border-l-[3px] border-l-green-600 bg-white px-2.5 py-2.5 dark:border-green-900/50 dark:border-l-green-500 dark:bg-gray-900/50 sm:min-h-[5.5rem] sm:border-l-4 sm:px-4 sm:py-3">
+                    <p className="text-[10px] font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400 sm:text-xs">
                       Prix / m²
                     </p>
                     {priceInitialLoading ? (
@@ -1172,8 +1173,8 @@ export default function AdminDashboard() {
                           salePricePerM2={activeSalePrice}
                           isSaleActive={isStoreOnSale}
                           suffix=" TND/m²"
-                          listClassName="text-sm text-gray-500 line-through dark:text-gray-400"
-                          saleClassName="text-lg font-semibold text-green-600 dark:text-green-400"
+                          listClassName="text-[11px] text-gray-500 line-through dark:text-gray-400 sm:text-sm"
+                          saleClassName="text-sm font-semibold text-green-600 dark:text-green-400 sm:text-lg"
                         />
                       </div>
                     )}
@@ -1200,9 +1201,9 @@ export default function AdminDashboard() {
                       return (
                     <div
                       key={width.id}
-                      className="flex min-h-[5.5rem] flex-col rounded-xl border border-amber-200/80 border-l-4 border-l-amber-500 bg-white px-4 py-3 dark:border-amber-900/50 dark:border-l-amber-500 dark:bg-gray-900/50"
+                      className="flex min-h-0 flex-col justify-between rounded-xl border border-amber-200/80 border-l-[3px] border-l-amber-500 bg-white px-2.5 py-2.5 dark:border-amber-900/50 dark:border-l-amber-500 dark:bg-gray-900/50 sm:min-h-[5.5rem] sm:border-l-4 sm:px-4 sm:py-3"
                     >
-                      <p className="text-xs font-medium tracking-wide text-gray-500 dark:text-gray-400">
+                      <p className="text-[10px] font-medium tracking-wide text-gray-500 dark:text-gray-400 sm:text-xs">
                         {formatPanneauCardLabel(width.widthCm)}
                       </p>
                       {panneauConfigInitialLoading ? (
@@ -1214,8 +1215,8 @@ export default function AdminDashboard() {
                             salePricePerM2={width.salePrice ?? null}
                             isSaleActive={onPromo}
                             suffix=" TND"
-                            listClassName="text-sm text-gray-500 line-through dark:text-gray-400"
-                            saleClassName="text-lg font-semibold text-amber-700 dark:text-amber-300"
+                            listClassName="text-[11px] text-gray-500 line-through dark:text-gray-400 sm:text-sm"
+                            saleClassName="text-sm font-semibold text-amber-700 dark:text-amber-300 sm:text-lg"
                           />
                         </div>
                       )}
@@ -1223,303 +1224,319 @@ export default function AdminDashboard() {
                       );
                     }
                   )}
-                  <div className="flex min-h-[5.5rem] flex-col rounded-xl border border-blue-200/80 border-l-4 border-l-blue-600 bg-white px-4 py-3 dark:border-blue-900/50 dark:border-l-blue-500 dark:bg-gray-900/50">
-                    <p className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                  <div className="flex min-h-0 flex-col justify-between rounded-xl border border-blue-200/80 border-l-[3px] border-l-blue-600 bg-white px-2.5 py-2.5 dark:border-blue-900/50 dark:border-l-blue-500 dark:bg-gray-900/50 sm:min-h-[5.5rem] sm:border-l-4 sm:px-4 sm:py-3">
+                    <p className="text-[10px] font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400 sm:text-xs">
                       Pose
                     </p>
                     {installationFeeInitialLoading ? (
                       <p className="mt-1 text-sm text-gray-500">…</p>
                     ) : (
-                      <p className="mt-1 text-lg font-semibold text-gray-900 dark:text-white">
-                        {installationFeeData?.fee} TND
+                      <p className="mt-1 text-lg font-bold text-gray-900 dark:text-white">
+                        {Number(installationFeeData?.fee ?? 0).toFixed(2)} TND
                       </p>
                     )}
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-2">
-                  <div className="overflow-hidden rounded-2xl border border-green-200/70 bg-white shadow-sm dark:border-green-900/40 dark:bg-gray-900/40">
-                    <div className="border-b border-green-100 bg-gradient-to-r from-green-50 via-white to-emerald-50 px-6 py-5 dark:border-green-900/30 dark:from-green-950/30 dark:via-gray-900/40 dark:to-emerald-950/20">
-                      <div className="flex items-start justify-between gap-4">
-                        <h4 className="text-lg font-semibold text-green-800 dark:text-green-300">
+                <div className="grid grid-cols-1 items-start gap-3 sm:gap-5 xl:grid-cols-2">
+                  {/* Prix du m² */}
+                  <div className="overflow-hidden rounded-2xl border border-green-200/80 bg-white shadow-sm dark:border-green-900/40 dark:bg-gray-900/50">
+                    <div className="flex items-center justify-between gap-3 border-b border-green-100/80 px-4 py-3 dark:border-green-900/30 sm:px-5 sm:py-4">
+                      <div className="min-w-0">
+                        <h4 className="text-sm font-semibold text-green-800 dark:text-green-300 sm:text-base">
                           Prix du m²
                         </h4>
-                        <div className="flex shrink-0 flex-col items-end gap-1">
-                          <span
-                            className={`inline-flex items-center rounded-full border border-green-200 bg-white px-3 py-1 text-xs font-medium text-green-800 dark:border-green-800 dark:bg-green-950/40 dark:text-green-200 ${
-                              isSaleActive || priceData?.isSaleActive === true
-                                ? ""
-                                : "invisible"
-                            }`}
-                          >
-                            Promotion active
-                          </span>
-                          {priceData?.lastUpdated && (
-                            <p className="text-xs text-gray-500">
-                              Mis à jour {formatLastUpdated(priceData.lastUpdated)}
-                            </p>
-                          )}
-                        </div>
+                        {priceData?.lastUpdated && (
+                          <p className="mt-0.5 truncate text-[11px] text-gray-500 sm:text-xs">
+                            Mis à jour {formatLastUpdated(priceData.lastUpdated)}
+                          </p>
+                        )}
                       </div>
+                      <span
+                        className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide sm:text-xs ${
+                          isSaleActive || priceData?.isSaleActive === true
+                            ? "bg-green-600 text-white"
+                            : "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400"
+                        }`}
+                      >
+                        {isSaleActive || priceData?.isSaleActive === true
+                          ? "Promo"
+                          : "Catalogue"}
+                      </span>
                     </div>
 
-                    <div className="space-y-6 p-6">
-                      <div className="rounded-xl border border-green-100 bg-green-50/50 px-4 py-3 dark:border-green-900/30 dark:bg-green-950/20">
-                        <p className="text-xs font-medium uppercase tracking-wide text-green-700/80 dark:text-green-300/80">
-                          Prix catalogue
-                        </p>
+                    <div className="space-y-3 p-4 sm:space-y-4 sm:p-5">
+                      <div className="flex items-end justify-between gap-3 rounded-xl bg-green-50/80 px-3.5 py-3 dark:bg-green-950/25">
+                        <div>
+                          <p className="text-[11px] font-medium uppercase tracking-wide text-green-700/70 dark:text-green-300/70">
+                            Tarif actuel
+                          </p>
                           {priceInitialLoading ? (
-                            <p className="mt-2 text-sm text-gray-500">Chargement...</p>
+                            <p className="mt-1 text-sm text-gray-500">Chargement...</p>
                           ) : (
-                            <div className="mt-2">
+                            <div className="mt-1">
                               <PriceDisplay
                                 pricePerM2={storeListPrice}
                                 salePricePerM2={activeSalePrice}
                                 isSaleActive={isStoreOnSale}
                                 suffix=" TND/m²"
-                                className="text-2xl font-semibold"
-                                listClassName="text-lg text-gray-500 line-through dark:text-gray-400"
-                                saleClassName="text-2xl font-semibold text-green-600 dark:text-green-400"
+                                className="text-xl font-bold tracking-tight sm:text-2xl"
+                                listClassName="text-sm text-gray-500 line-through dark:text-gray-400"
+                                saleClassName="text-xl font-bold tracking-tight text-green-600 dark:text-green-400 sm:text-2xl"
                               />
                             </div>
                           )}
+                        </div>
                       </div>
 
-                      <div className="rounded-xl border border-gray-200 bg-gray-50/50 p-5 dark:border-gray-700 dark:bg-gray-800/30">
-                        <h5 className="mb-4 text-base font-semibold text-gray-900 dark:text-white">
-                          Modifier le tarif catalogue
-                        </h5>
-                        <form onSubmit={handlePriceUpdate}>
+                      <form
+                        onSubmit={handlePriceUpdate}
+                        className="flex items-end gap-2"
+                      >
+                        <div className="min-w-0 max-w-[9.5rem] flex-1 sm:max-w-[12rem]">
                           <Input
-                            label="Nouveau prix catalogue"
+                            label="Nouveau prix"
                             type="text"
                             inputMode="decimal"
                             pattern="^[0-9]+([.,][0-9]{1,2})?$"
                             value={newPrice}
                             onChange={(e) => setNewPrice(e.target.value.replace(",", "."))}
-                            placeholder="Ex: 77"
+                            placeholder="77"
                             className="text-sm"
-                            endAction={
-                              <Button
-                                type="submit"
-                                size="sm"
-                                disabled={updatePriceMutation.isPending}
-                              >
-                                Mettre à jour
-                              </Button>
-                            }
                           />
-                        </form>
-                      </div>
-
-                      <div className="rounded-xl border border-gray-200 bg-white p-5 dark:border-gray-700 dark:bg-gray-900/50">
-                        <div className="mb-4 flex items-center justify-between gap-3">
-                          <div>
-                            <h5 className="text-base font-semibold text-gray-900 dark:text-white">
-                              Promotion
-                            </h5>
-                          </div>
-                          <label className="inline-flex cursor-pointer items-center gap-2.5 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700">
-                            <span
-                              className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${
-                                isSaleActive ? "bg-green-600" : "bg-gray-300 dark:bg-gray-600"
-                              }`}
-                            >
-                              <input
-                                type="checkbox"
-                                checked={isSaleActive}
-                                onChange={(e) => handleSaleToggle(e.target.checked)}
-                                className="sr-only"
-                              />
-                              <span
-                                className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
-                                  isSaleActive ? "translate-x-4" : "translate-x-0.5"
-                                }`}
-                              />
-                            </span>
-                            {isSaleActive ? "Active" : "Inactive"}
-                          </label>
                         </div>
-                        <form onSubmit={handleSaleUpdate} noValidate className="space-y-4">
-                          <Input
-                            type="text"
-                            inputMode="decimal"
-                            value={newSalePrice}
-                            onChange={(e) => setNewSalePrice(e.target.value.replace(",", "."))}
-                            placeholder="Ex: 60"
-                            error={salePriceError}
-                            className="text-sm"
-                            disabled={!isSaleActive}
-                          />
+                        <Button
+                          type="submit"
+                          size="sm"
+                          disabled={updatePriceMutation.isPending}
+                          className="mb-0.5 shrink-0 whitespace-nowrap px-3"
+                        >
+                          {updatePriceMutation.isPending ? "…" : "Mettre à jour"}
+                        </Button>
+                      </form>
+
+                      <div className="rounded-xl border border-gray-200/90 bg-gray-50/60 p-3 dark:border-gray-700 dark:bg-gray-800/40 sm:p-3.5">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-semibold text-gray-900 dark:text-white">
+                              Promotion
+                            </p>
+                            <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                              {isSaleActive ? "Active sur la boutique" : "Désactivée"}
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            role="switch"
+                            aria-checked={isSaleActive}
+                            onClick={() => handleSaleToggle(!isSaleActive)}
+                            className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors ${
+                              isSaleActive ? "bg-green-600" : "bg-gray-300 dark:bg-gray-600"
+                            }`}
+                          >
+                            <span
+                              className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
+                                isSaleActive ? "translate-x-6" : "translate-x-1"
+                              }`}
+                            />
+                          </button>
+                        </div>
+
+                        <form
+                          onSubmit={handleSaleUpdate}
+                          noValidate
+                          className={`mt-3 flex items-start gap-2 ${isSaleActive ? "" : "pointer-events-none opacity-45"}`}
+                        >
+                          <div className="min-w-0 max-w-[9.5rem] flex-1 sm:max-w-[12rem]">
+                            <Input
+                              type="text"
+                              inputMode="decimal"
+                              value={newSalePrice}
+                              onChange={(e) => setNewSalePrice(e.target.value.replace(",", "."))}
+                              placeholder="Prix promo"
+                              error={salePriceError}
+                              className="text-sm"
+                              disabled={!isSaleActive}
+                            />
+                          </div>
                           <Button
                             type="submit"
                             size="sm"
                             variant="secondary"
                             disabled={!canSaveStoreSale || Boolean(salePriceError)}
+                            className="mt-0.5 shrink-0 whitespace-nowrap px-3"
                           >
-                            Enregistrer la promotion
+                            Enregistrer
                           </Button>
                         </form>
                       </div>
                     </div>
                   </div>
 
-                  <div className="overflow-hidden rounded-2xl border border-blue-200/70 bg-white shadow-sm dark:border-blue-900/40 dark:bg-gray-900/40">
-                    <div className="border-b border-blue-100 bg-gradient-to-r from-blue-50 via-white to-sky-50 px-6 py-5 dark:border-blue-900/30 dark:from-blue-950/30 dark:via-gray-900/40 dark:to-sky-950/20">
-                      <div className="flex flex-wrap items-start justify-between gap-4">
-                        <div>
-                          <h4 className="text-lg font-semibold text-blue-800 dark:text-blue-300">
-                            Frais de pose
-                          </h4>
-                        </div>
+                  {/* Frais de pose */}
+                  <div className="overflow-hidden rounded-2xl border border-blue-200/80 bg-white shadow-sm dark:border-blue-900/40 dark:bg-gray-900/50">
+                    <div className="flex items-center justify-between gap-3 border-b border-blue-100/80 px-4 py-3 dark:border-blue-900/30 sm:px-5 sm:py-4">
+                      <div className="min-w-0">
+                        <h4 className="text-sm font-semibold text-blue-800 dark:text-blue-300 sm:text-base">
+                          Frais de pose
+                        </h4>
                         {installationFeeData?.lastUpdated && (
-                          <p className="text-xs text-gray-500">
+                          <p className="mt-0.5 truncate text-[11px] text-gray-500 sm:text-xs">
                             Mis à jour {formatLastUpdated(installationFeeData.lastUpdated)}
                           </p>
                         )}
                       </div>
                     </div>
 
-                    <div className="space-y-6 p-6">
-                      <div className="rounded-xl border border-blue-100 bg-blue-50/50 px-4 py-3 dark:border-blue-900/30 dark:bg-blue-950/20">
-                        <p className="text-xs font-medium uppercase tracking-wide text-blue-700/80 dark:text-blue-300/80">
-                          Frais de pose
-                        </p>
+                    <div className="space-y-3 p-4 sm:space-y-4 sm:p-5">
+                      <div className="flex items-end justify-between gap-3 rounded-xl bg-blue-50/80 px-3.5 py-3 dark:bg-blue-950/25">
+                        <div>
+                          <p className="text-[11px] font-medium uppercase tracking-wide text-blue-700/70 dark:text-blue-300/70">
+                            Tarif actuel
+                          </p>
                           {installationFeeInitialLoading ? (
-                            <p className="mt-2 text-sm text-gray-500">Chargement...</p>
+                            <p className="mt-1 text-sm text-gray-500">Chargement...</p>
                           ) : (
-                            <p className="mt-2 text-2xl font-semibold text-gray-900 dark:text-white">
-                              {installationFeeData?.fee} TND
+                            <p className="mt-1 text-xl font-bold tracking-tight text-gray-900 dark:text-white sm:text-2xl">
+                              {installationFeeData?.fee}
+                              <span className="ml-1 text-sm font-semibold text-gray-500 dark:text-gray-400">
+                                TND
+                              </span>
                             </p>
                           )}
+                        </div>
                       </div>
 
-                      <div className="rounded-xl border border-gray-200 bg-gray-50/50 p-5 dark:border-gray-700 dark:bg-gray-800/30">
-                        <h5 className="mb-4 text-base font-semibold text-gray-900 dark:text-white">
-                          Modifier le tarif
-                        </h5>
-                        <form onSubmit={handleInstallationFeeUpdate}>
+                      <form
+                        onSubmit={handleInstallationFeeUpdate}
+                        className="flex items-end gap-2"
+                      >
+                        <div className="min-w-0 max-w-[9.5rem] flex-1 sm:max-w-[12rem]">
                           <Input
                             label="Nouveau tarif"
                             type="text"
                             inputMode="decimal"
                             pattern="^[0-9]+([.,][0-9]{1,2})?$"
                             value={newInstallationFee}
-                            onChange={(e) => setNewInstallationFee(e.target.value.replace(",", "."))}
-                            placeholder="Ex: 11"
-                            className="text-sm"
-                            endAction={
-                              <Button
-                                type="submit"
-                                size="sm"
-                                disabled={updateInstallationFeeMutation.isPending}
-                              >
-                                Mettre à jour
-                              </Button>
+                            onChange={(e) =>
+                              setNewInstallationFee(e.target.value.replace(",", "."))
                             }
+                            placeholder="11"
+                            className="text-sm"
                           />
-                        </form>
-                      </div>
+                        </div>
+                        <Button
+                          type="submit"
+                          size="sm"
+                          disabled={updateInstallationFeeMutation.isPending}
+                          className="mb-0.5 shrink-0 whitespace-nowrap px-3"
+                        >
+                          {updateInstallationFeeMutation.isPending ? "…" : "Mettre à jour"}
+                        </Button>
+                      </form>
                     </div>
                   </div>
                 </div>
 
-                <div className="mt-6 overflow-hidden rounded-2xl border border-amber-200/70 bg-white shadow-sm dark:border-amber-900/40 dark:bg-gray-900/40">
-                  <div className="border-b border-amber-100 bg-gradient-to-r from-amber-50 via-white to-orange-50 px-6 py-5 dark:border-amber-900/30 dark:from-amber-950/30 dark:via-gray-900/40 dark:to-orange-950/20">
-                    <div className="flex items-start justify-between gap-4">
-                      <h4 className="text-lg font-semibold text-amber-800 dark:text-amber-300">
+                <div className="mt-4 overflow-hidden rounded-2xl border border-amber-200/80 bg-white shadow-sm dark:border-amber-900/40 dark:bg-gray-900/50 sm:mt-6">
+                  <div className="flex items-center justify-between gap-3 border-b border-amber-100/80 px-4 py-3 dark:border-amber-900/30 sm:px-5 sm:py-4">
+                    <div className="min-w-0">
+                      <h4 className="text-sm font-semibold text-amber-800 dark:text-amber-300 sm:text-base">
                         Configuration panneau
                       </h4>
-                      <div className="flex shrink-0 flex-col items-end gap-1">
-                        <span
-                          className={`inline-flex items-center rounded-full border border-amber-200 bg-white px-3 py-1 text-xs font-medium text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200 ${
-                            isPanneauPromoSaved ? "" : "invisible"
-                          }`}
-                        >
-                          Promotion active
-                        </span>
-                        {panneauConfigData?.lastUpdated && (
-                          <p className="text-xs text-gray-500">
-                            Mis à jour {formatLastUpdated(panneauConfigData.lastUpdated)}
-                          </p>
-                        )}
-                      </div>
+                      {panneauConfigData?.lastUpdated && (
+                        <p className="mt-0.5 truncate text-[11px] text-gray-500 sm:text-xs">
+                          Mis à jour {formatLastUpdated(panneauConfigData.lastUpdated)}
+                        </p>
+                      )}
                     </div>
+                    <span
+                      className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide sm:text-xs ${
+                        isPanneauSaleActive || isPanneauPromoSaved
+                          ? "bg-amber-600 text-white"
+                          : "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400"
+                      }`}
+                    >
+                      {isPanneauSaleActive || isPanneauPromoSaved ? "Promo" : "Catalogue"}
+                    </span>
                   </div>
 
-                  <div className="space-y-6 p-6">
+                  <div className="space-y-3 p-4 sm:space-y-4 sm:p-5">
                     {panneauConfigInitialLoading ? (
                       <p className="text-sm text-gray-500">Chargement...</p>
                     ) : (panneauConfigData?.widths ?? []).length === 0 ? (
-                      <p className="rounded-xl border border-dashed border-gray-200 px-4 py-6 text-center text-sm text-gray-500 dark:border-gray-700">
+                      <p className="rounded-xl border border-dashed border-gray-200 px-3 py-4 text-center text-sm text-gray-500 dark:border-gray-700">
                         Aucune largeur configurée pour le moment.
                       </p>
                     ) : (
-                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                          {(panneauConfigData?.widths ?? []).map(
-                            (width: {
-                              id: string;
-                              widthCm: number;
-                              label?: string | null;
-                              price: number;
-                              salePrice?: number | null;
-                            }) => {
-                              const effectivePrice = getEffectivePanneauWidthPrice(
-                                {
-                                  price: width.price,
-                                  salePrice: width.salePrice ?? null,
-                                },
-                                panneauConfigData?.isSaleActive === true
-                              );
-                              const onPromo =
-                                panneauConfigData?.isSaleActive === true &&
-                                effectivePrice < width.price;
+                      <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">
+                        {(panneauConfigData?.widths ?? []).map(
+                          (width: {
+                            id: string;
+                            widthCm: number;
+                            label?: string | null;
+                            price: number;
+                            salePrice?: number | null;
+                          }) => {
+                            const effectivePrice = getEffectivePanneauWidthPrice(
+                              {
+                                price: width.price,
+                                salePrice: width.salePrice ?? null,
+                              },
+                              panneauConfigData?.isSaleActive === true
+                            );
+                            const onPromo =
+                              panneauConfigData?.isSaleActive === true &&
+                              effectivePrice < width.price;
 
-                              return (
+                            return (
                               <div
                                 key={width.id}
-                                className="rounded-xl border border-amber-100 bg-amber-50/50 px-4 py-3 dark:border-amber-900/30 dark:bg-amber-950/20"
+                                className="rounded-xl bg-amber-50/80 px-2.5 py-2.5 dark:bg-amber-950/25 sm:px-3.5 sm:py-3"
                               >
-                                <p className="text-xs font-medium tracking-wide text-amber-700/80 dark:text-amber-300/80">
+                                <p className="text-[10px] font-medium uppercase tracking-wide text-amber-700/70 dark:text-amber-300/70 sm:text-[11px]">
                                   {formatPanneauCardLabel(width.widthCm)}
                                 </p>
-                                <div className="mt-2">
+                                <div className="mt-1">
                                   <PriceDisplay
                                     pricePerM2={width.price}
                                     salePricePerM2={width.salePrice ?? null}
                                     isSaleActive={onPromo}
                                     suffix=" TND"
-                                    listClassName="text-sm text-gray-500 line-through dark:text-gray-400"
-                                    saleClassName="text-lg font-semibold text-amber-700 dark:text-amber-300"
+                                    listClassName="text-[11px] text-gray-500 line-through dark:text-gray-400 sm:text-sm"
+                                    saleClassName="text-sm font-bold tracking-tight text-amber-700 dark:text-amber-300 sm:text-lg"
                                   />
                                 </div>
                               </div>
-                              );
-                            }
-                          )}
-                        </div>
-                      )}
+                            );
+                          }
+                        )}
+                      </div>
+                    )}
 
-                    <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
-                      <div className="space-y-4 xl:col-span-2">
-                        <div className="rounded-xl border border-gray-200 bg-gray-50/50 p-5 dark:border-gray-700 dark:bg-gray-800/30">
-                          <div className="mb-4 flex items-center justify-between gap-3">
-                            <div>
-                              <h5 className="text-base font-semibold text-gray-900 dark:text-white">
+                    <div className="grid grid-cols-1 gap-3 xl:grid-cols-3 xl:gap-4">
+                      <div className="space-y-3 xl:col-span-2">
+                        <div className="rounded-xl border border-gray-200/90 bg-gray-50/60 p-3 dark:border-gray-700 dark:bg-gray-800/40 sm:p-3.5">
+                          <div className="mb-3 flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <h5 className="text-sm font-semibold text-gray-900 dark:text-white">
                                 Dimensions & tarifs
                               </h5>
-                              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                                Hauteur fixe et largeurs proposées dans le configurateur.
+                              <p className="mt-0.5 text-[11px] text-gray-500 dark:text-gray-400 sm:text-xs">
+                                Hauteur fixe et largeurs du configurateur.
                               </p>
                             </div>
-                            <span className="shrink-0 rounded-full bg-white px-2.5 py-1 text-xs font-medium text-gray-600 ring-1 ring-gray-200 dark:bg-gray-900 dark:text-gray-300 dark:ring-gray-700">
+                            <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-[10px] font-medium text-gray-600 ring-1 ring-gray-200 dark:bg-gray-900 dark:text-gray-300 dark:ring-gray-700 sm:text-xs">
                               {savedPanneauWidths.length} modèle
                               {savedPanneauWidths.length > 1 ? "s" : ""}
                             </span>
                           </div>
 
-                          <div className="space-y-5">
-                            <form onSubmit={handlePanneauHeightUpdate} className="max-w-md">
+                          <form
+                            onSubmit={handlePanneauHeightUpdate}
+                            className="mb-3 flex items-end gap-2"
+                          >
+                            <div className="min-w-0 max-w-[9.5rem] flex-1 sm:max-w-[12rem]">
                               <Input
                                 label="Hauteur fixe (cm)"
                                 type="text"
@@ -1531,247 +1548,246 @@ export default function AdminDashboard() {
                                 }
                                 placeholder="220"
                                 className="text-sm"
-                                endAction={
-                                  <Button
-                                    type="submit"
-                                    size="sm"
-                                    disabled={updatePanneauHeightMutation.isPending}
-                                  >
-                                    Mettre à jour
-                                  </Button>
-                                }
                               />
-                            </form>
+                            </div>
+                            <Button
+                              type="submit"
+                              size="sm"
+                              disabled={updatePanneauHeightMutation.isPending}
+                              className="mb-0.5 shrink-0 whitespace-nowrap px-3"
+                            >
+                              {updatePanneauHeightMutation.isPending ? "…" : "Mettre à jour"}
+                            </Button>
+                          </form>
 
-                            <div className={panneauTableShellClassName}>
-                              <div
-                                className={`hidden w-full gap-3 ${adminTableHeaderClassName} px-3 py-3 sm:px-4 md:grid ${panneauWidthGridClass}`}
-                              >
-                                <span className={`${panneauWidthCellClass} ${adminTableHeadTextClassName}`}>
-                                  Largeur (cm)
-                                </span>
-                                <span className={`${panneauWidthCellClass} ${adminTableHeadTextClassName}`}>
-                                  Prix catalogue
-                                </span>
-                                <span className={`${panneauWidthCellClass} ${adminTableHeadTextClassName}`}>
-                                  Action
-                                </span>
+                          <div className={panneauTableShellClassName}>
+                            <div
+                              className={`hidden w-full gap-3 ${adminTableHeaderClassName} px-3 py-2.5 sm:px-4 md:grid ${panneauWidthGridClass}`}
+                            >
+                              <span className={`${panneauWidthCellClass} ${adminTableHeadTextClassName}`}>
+                                Largeur (cm)
+                              </span>
+                              <span className={`${panneauWidthCellClass} ${adminTableHeadTextClassName}`}>
+                                Prix catalogue
+                              </span>
+                              <span className={`${panneauWidthCellClass} ${adminTableHeadTextClassName}`}>
+                                Action
+                              </span>
+                            </div>
+
+                            {savedPanneauWidths.length === 0 && !isAddingPanneauWidth ? (
+                              <p className="px-3 py-3 text-center text-sm text-gray-500 sm:px-4 dark:text-gray-400">
+                                Aucune largeur configurée.
+                              </p>
+                            ) : savedPanneauWidths.length > 0 ? (
+                              <div className={`w-full ${adminTableBodyClassName}`}>
+                                {savedPanneauWidths.map((width) => {
+                                  const isEditing = editingPanneauWidthCm === width.widthCm;
+
+                                  return (
+                                    <div
+                                      key={width.id}
+                                      className={`grid w-full grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_auto] items-center gap-2 px-2.5 py-2.5 sm:gap-3 sm:px-4 sm:py-3 md:grid ${panneauWidthGridClass}`}
+                                    >
+                                      {isEditing ? (
+                                        <>
+                                          <div className={panneauWidthCellClass}>
+                                            <input
+                                              type="text"
+                                              inputMode="numeric"
+                                              value={editPanneauWidthCm}
+                                              onChange={(e) =>
+                                                setEditPanneauWidthCm(e.target.value)
+                                              }
+                                              onKeyDown={handleEditPanneauWidthKeyDown}
+                                              autoFocus
+                                              className={panneauCellInputClass}
+                                            />
+                                          </div>
+                                          <div className={panneauWidthCellClass}>
+                                            <input
+                                              type="text"
+                                              inputMode="decimal"
+                                              value={editPanneauWidthPrice}
+                                              onChange={(e) =>
+                                                setEditPanneauWidthPrice(
+                                                  e.target.value.replace(",", ".")
+                                                )
+                                              }
+                                              onKeyDown={handleEditPanneauWidthKeyDown}
+                                              className={panneauCellInputClass}
+                                            />
+                                          </div>
+                                          <div className={panneauWidthActionsClass}>
+                                            <button
+                                              type="button"
+                                              onClick={handleSaveEditPanneauWidth}
+                                              disabled={!canConfirmEditPanneauWidth}
+                                              className={panneauConfirmButtonClass}
+                                              aria-label="Enregistrer la largeur"
+                                            >
+                                              {CheckIcon}
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={handleCancelEditPanneauWidth}
+                                              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-lg leading-none text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/30 dark:hover:text-red-400"
+                                              aria-label="Annuler"
+                                            >
+                                              ×
+                                            </button>
+                                          </div>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <p
+                                            className={`${panneauWidthCellClass} text-sm font-medium text-gray-900 dark:text-white`}
+                                          >
+                                            {width.widthCm}
+                                          </p>
+                                          <p
+                                            className={`${panneauWidthCellClass} text-sm font-medium text-gray-900 dark:text-white`}
+                                          >
+                                            {width.price.toFixed(2)} TND
+                                          </p>
+                                          <div className={panneauWidthActionsClass}>
+                                            <button
+                                              type="button"
+                                              onClick={() => handleStartEditPanneauWidth(width)}
+                                              className={panneauEditButtonClass}
+                                              aria-label="Modifier cette largeur"
+                                            >
+                                              {EditIcon}
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={() =>
+                                                handleRemovePanneauWidth(width.widthCm)
+                                              }
+                                              disabled={deletePanneauWidthMutation.isPending}
+                                              className="flex h-9 w-9 items-center justify-center rounded-lg text-lg leading-none text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-red-950/30 dark:hover:text-red-400"
+                                              aria-label="Retirer cette largeur"
+                                            >
+                                              ×
+                                            </button>
+                                          </div>
+                                        </>
+                                      )}
+                                    </div>
+                                  );
+                                })}
                               </div>
+                            ) : null}
 
-                              {savedPanneauWidths.length === 0 && !isAddingPanneauWidth ? (
-                                <p className="px-3 py-4 text-center text-sm text-gray-500 sm:px-4 dark:text-gray-400">
-                                  Aucune largeur configurée.
-                                </p>
-                              ) : savedPanneauWidths.length > 0 ? (
-                                <div className={`w-full ${adminTableBodyClassName}`}>
-                                  {savedPanneauWidths.map((width) => {
-                                    const isEditing = editingPanneauWidthCm === width.widthCm;
-
-                                    return (
-                                      <div
-                                        key={width.id}
-                                        className={`grid w-full grid-cols-1 items-center gap-3 px-3 py-4 sm:px-4 md:grid ${panneauWidthGridClass}`}
-                                      >
-                                        {isEditing ? (
-                                          <>
-                                            <div className={panneauWidthCellClass}>
-                                              <input
-                                                type="text"
-                                                inputMode="numeric"
-                                                value={editPanneauWidthCm}
-                                                onChange={(e) =>
-                                                  setEditPanneauWidthCm(e.target.value)
-                                                }
-                                                onKeyDown={handleEditPanneauWidthKeyDown}
-                                                autoFocus
-                                                className={panneauCellInputClass}
-                                              />
-                                            </div>
-                                            <div className={panneauWidthCellClass}>
-                                              <input
-                                                type="text"
-                                                inputMode="decimal"
-                                                value={editPanneauWidthPrice}
-                                                onChange={(e) =>
-                                                  setEditPanneauWidthPrice(
-                                                    e.target.value.replace(",", ".")
-                                                  )
-                                                }
-                                                onKeyDown={handleEditPanneauWidthKeyDown}
-                                                className={panneauCellInputClass}
-                                              />
-                                            </div>
-                                            <div className={panneauWidthActionsClass}>
-                                              <button
-                                                type="button"
-                                                onClick={handleSaveEditPanneauWidth}
-                                                disabled={!canConfirmEditPanneauWidth}
-                                                className={panneauConfirmButtonClass}
-                                                aria-label="Enregistrer la largeur"
-                                              >
-                                                {CheckIcon}
-                                              </button>
-                                              <button
-                                                type="button"
-                                                onClick={handleCancelEditPanneauWidth}
-                                                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-lg leading-none text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/30 dark:hover:text-red-400"
-                                                aria-label="Annuler"
-                                              >
-                                                ×
-                                              </button>
-                                            </div>
-                                          </>
-                                        ) : (
-                                          <>
-                                            <p
-                                              className={`${panneauWidthCellClass} text-sm font-medium text-gray-900 dark:text-white`}
-                                            >
-                                              {width.widthCm}
-                                            </p>
-                                            <p
-                                              className={`${panneauWidthCellClass} text-sm font-medium text-gray-900 dark:text-white`}
-                                            >
-                                              {width.price.toFixed(2)} TND
-                                            </p>
-                                            <div className={panneauWidthActionsClass}>
-                                              <button
-                                                type="button"
-                                                onClick={() => handleStartEditPanneauWidth(width)}
-                                                className={panneauEditButtonClass}
-                                                aria-label="Modifier cette largeur"
-                                              >
-                                                {EditIcon}
-                                              </button>
-                                              <button
-                                                type="button"
-                                                onClick={() =>
-                                                  handleRemovePanneauWidth(width.widthCm)
-                                                }
-                                                disabled={deletePanneauWidthMutation.isPending}
-                                                className="flex h-10 w-10 items-center justify-center rounded-lg text-lg leading-none text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-red-950/30 dark:hover:text-red-400"
-                                                aria-label="Retirer cette largeur"
-                                              >
-                                                ×
-                                              </button>
-                                            </div>
-                                          </>
-                                        )}
-                                      </div>
-                                    );
-                                  })}
+                            {isAddingPanneauWidth ? (
+                              <div
+                                className={`grid w-full grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_auto] items-center gap-2 border-t border-gray-200 bg-white px-2.5 py-2.5 sm:gap-3 sm:px-4 sm:py-3 dark:border-gray-700 dark:bg-gray-800 md:grid ${panneauWidthGridClass}`}
+                              >
+                                <div className={panneauWidthCellClass}>
+                                  <input
+                                    type="text"
+                                    inputMode="numeric"
+                                    value={newPanneauWidthCm}
+                                    onChange={(e) => setNewPanneauWidthCm(e.target.value)}
+                                    onKeyDown={handleAddPanneauWidthKeyDown}
+                                    autoFocus
+                                    className={panneauCellInputClass}
+                                  />
                                 </div>
-                              ) : null}
-
-                              {isAddingPanneauWidth ? (
-                                <div
-                                  className={`grid w-full grid-cols-1 items-center gap-3 border-t border-gray-200 bg-white px-3 py-4 sm:px-4 dark:border-gray-700 dark:bg-gray-800 md:grid ${panneauWidthGridClass}`}
-                                >
-                                  <div className={panneauWidthCellClass}>
-                                    <input
-                                      type="text"
-                                      inputMode="numeric"
-                                      value={newPanneauWidthCm}
-                                      onChange={(e) => setNewPanneauWidthCm(e.target.value)}
-                                      onKeyDown={handleAddPanneauWidthKeyDown}
-                                      autoFocus
-                                      className={panneauCellInputClass}
-                                    />
-                                  </div>
-                                  <div className={panneauWidthCellClass}>
-                                    <input
-                                      type="text"
-                                      inputMode="decimal"
-                                      value={newPanneauWidthPrice}
-                                      onChange={(e) =>
-                                        setNewPanneauWidthPrice(e.target.value.replace(",", "."))
-                                      }
-                                      onKeyDown={handleAddPanneauWidthKeyDown}
-                                      className={panneauCellInputClass}
-                                    />
-                                  </div>
-                                  <div className={panneauWidthActionsClass}>
-                                    <button
-                                      type="button"
-                                      onClick={handleAddPanneauWidth}
-                                      disabled={!canConfirmNewPanneauWidth}
-                                      className={
-                                        canConfirmNewPanneauWidth
-                                          ? panneauConfirmButtonClass
-                                          : panneauPlusButtonClass
-                                      }
-                                      aria-label="Enregistrer la nouvelle largeur"
-                                    >
-                                      {canConfirmNewPanneauWidth ? CheckIcon : "+"}
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={handleCancelAddPanneauWidth}
-                                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-lg leading-none text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/30 dark:hover:text-red-400"
-                                      aria-label="Annuler"
-                                    >
-                                      ×
-                                    </button>
-                                  </div>
+                                <div className={panneauWidthCellClass}>
+                                  <input
+                                    type="text"
+                                    inputMode="decimal"
+                                    value={newPanneauWidthPrice}
+                                    onChange={(e) =>
+                                      setNewPanneauWidthPrice(e.target.value.replace(",", "."))
+                                    }
+                                    onKeyDown={handleAddPanneauWidthKeyDown}
+                                    className={panneauCellInputClass}
+                                  />
                                 </div>
-                              ) : (
-                                <div className="flex w-full justify-end border-t border-gray-200 bg-white px-3 py-4 sm:px-4 dark:border-gray-700 dark:bg-gray-800">
+                                <div className={panneauWidthActionsClass}>
                                   <button
                                     type="button"
-                                    onClick={handleOpenAddPanneauWidth}
-                                    className={panneauPlusButtonClass}
-                                    aria-label="Ajouter un modèle"
+                                    onClick={handleAddPanneauWidth}
+                                    disabled={!canConfirmNewPanneauWidth}
+                                    className={
+                                      canConfirmNewPanneauWidth
+                                        ? panneauConfirmButtonClass
+                                        : panneauPlusButtonClass
+                                    }
+                                    aria-label="Enregistrer la nouvelle largeur"
                                   >
-                                    +
+                                    {canConfirmNewPanneauWidth ? CheckIcon : "+"}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={handleCancelAddPanneauWidth}
+                                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-lg leading-none text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/30 dark:hover:text-red-400"
+                                    aria-label="Annuler"
+                                  >
+                                    ×
                                   </button>
                                 </div>
-                              )}
-                            </div>
+                              </div>
+                            ) : (
+                              <div className="flex w-full justify-end border-t border-gray-200 bg-white px-2.5 py-2.5 sm:px-4 sm:py-3 dark:border-gray-700 dark:bg-gray-800">
+                                <button
+                                  type="button"
+                                  onClick={handleOpenAddPanneauWidth}
+                                  className={panneauPlusButtonClass}
+                                  aria-label="Ajouter un modèle"
+                                >
+                                  +
+                                </button>
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>
 
-                      <div className="space-y-4">
-                        <div className="rounded-xl border border-gray-200 bg-white p-5 dark:border-gray-700 dark:bg-gray-900/50">
-                          <div className="mb-4 flex items-center justify-between gap-3">
+                      <div className="space-y-3">
+                        <div className="rounded-xl border border-gray-200/90 bg-gray-50/60 p-3 dark:border-gray-700 dark:bg-gray-800/40 sm:p-3.5">
+                          <div className="flex items-center justify-between gap-3">
                             <div>
-                              <h5 className="text-base font-semibold text-gray-900 dark:text-white">
+                              <p className="text-sm font-semibold text-gray-900 dark:text-white">
                                 Promotion
-                              </h5>
-                              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                                Les prix promo se sauvegardent uniquement ici.
+                              </p>
+                              <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                                {isPanneauSaleActive
+                                  ? "Active sur la boutique"
+                                  : "Sauvegarde uniquement ici"}
                               </p>
                             </div>
-                            <label className="inline-flex cursor-pointer items-center gap-2.5 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700">
+                            <button
+                              type="button"
+                              role="switch"
+                              aria-checked={isPanneauSaleActive}
+                              onClick={() => handlePanneauSaleToggle(!isPanneauSaleActive)}
+                              className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors ${
+                                isPanneauSaleActive
+                                  ? "bg-amber-600"
+                                  : "bg-gray-300 dark:bg-gray-600"
+                              }`}
+                            >
                               <span
-                                className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${
-                                  isPanneauSaleActive
-                                    ? "bg-green-600"
-                                    : "bg-gray-300 dark:bg-gray-600"
+                                className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
+                                  isPanneauSaleActive ? "translate-x-6" : "translate-x-1"
                                 }`}
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={isPanneauSaleActive}
-                                  onChange={(e) => handlePanneauSaleToggle(e.target.checked)}
-                                  className="sr-only"
-                                />
-                                <span
-                                  className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
-                                    isPanneauSaleActive ? "translate-x-4" : "translate-x-0.5"
-                                  }`}
-                                />
-                              </span>
-                              {isPanneauSaleActive ? "Active" : "Inactive"}
-                            </label>
+                              />
+                            </button>
                           </div>
 
-                          <form onSubmit={handlePanneauSaleUpdate} className="space-y-4">
+                          <form
+                            onSubmit={handlePanneauSaleUpdate}
+                            className={`mt-3 space-y-2 ${isPanneauSaleActive ? "" : "pointer-events-none opacity-45"}`}
+                          >
                             {(panneauConfigData?.widths ?? []).length === 0 ? (
                               <p className="text-sm text-gray-500 dark:text-gray-400">
                                 Ajoutez d&apos;abord une largeur panneau.
                               </p>
                             ) : (
-                              <div className="space-y-3">
+                              <div className="space-y-2">
                                 {(panneauConfigData?.widths ?? []).map(
                                   (width: {
                                     widthCm: number;
@@ -1790,13 +1806,11 @@ export default function AdminDashboard() {
                                     return (
                                       <div
                                         key={width.widthCm}
-                                        className="grid grid-cols-1 items-center gap-2 sm:grid-cols-[minmax(0,1fr)_8rem]"
+                                        className="flex items-center gap-2"
                                       >
-                                        <div className="min-w-0">
-                                          <p className="text-sm font-medium text-gray-800 dark:text-gray-200">
-                                            {formatPanneauCardLabel(width.widthCm)}
-                                          </p>
-                                        </div>
+                                        <p className="min-w-0 flex-1 truncate text-xs font-medium text-gray-800 dark:text-gray-200 sm:text-sm">
+                                          {formatPanneauCardLabel(width.widthCm)}
+                                        </p>
                                         <input
                                           type="text"
                                           inputMode="decimal"
@@ -1810,7 +1824,7 @@ export default function AdminDashboard() {
                                           }}
                                           placeholder="Ex: 140"
                                           disabled={!isPanneauSaleActive}
-                                          className={`${panneauCellInputClass} ${
+                                          className={`${panneauCellInputClass} !w-[5.5rem] shrink-0 sm:!w-[7rem] ${
                                             hasSaleError
                                               ? "border-red-500 focus:border-red-500 focus:ring-red-500/20"
                                               : ""
@@ -1823,28 +1837,31 @@ export default function AdminDashboard() {
                               </div>
                             )}
 
-                            <Button
-                              type="submit"
-                              size="sm"
-                              variant="secondary"
-                              disabled={!canSavePanneauPromo}
-                            >
-                              Enregistrer la promotion
-                            </Button>
+                            <div className="flex justify-end pt-1">
+                              <Button
+                                type="submit"
+                                size="sm"
+                                variant="secondary"
+                                disabled={!canSavePanneauPromo}
+                                className="whitespace-nowrap px-3"
+                              >
+                                Enregistrer
+                              </Button>
+                            </div>
                           </form>
                         </div>
 
-                        <div className="rounded-xl border border-gray-200 bg-white p-5 dark:border-gray-700 dark:bg-gray-900/50">
-                          <div className="mb-4 flex items-center justify-between gap-3">
-                            <div>
-                              <h5 className="text-base font-semibold text-gray-900 dark:text-white">
+                        <div className="rounded-xl border border-gray-200/90 bg-gray-50/60 p-3 dark:border-gray-700 dark:bg-gray-800/40 sm:p-3.5">
+                          <div className="mb-2.5 flex items-center justify-between gap-2">
+                            <div className="min-w-0">
+                              <h5 className="text-sm font-semibold text-gray-900 dark:text-white">
                                 Références produits
                               </h5>
-                              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                                Produits disponibles en option panneau.
+                              <p className="mt-0.5 text-[11px] text-gray-500 dark:text-gray-400">
+                                Option panneau disponible.
                               </p>
                             </div>
-                            <span className="shrink-0 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700 ring-1 ring-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:ring-amber-900/50">
+                            <span className="shrink-0 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700 ring-1 ring-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:ring-amber-900/50 sm:text-xs">
                               {activeProducts.filter((p) => p.supportsPanneau === true).length} /{" "}
                               {activeProducts.length}
                             </span>
@@ -1854,17 +1871,17 @@ export default function AdminDashboard() {
                           ) : activeProducts.length === 0 ? (
                             <p className="text-sm text-gray-500">Aucun produit actif.</p>
                           ) : (
-                            <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
+                            <div className="max-h-56 space-y-1.5 overflow-y-auto pr-0.5 sm:max-h-72">
                               {activeProducts.map((product) => (
                                 <label
                                   key={product._id}
-                                  className={`flex cursor-pointer items-center justify-between gap-3 rounded-lg border px-3 py-2.5 text-sm transition-colors ${
+                                  className={`flex cursor-pointer items-center justify-between gap-2 rounded-lg border px-2.5 py-2 text-sm transition-colors ${
                                     product.supportsPanneau === true
                                       ? "border-amber-200 bg-amber-50/60 dark:border-amber-900/50 dark:bg-amber-950/20"
                                       : "border-gray-100 hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-800/60"
                                   }`}
                                 >
-                                  <span className="font-medium text-gray-800 dark:text-gray-200">
+                                  <span className="truncate font-medium text-gray-800 dark:text-gray-200">
                                     {product.name}
                                   </span>
                                   <span className="relative inline-flex shrink-0">
@@ -1881,10 +1898,15 @@ export default function AdminDashboard() {
                                       }
                                       className="peer sr-only"
                                     />
-                                    <span aria-hidden="true" className={panneauReferenceCheckboxBoxClass}>
+                                    <span
+                                      aria-hidden="true"
+                                      className={panneauReferenceCheckboxBoxClass}
+                                    >
                                       <svg
                                         className={`h-3.5 w-3.5 text-white transition-opacity duration-200 ${
-                                          product.supportsPanneau === true ? "opacity-100" : "opacity-0"
+                                          product.supportsPanneau === true
+                                            ? "opacity-100"
+                                            : "opacity-0"
                                         }`}
                                         fill="none"
                                         viewBox="0 0 24 24"
@@ -1917,6 +1939,7 @@ export default function AdminDashboard() {
             </div>
           </div>
         </main>
+        <Footer />
       </div>
     </>
   );

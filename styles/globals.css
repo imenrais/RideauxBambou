@@ -7,7 +7,7 @@
 
 /* Custom global styles */
 .card {
-  @apply rounded-lg bg-white p-6 shadow-lg dark:bg-gray-800;
+  @apply rounded-lg bg-white p-4 shadow-lg sm:p-6 dark:bg-gray-800;
 }
 
 /* Custom animations */
@@ -89,7 +89,8 @@ html.dark {
 }
 
 body {
-  overflow-x: hidden;
+  /* clip keeps horizontal overflow contained without breaking sticky nav */
+  overflow-x: clip;
 }
 
 img,
@@ -163,7 +164,21 @@ html.dark select:-webkit-autofill:active {
   }
 
   .section-padding {
-    @apply py-12 sm:py-16 lg:py-20;
+    @apply py-8 sm:py-12 lg:py-16;
+  }
+
+  .table-scroll {
+    @apply -mx-3 overflow-x-auto px-3 sm:mx-0 sm:px-0;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .pb-safe-fab {
+    padding-bottom: max(5.5rem, calc(env(safe-area-inset-bottom, 0px) + 4.5rem));
+  }
+
+  .break-anywhere {
+    overflow-wrap: anywhere;
+    word-break: break-word;
   }
 
   .card-hover {
@@ -220,27 +235,27 @@ html.dark select:-webkit-autofill:active {
   }
 
   h1 {
-    @apply text-4xl font-extrabold sm:text-5xl lg:text-6xl;
+    @apply text-2xl font-extrabold sm:text-4xl lg:text-5xl;
   }
 
   h2 {
-    @apply text-3xl font-bold sm:text-4xl lg:text-5xl;
+    @apply text-xl font-bold sm:text-3xl lg:text-4xl;
   }
 
   h3 {
-    @apply text-2xl font-bold sm:text-3xl lg:text-4xl;
+    @apply text-lg font-bold sm:text-2xl lg:text-3xl;
   }
 
   h4 {
-    @apply text-xl font-semibold sm:text-2xl lg:text-3xl;
+    @apply text-base font-semibold sm:text-xl lg:text-2xl;
   }
 
   h5 {
-    @apply text-lg font-semibold sm:text-xl lg:text-2xl;
+    @apply text-sm font-semibold sm:text-lg lg:text-xl;
   }
 
   h6 {
-    @apply text-base font-semibold sm:text-lg lg:text-xl;
+    @apply text-sm font-semibold sm:text-base lg:text-lg;
   }
 }
 
@@ -269,6 +284,24 @@ html.dark select:-webkit-autofill:active {
   .mobile-padding {
     @apply p-4 sm:p-6 lg:p-8;
   }
+}
+
+/* ApexCharts: keep default tooltip readable in dark mode */
+.apexcharts-tooltip.apexcharts-theme-light {
+  color: #111827 !important;
+}
+
+.apexcharts-tooltip.apexcharts-theme-light .apexcharts-tooltip-title {
+  color: #111827 !important;
+  background: #f9fafb !important;
+  border-bottom-color: #e5e7eb !important;
+}
+
+.apexcharts-xaxistooltip,
+.apexcharts-yaxistooltip {
+  color: #111827 !important;
+  background: #ffffff !important;
+  border-color: #e5e7eb !important;
 }
 
 /* Print styles */

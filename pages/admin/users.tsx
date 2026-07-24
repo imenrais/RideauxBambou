@@ -7,6 +7,7 @@ import { useState, useEffect } from "react";
 
 import AdminNavigation from "../../components/AdminNavigation";
 import BackButton from "../../components/BackButton";
+import Footer from "../../components/Footer";
 import Button from "../../components/ui/Button";
 import Card from "../../components/ui/Card";
 import Input from "../../components/ui/Input";
@@ -25,7 +26,6 @@ import {
 import { useToast } from "../../contexts/ToastContext";
 import { formFieldLabelClass, formSelectClass } from "../../lib/form-field-styles";
 import { getEmailValidationError, normalizeEmailValue } from "../../lib/email-validation";
-import { checkPasswordStrength } from "../../lib/password-validation";
 
 const PAGE_TITLE = "Gestion des Employés - Rideaux Bambou Admin";
 
@@ -127,47 +127,6 @@ export default function AdminUsers() {
     }
   };
 
-  const createWorkerMutation = useMutation({
-    mutationFn: async (payload: {
-      firstName: string;
-      lastName: string;
-      email: string;
-      role: string;
-      password: string;
-    }) => {
-      const response = await fetch("/api/admin/users", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-      });
-      const data = await response.json();
-      if (!data.success) {
-        throw new Error(data.error);
-      }
-      return data.data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin-users"] });
-      setWorkerForm({
-        firstName: "",
-        lastName: "",
-        email: "",
-        password: "",
-        confirmPassword: "",
-        role: "",
-      });
-      setWorkerCreateError("");
-      success("Compte employé créé avec succès.");
-    },
-    onError: (mutationError) => {
-      const message = mutationError instanceof Error ? mutationError.message : "Erreur inconnue";
-      setWorkerCreateError(message);
-      error(`Erreur: ${message}`);
-    },
-  });
-
   const updateWorkerMutation = useMutation({
     mutationFn: async ({
       userId,
@@ -231,44 +190,7 @@ export default function AdminUsers() {
 
   const handleCreateWorker = (e: React.FormEvent) => {
     e.preventDefault();
-    setWorkerCreateError("");
-    const normalizedRole = workerForm.role.trim().toLowerCase();
-    const normalizedEmail = normalizeEmailValue(workerForm.email);
-    const emailValidationError = getEmailValidationError(normalizedEmail, { required: true });
-    setWorkerForm((prev) => ({ ...prev, email: normalizedEmail }));
-    setWorkerCreateEmailError(emailValidationError);
-    if (emailValidationError) {
-      setWorkerCreateError(emailValidationError);
-      return;
-    }
-
-    if (!normalizedRole) {
-      setWorkerCreateError("Le rôle est requis.");
-      error("Le rôle est requis.");
-      return;
-    }
-    if (workerForm.password !== workerForm.confirmPassword) {
-      setWorkerCreateError("La confirmation du mot de passe ne correspond pas.");
-      error("La confirmation du mot de passe ne correspond pas.");
-      return;
-    }
-    const strength = checkPasswordStrength(workerForm.password);
-    if (!strength.isValid) {
-      const message = `Mot de passe faible. Ajoutez: ${strength.feedback.join(", ")}.`;
-      setWorkerCreateError(message);
-      error(message);
-      return;
-    }
-    const payload = {
-      firstName: workerForm.firstName.trim(),
-      lastName: workerForm.lastName.trim(),
-      email: normalizedEmail,
-      role: normalizedRole,
-      password: workerForm.password,
-    };
-    createWorkerMutation.mutate({
-      ...payload,
-    });
+    // Account creation temporarily disabled — no-op
   };
 
   const handleDeleteWorker = (userId: string, userName: string) => {
@@ -352,13 +274,13 @@ export default function AdminUsers() {
 
         {/* Main Content */}
         <main className={pageMainClass}>
-          <div className="mb-6">
+          <div className="mb-4 sm:mb-6">
             <BackButton href="/admin" />
           </div>
-          <div className="space-y-6">
+          <div className="space-y-4 sm:space-y-6">
             {/* Header */}
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Gestion des Employés</h1>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <h1 className="text-2xl font-bold text-gray-900 sm:text-3xl dark:text-white">Gestion des Employés</h1>
             </div>
 
             {/* Worker account creation */}
@@ -452,14 +374,16 @@ export default function AdminUsers() {
                   className="h-9 py-1.5 text-sm"
                   required
                 />
-                <div className="mt-2 flex justify-end md:col-span-2">
+                <div className="mt-2 flex justify-center md:col-span-2 md:mt-5 md:justify-end">
                   <Button
-                    type="submit"
-                    loading={createWorkerMutation.isPending}
-                    disabled={createWorkerMutation.isPending || Boolean(workerCreateEmailError)}
-                    className="w-full sm:min-w-[230px] sm:w-auto"
+                    type="button"
+                    size="sm"
+                    onClick={() => {
+                      // Account creation temporarily disabled — no-op
+                    }}
+                    className="shrink-0 !inline-flex !items-center !leading-none rounded-lg px-2.5 py-1.5 text-xs shadow-md sm:rounded-xl sm:px-4 sm:py-2 sm:text-sm sm:shadow-lg"
                   >
-                    {createWorkerMutation.isPending ? "Création..." : "Créer compte"}
+                    Créer compte
                   </Button>
                 </div>
                 {workerCreateError && (
@@ -537,8 +461,8 @@ export default function AdminUsers() {
                       </div>
                     ))}
                   </div>
-                  <div className="hidden md:block">
-                    <Table className={adminTableRoomySpacingClassName}>
+                  <div className="hidden w-full md:block">
+                    <Table className={`${adminTableRoomySpacingClassName} !w-full`}>
                       <TableHeader>
                         <TableRow>
                           <TableHead>Utilisateur</TableHead>
@@ -628,22 +552,28 @@ export default function AdminUsers() {
               {/* Pagination */}
               {usersData?.pagination && (
                 <div className="flex items-center justify-between border-t border-gray-200 bg-white px-4 py-3 dark:border-gray-700 dark:bg-gray-800 sm:px-6">
-                  <div className="flex flex-1 justify-between sm:hidden">
+                  <div className="flex flex-1 justify-between gap-3 sm:hidden">
                     <Button
-                      onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                      disabled={currentPage === 1}
+                      type="button"
                       variant="secondary"
                       size="sm"
+                      onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                      disabled={currentPage === 1}
+                      className="min-w-[7.5rem] justify-center"
                     >
                       Précédent
                     </Button>
                     <Button
-                      onClick={() =>
-                        setCurrentPage(Math.min(usersData.pagination.pages, currentPage + 1))
-                      }
-                      disabled={currentPage === usersData.pagination.pages}
+                      type="button"
                       variant="secondary"
                       size="sm"
+                      onClick={() =>
+                        setCurrentPage(
+                          Math.min(usersData?.pagination?.totalPages || 1, currentPage + 1)
+                        )
+                      }
+                      disabled={currentPage === (usersData?.pagination?.totalPages || 1)}
+                      className="min-w-[7.5rem] justify-center"
                     >
                       Suivant
                     </Button>
@@ -658,31 +588,31 @@ export default function AdminUsers() {
                         ({usersData?.pagination?.totalUsers || 0} utilisateurs au total)
                       </p>
                     </div>
-                    <div>
-                      <nav className="relative z-0 inline-flex -space-x-px rounded-md shadow-sm">
-                        <Button
-                          onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                          disabled={currentPage === 1}
-                          variant="secondary"
-                          size="sm"
-                          className="rounded-l-md rounded-r-none"
-                        >
-                          Précédent
-                        </Button>
-                        <Button
-                          onClick={() =>
-                            setCurrentPage(
-                              Math.min(usersData?.pagination?.totalPages || 1, currentPage + 1)
-                            )
-                          }
-                          disabled={currentPage === (usersData?.pagination?.totalPages || 1)}
-                          variant="secondary"
-                          size="sm"
-                          className="rounded-l-none rounded-r-md"
-                        >
-                          Suivant
-                        </Button>
-                      </nav>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                        disabled={currentPage === 1}
+                        className="min-w-[7.5rem] justify-center font-semibold"
+                      >
+                        Précédent
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        onClick={() =>
+                          setCurrentPage(
+                            Math.min(usersData?.pagination?.totalPages || 1, currentPage + 1)
+                          )
+                        }
+                        disabled={currentPage === (usersData?.pagination?.totalPages || 1)}
+                        className="min-w-[7.5rem] justify-center font-semibold"
+                      >
+                        Suivant
+                      </Button>
                     </div>
                   </div>
                 </div>
@@ -690,6 +620,8 @@ export default function AdminUsers() {
             </div>
           </div>
         </main>
+
+        <Footer />
 
         {/* Role Update Modal */}
         {editingUser && (

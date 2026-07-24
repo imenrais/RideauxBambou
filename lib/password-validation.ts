@@ -90,9 +90,9 @@ export function getPasswordStrengthColor(score: number): string {
     case 2:
       return "bg-orange-500";
     case 3:
-      return "bg-yellow-500";
+      return "bg-yellow-400";
     case 4:
-      return "bg-blue-500";
+      return "bg-lime-500";
     case 5:
       return "bg-green-500";
     default:

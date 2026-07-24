@@ -3,12 +3,12 @@ import dynamic from "next/dynamic";
 import { useRouter } from "next/router";
 import { useSession } from "next-auth/react";
 import { useState, useEffect } from "react";
+import { FiPlus } from "react-icons/fi";
 
 import BackButton from "../../components/BackButton";
 import AdminLayout from "../../components/layout/AdminLayout";
 import Button from "../../components/ui/Button";
 import Loading from "../../components/ui/Loading";
-import { adminTableShellClassName } from "../../components/ui/Table";
 import { useToast } from "../../contexts/ToastContext";
 import { notifyProductsUpdated } from "../../lib/product-availability-sync";
 import { PRODUCTS_QUERY_KEY } from "../../lib/products-query";
@@ -307,20 +307,31 @@ export default function AdminProducts() {
 
   return (
     <AdminLayout title="Gestion des Produits - Administration" description="Gestion des produits - Administration">
-      <div className="mb-6">
+      <div className="mb-4 sm:mb-6">
         <BackButton />
       </div>
-      <div className="mb-14 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Gestion des Produits</h1>
-          <p className="mt-2 text-gray-600 dark:text-gray-400">Gérez votre catalogue de produits</p>
+      <div className="mb-4 sm:mb-10 lg:mb-14">
+        <div className="flex items-center justify-between gap-2 sm:gap-3">
+          <h1 className="min-w-0 text-xl font-bold tracking-tight text-gray-900 dark:text-white sm:text-3xl">
+            Gestion des Produits
+          </h1>
+          <Button
+            type="button"
+            size="sm"
+            icon={<FiPlus className="h-3.5 w-3.5 sm:h-4 sm:w-4" />}
+            onClick={() => setShowModal(true)}
+            className="shrink-0 !inline-flex !items-center !leading-none rounded-lg px-2.5 py-1.5 text-xs shadow-md sm:rounded-xl sm:px-4 sm:py-2 sm:text-sm sm:shadow-lg"
+          >
+            <span className="sm:hidden">Ajouter</span>
+            <span className="hidden sm:inline">Ajouter un produit</span>
+          </Button>
         </div>
-        <Button onClick={() => setShowModal(true)} className="shrink-0">
-          Ajouter un produit
-        </Button>
+        <p className="mt-1 text-xs text-gray-600 dark:text-gray-400 sm:mt-2 sm:text-base">
+          Gérez votre catalogue de produits
+        </p>
       </div>
 
-      <div className={adminTableShellClassName}>
+      <div className="mx-auto w-full max-w-full overflow-visible rounded-lg bg-white shadow-lg dark:bg-gray-800 md:max-w-4xl md:overflow-x-auto">
         <ProductTable
           products={Array.isArray(productsData) ? productsData : []}
           priceSettings={{

@@ -45,26 +45,26 @@ export default function Contact({ title }: ContactProps) {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6 }}
-        className="space-y-16"
+        className="space-y-8 sm:space-y-12 lg:space-y-16"
       >
         {/* Header */}
         <div className="text-center">
-          <h1 className="text-4xl font-bold text-gray-900 dark:text-white lg:text-5xl">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white sm:text-4xl lg:text-5xl">
             Contactez-nous
           </h1>
-          <p className="mt-4 text-lg text-gray-600 dark:text-gray-400">
+          <p className="mt-3 text-sm text-gray-600 dark:text-gray-400 sm:mt-4 sm:text-lg">
             Nous sommes là pour vous aider à créer votre espace de rêve
           </p>
         </div>
 
-        <div className="grid grid-cols-1 gap-12 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 lg:gap-12">
           {/* Contact Form */}
-          <Card className="p-8">
-            <h2 className="mb-6 text-2xl font-semibold text-gray-900 dark:text-white">
+          <Card className="p-4 sm:p-6 lg:p-8">
+            <h2 className="mb-4 text-xl font-semibold text-gray-900 dark:text-white sm:mb-6 sm:text-2xl">
               Envoyez-nous un message
             </h2>
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+            <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
+              <div className="grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-2">
                 <div>
                   <label className={formFieldLabelClass}>
                     Prénom
@@ -163,8 +163,8 @@ export default function Contact({ title }: ContactProps) {
                 </p>
               </div>
 
-              <div className="p-8">
-                <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
+              <div className="p-4 sm:p-6 lg:p-8">
+                <div className="grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-2 lg:grid-cols-3 lg:gap-8">
                   {/* Address Card */}
                   <motion.div
                     initial={{ opacity: 0, y: 20 }}
@@ -344,7 +344,7 @@ export default function Contact({ title }: ContactProps) {
               </div>
             </Card>
 
-            <Card className="p-8">
+            <Card className="p-4 sm:p-6 lg:p-8">
               <h2 className="mb-4 text-xl font-semibold text-gray-900 dark:text-white">
                 Pourquoi nous choisir ?
               </h2>

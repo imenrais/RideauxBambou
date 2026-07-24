@@ -944,30 +944,30 @@ export default function UserSettings({ title }: UserSettingsProps) {
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
         <Navigation />
 
-        <main className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
+        <main className="mx-auto max-w-4xl px-3 py-5 sm:px-6 sm:py-8 lg:px-8">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
-            className="space-y-8"
+            className="space-y-5 sm:space-y-8"
           >
             {/* Header */}
             <div className="text-center">
-              <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+              <h1 className="text-2xl font-bold text-gray-900 sm:text-3xl dark:text-white">
                 Paramètres du Compte
               </h1>
-              <p className="mt-2 text-gray-600 dark:text-gray-400">
+              <p className="mt-1.5 text-sm text-gray-600 sm:mt-2 sm:text-base dark:text-gray-400">
                 Gérez vos informations de compte et préférences
               </p>
             </div>
 
             {/* Profile Form */}
-            <Card className="p-8">
-              <h2 className="mb-6 text-xl font-semibold text-gray-900 dark:text-white">
+            <Card className="p-4 sm:p-6 lg:p-8">
+              <h2 className="mb-4 text-lg font-semibold text-gray-900 sm:mb-6 sm:text-xl dark:text-white">
                 Informations Personnelles
               </h2>
-              <form onSubmit={handleSubmit} className="space-y-6">
-                <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+              <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
+                <div className="grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-2">
                   <div>
                     <label className={formFieldLabelClass}>
                       Prénom
@@ -1127,23 +1127,23 @@ export default function UserSettings({ title }: UserSettingsProps) {
             </Card>
 
             {/* Account Actions */}
-            <Card className="p-8">
-              <div className="mb-8">
-                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+            <Card className="p-4 sm:p-6 lg:p-8">
+              <div className="mb-5 sm:mb-8">
+                <h2 className="text-xl font-bold text-gray-900 sm:text-2xl dark:text-white">
                   Actions du Compte
                 </h2>
-                <p className="mt-2 text-gray-600 dark:text-gray-400">
+                <p className="mt-1.5 text-sm text-gray-600 sm:mt-2 dark:text-gray-400">
                   Gérez la sécurité et les paramètres avancés de votre compte
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+              <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2">
                 {/* Change Password Card */}
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.6, delay: 0.1 }}
-                  className="group relative overflow-hidden rounded-xl border border-gray-200 bg-gradient-to-br from-gray-50 to-white p-6 transition-all duration-300 hover:shadow-lg hover:shadow-gray-200 dark:border-gray-700 dark:from-gray-800 dark:to-gray-700 dark:hover:shadow-gray-900"
+                  className="group relative overflow-hidden rounded-xl border border-gray-200 bg-gradient-to-br from-gray-50 to-white p-4 transition-all duration-300 hover:shadow-lg hover:shadow-gray-200 sm:p-6 dark:border-gray-700 dark:from-gray-800 dark:to-gray-700 dark:hover:shadow-gray-900"
                 >
                   <div className="absolute right-4 top-4">
                     <div className="rounded-full bg-gray-100 p-3 group-hover:bg-gray-200 dark:bg-gray-700 dark:group-hover:bg-gray-600">
@@ -1202,7 +1202,7 @@ export default function UserSettings({ title }: UserSettingsProps) {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.6, delay: 0.3 }}
-                className="mt-8 rounded-lg bg-amber-50 p-4 dark:bg-amber-900/20"
+                className="mt-5 rounded-lg bg-amber-50 p-3 sm:mt-8 sm:p-4 dark:bg-amber-900/20"
               >
                 <div className="flex items-start">
                   <div className="flex-shrink-0">

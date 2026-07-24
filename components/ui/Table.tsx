@@ -34,16 +34,16 @@ interface TableHeadProps {
 }
 
 export const adminTableComfortableSpacingClassName =
-  "[&_th]:!px-5 [&_td]:!px-5 sm:[&_th]:!px-6 sm:[&_td]:!px-6";
+  "[&_th]:!px-3 [&_td]:!px-3 sm:[&_th]:!px-5 sm:[&_td]:!px-5 md:[&_th]:!px-6 md:[&_td]:!px-6";
 
 export const adminTableRoomySpacingClassName =
   "[&_th]:!px-6 [&_td]:!px-6 [&_th]:!py-4 [&_td]:!py-5 sm:[&_th]:!px-8 sm:[&_td]:!px-8";
 
 export const adminTableShellClassName =
-  "mx-auto w-full max-w-full overflow-hidden rounded-lg bg-white shadow-lg dark:bg-gray-800 md:w-fit";
+  "mx-auto w-full max-w-full overflow-x-auto rounded-lg bg-white shadow-lg dark:bg-gray-800";
 
 export const adminTableShellInsetClassName =
-  "mx-auto w-full max-w-full overflow-hidden rounded-lg bg-white dark:bg-gray-800 md:w-fit";
+  "mx-auto w-full max-w-full overflow-hidden rounded-lg bg-white dark:bg-gray-800";
 
 export const adminTableClassName =
   "w-max max-w-full table-auto divide-y divide-gray-200 [&_td]:px-3 [&_th]:px-3 [&_th]:font-semibold [&_th]:tracking-wide sm:[&_td]:px-4 sm:[&_th]:px-4 dark:divide-gray-700";
@@ -63,7 +63,7 @@ export const adminTableCellClassName =
 
 export function Table({ children, className = "" }: TableProps) {
   return (
-    <div className="flex justify-center overflow-x-auto">
+    <div className="table-scroll w-full">
       <table className={`${adminTableClassName} ${className}`.trim()}>{children}</table>
     </div>
   );

@@ -53,28 +53,28 @@ export default function Footer() {
 
   return (
     <footer className="border-t border-gray-200 bg-gray-100 text-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-white">
-      <div className="mx-auto max-w-7xl px-4 pt-12 sm:px-6 lg:px-8">
-        <div className="flex flex-col gap-10 lg:flex-row lg:items-start lg:gap-40 xl:gap-48">
+      <div className="mx-auto max-w-7xl px-3 pt-6 sm:px-6 sm:pt-12 lg:px-8">
+        <div className="flex flex-col gap-6 sm:gap-8 lg:flex-row lg:items-start lg:gap-40 xl:gap-48">
           {/* Logo and Social */}
-          <div className="shrink-0 space-y-4 lg:w-52">
+          <div className="w-fit max-w-full shrink-0 space-y-2.5 sm:space-y-4">
             <Link
               href="/#accueil"
-              className="group inline-flex flex-nowrap items-center gap-3 whitespace-nowrap"
+              className="group inline-flex flex-nowrap items-center gap-2.5 sm:gap-3"
             >
               <Image
                 src="/images/logo.png"
                 alt="Rideaux Bambou Logo"
                 width={80}
                 height={80}
-                className="h-10 w-10 shrink-0 rounded-full object-cover"
+                className="h-8 w-8 shrink-0 rounded-full object-cover sm:h-10 sm:w-10"
                 quality={100}
               />
-              <h3 className="text-xl font-semibold transition-colors duration-150 group-hover:text-gray-600 dark:group-hover:text-gray-200 sm:text-2xl">
+              <h3 className="whitespace-nowrap text-base font-semibold tracking-tight transition-colors duration-150 group-hover:text-gray-600 dark:group-hover:text-gray-200 sm:text-2xl">
                 Rideaux Bambou
               </h3>
             </Link>
-            <div className="space-y-4">
-              <p className="text-sm text-gray-600 dark:text-gray-300">Suivez-nous</p>
+            <div className="space-y-2 sm:space-y-4">
+              <p className="text-xs text-gray-600 dark:text-gray-300 sm:text-sm">Suivez-nous</p>
               <div className="flex space-x-4">
                 {socialLinks.map((social) => (
                   <a
@@ -92,25 +92,29 @@ export default function Footer() {
             </div>
           </div>
 
-          {/* Adresse / Contact / Services — equal columns, identical gaps */}
-          <div className="grid w-full flex-1 grid-cols-1 gap-y-8 sm:grid-cols-3 sm:gap-x-10 lg:gap-x-12 [&>*:last-child]:sm:ml-10 [&>*:last-child]:lg:ml-16">
-            {/* Address + Privacy & Terms */}
-            <div className="min-w-0">
+          {/* Adresse / Contact / Services */}
+          <div className="grid w-full flex-1 grid-cols-2 gap-x-2.5 gap-y-6 sm:grid-cols-3 sm:gap-x-10 sm:gap-y-8 lg:gap-x-12">
+            {/* Address */}
+            <div className="order-1 min-w-0 sm:col-span-1">
               <div>
-                <h4 className="mb-4 flex items-start gap-2 text-lg font-semibold leading-snug">
-                  <HiOutlineMapPin className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
+                <h4 className="mb-3 flex min-h-[2.75rem] items-end gap-1 text-xs font-semibold leading-snug sm:mb-4 sm:min-h-0 sm:items-center sm:gap-2 sm:text-lg">
+                  <HiOutlineMapPin className="h-3.5 w-3.5 shrink-0 sm:mt-0.5 sm:h-5 sm:w-5" aria-hidden="true" />
                   <span>Adresse</span>
                 </h4>
-                <div className="pl-7 text-sm leading-relaxed text-gray-600 dark:text-gray-300">
-                  <p>11 rue 15 octobre</p>
-                  <p>Ben Arous, Ben Arous</p>
-                </div>
+                <ul className="space-y-2 pl-4 sm:pl-7">
+                  <li className="text-[10px] text-gray-600 dark:text-gray-300 sm:text-sm sm:leading-relaxed">
+                    11 rue 15 octobre
+                  </li>
+                  <li className="text-[10px] text-gray-600 dark:text-gray-300 sm:text-sm sm:leading-relaxed">
+                    Ben Arous, Ben Arous
+                  </li>
+                </ul>
               </div>
 
-              <div className="mt-12">
-                <h4 className="mb-4 flex items-start gap-2 text-base font-semibold leading-snug lg:text-lg">
+              <div className="mt-8 hidden sm:mt-12 sm:block">
+                <h4 className="mb-3 flex items-start gap-2 text-sm font-semibold leading-snug sm:mb-4 sm:whitespace-nowrap sm:text-base lg:text-lg">
                   <HiOutlineShieldCheck className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
-                  <span className="whitespace-nowrap">Confidentialité & Conditions</span>
+                  <span>Confidentialité & Conditions</span>
                 </h4>
                 <ul className="space-y-2 pl-7">
                   {footerLinks.privacyTerms.map((link) => (
@@ -128,16 +132,16 @@ export default function Footer() {
             </div>
 
             {/* Contact */}
-            <div className="min-w-0">
-              <h4 className="mb-4 flex items-start gap-2 text-lg font-semibold leading-snug">
-                <HiOutlinePhone className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
+            <div className="order-2 min-w-0 sm:col-span-1">
+              <h4 className="mb-3 flex min-h-[2.75rem] items-end gap-1 text-xs font-semibold leading-snug sm:mb-4 sm:min-h-0 sm:items-center sm:gap-2 sm:text-lg">
+                <HiOutlinePhone className="h-3.5 w-3.5 shrink-0 sm:mt-0.5 sm:h-5 sm:w-5" aria-hidden="true" />
                 <span>Contact</span>
               </h4>
-              <ul className="space-y-3 pl-7 text-sm text-gray-600 dark:text-gray-300">
+              <ul className="space-y-2 pl-4 sm:space-y-3 sm:pl-7">
                 <li>
                   <a
                     href="tel:+21651590770"
-                    className="transition-colors hover:text-gray-900 dark:hover:text-white"
+                    className="whitespace-nowrap text-[10px] text-gray-600 transition-colors hover:text-gray-900 dark:text-gray-300 dark:hover:text-white sm:text-sm"
                   >
                     Téléphone : 51 590 770
                   </a>
@@ -145,7 +149,7 @@ export default function Footer() {
                 <li>
                   <a
                     href="mailto:rideauxbambou@gmail.com"
-                    className="whitespace-nowrap transition-colors hover:text-gray-900 dark:hover:text-white"
+                    className="whitespace-nowrap text-[10px] text-gray-600 transition-colors hover:text-gray-900 dark:text-gray-300 dark:hover:text-white sm:text-sm"
                   >
                     Email : rideauxbambou@gmail.com
                   </a>
@@ -154,17 +158,37 @@ export default function Footer() {
             </div>
 
             {/* Services */}
-            <div className="min-w-0">
-              <h4 className="mb-4 flex items-start gap-2 text-lg font-semibold leading-snug">
-                <HiOutlineWrenchScrewdriver className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
+            <div className="order-3 min-w-0 sm:ml-10 lg:ml-16">
+              <h4 className="mb-3 flex min-h-[2.75rem] items-end gap-1 text-xs font-semibold leading-snug sm:mb-4 sm:min-h-0 sm:items-center sm:gap-2 sm:text-lg">
+                <HiOutlineWrenchScrewdriver className="h-3.5 w-3.5 shrink-0 sm:mt-0.5 sm:h-5 sm:w-5" aria-hidden="true" />
                 <span>Services</span>
               </h4>
-              <ul className="space-y-2 pl-7">
+              <ul className="space-y-2 pl-4 sm:space-y-2 sm:pl-7">
                 {footerLinks.services.map((link) => (
                   <li key={link.label}>
                     <Link
                       href={link.href}
-                      className="text-sm text-gray-600 transition-colors hover:text-gray-900 dark:text-gray-300 dark:hover:text-white"
+                      className="text-[10px] text-gray-600 transition-colors hover:text-gray-900 dark:text-gray-300 dark:hover:text-white sm:text-sm"
+                    >
+                      {link.label}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {/* Privacy — phone only (after Services); desktop keeps it under Adresse */}
+            <div className="order-4 min-w-0 sm:hidden">
+              <h4 className="mb-3 flex min-h-[2.75rem] items-end gap-1 text-xs font-semibold leading-snug">
+                <HiOutlineShieldCheck className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                <span>Confidentialité & Conditions</span>
+              </h4>
+              <ul className="space-y-2 pl-4">
+                {footerLinks.privacyTerms.map((link) => (
+                  <li key={link.label}>
+                    <Link
+                      href={link.href}
+                      className="text-[10px] text-gray-600 transition-colors hover:text-gray-900 dark:text-gray-300 dark:hover:text-white"
                     >
                       {link.label}
                     </Link>
@@ -176,9 +200,9 @@ export default function Footer() {
         </div>
 
         {/* Bottom Bar */}
-        <div className="mt-8 border-t border-gray-200 py-8 dark:border-gray-700">
-          <div className="flex flex-col items-center justify-center space-y-4 md:flex-row md:space-y-0">
-            <p className="text-sm text-gray-500 dark:text-gray-400">
+        <div className="mt-5 border-t border-gray-200 py-3 dark:border-gray-700 sm:mt-8 sm:py-5">
+          <div className="flex items-center justify-center">
+            <p className="text-center text-[11px] text-gray-500 dark:text-gray-400 sm:text-sm">
               ©{currentYear} Rideaux Bambou. Tous droits réservés.
             </p>
           </div>

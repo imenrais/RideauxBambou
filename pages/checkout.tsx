@@ -391,7 +391,7 @@ export default function CheckoutPage() {
               transition={{ duration: 0.6 }}
               className="mb-8"
             >
-              <h1 className="mb-2 text-3xl font-bold text-gray-900 dark:text-white">
+              <h1 className="mb-2 text-2xl font-bold sm:text-3xl text-gray-900 dark:text-white">
                 Finaliser la commande
               </h1>
               <p className="text-gray-600 dark:text-gray-400">
@@ -405,7 +405,7 @@ export default function CheckoutPage() {
               </div>
             )}
 
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-3 lg:gap-8">
+            <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-3 lg:gap-8">
               {/* Order Summary */}
               <div className="lg:col-span-1">
                 <motion.div
@@ -550,7 +550,7 @@ export default function CheckoutPage() {
                     </div>
 
                     {isCompanyOrder ? (
-                      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                      <div className="grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-2">
                         <div className="md:col-span-2">
                           <label htmlFor="companyName" className={formFieldLabelClass}>
                             Nom de l&apos;entreprise *
@@ -593,7 +593,7 @@ export default function CheckoutPage() {
                         </div>
                       </div>
                     ) : (
-                      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                      <div className="grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-2">
                         <div>
                           <label htmlFor="firstName" className={formFieldLabelClass}>
                             Prénom *
@@ -695,7 +695,7 @@ export default function CheckoutPage() {
                       />
                     </div>
 
-                    <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                    <div className="grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-2">
                       <div>
                         <label
                           htmlFor="state"
@@ -749,7 +749,7 @@ export default function CheckoutPage() {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                    <div className="grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-2">
                       <div>
                         <label
                           htmlFor="postalCode"

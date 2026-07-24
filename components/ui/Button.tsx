@@ -23,7 +23,7 @@ export default function Button({
   ...props
 }: ButtonProps) {
   const baseClasses =
-    "inline-flex items-center justify-center font-semibold transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60";
+    "inline-flex items-center justify-center leading-none font-semibold transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60";
 
   const variantClasses = {
     primary:
@@ -37,9 +37,9 @@ export default function Button({
   };
 
   const sizeClasses = {
-    sm: "px-4 py-2 text-sm",
-    md: "px-6 py-3 text-base",
-    lg: "px-8 py-4 text-lg",
+    sm: "px-3 py-1.5 text-xs sm:px-4 sm:py-2 sm:text-sm",
+    md: "px-4 py-2.5 text-sm sm:px-6 sm:py-3 sm:text-base",
+    lg: "px-5 py-3 text-base sm:px-8 sm:py-4 sm:text-lg",
   };
 
   const widthClasses = fullWidth ? "w-full" : "";
@@ -48,7 +48,7 @@ export default function Button({
   return (
     <button className={finalClasses} disabled={disabled || loading} {...props}>
       {loading && (
-        <svg className="mr-2 h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+        <svg className="mr-2 h-4 w-4 shrink-0 animate-spin" fill="none" viewBox="0 0 24 24" aria-hidden="true">
           <circle
             className="opacity-25"
             cx="12"
@@ -65,11 +65,19 @@ export default function Button({
         </svg>
       )}
 
-      {!loading && icon && iconPosition === "left" && <span className="mr-2">{icon}</span>}
+      {!loading && icon && iconPosition === "left" && (
+        <span className="mr-1.5 inline-flex shrink-0 items-center justify-center sm:mr-2 [&>svg]:block">
+          {icon}
+        </span>
+      )}
 
-      {children}
+      <span className="inline-flex items-center leading-none">{children}</span>
 
-      {!loading && icon && iconPosition === "right" && <span className="ml-2">{icon}</span>}
+      {!loading && icon && iconPosition === "right" && (
+        <span className="ml-1.5 inline-flex shrink-0 items-center justify-center sm:ml-2 [&>svg]:block">
+          {icon}
+        </span>
+      )}
     </button>
   );
 }

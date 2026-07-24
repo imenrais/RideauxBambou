@@ -6,6 +6,7 @@ import { useState, useEffect, useMemo, useRef } from "react";
 
 import AdminNavigation from "../../components/AdminNavigation";
 import BackButton from "../../components/BackButton";
+import Footer from "../../components/Footer";
 import StorePanelBreakdown, {
   StorePanelQuantityHint,
 } from "../../components/StorePanelBreakdown";
@@ -13,8 +14,8 @@ import Button from "../../components/ui/Button";
 import Card from "../../components/ui/Card";
 import Input from "../../components/ui/Input";
 import Loading from "../../components/ui/Loading";
-import { adminTableShellClassName } from "../../components/ui/Table";
 import { useToast } from "../../contexts/ToastContext";
+import { FiPlus, FiSearch } from "react-icons/fi";
 import { escapeHtml } from "../../lib/email-templates";
 import { getEmailValidationError, normalizeEmailValue } from "../../lib/email-validation";
 import {
@@ -73,6 +74,7 @@ interface Product {
   _id: string;
   name: string;
   supportsPanneau?: boolean;
+  isAvailable?: boolean;
 }
 
 type CanonicalOrderStatus = "pending" | "confirmed" | "processing" | "delivered" | "cancelled";
@@ -105,6 +107,11 @@ const statusColors = {
   processing: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200",
   delivered: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
   cancelled: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
+};
+
+const customerTypeBadgeClass = {
+  company: "bg-teal-100 text-teal-800 ring-1 ring-inset ring-teal-600/15 dark:bg-teal-950/50 dark:text-teal-300 dark:ring-teal-400/20",
+  person: "bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-200",
 };
 
 const statusOptions = [
@@ -877,6 +884,7 @@ export default function AdminOrders() {
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ADMIN_ORDERS_LIST_QUERY_KEY });
       queryClient.invalidateQueries({ queryKey: ADMIN_ORDERS_STATS_QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: ["admin-dashboard-charts-orders"] });
       queryClient.invalidateQueries({ queryKey: ["admin-notification-center-orders"] });
     },
   });
@@ -1036,6 +1044,7 @@ export default function AdminOrders() {
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ADMIN_ORDERS_LIST_QUERY_KEY });
       queryClient.invalidateQueries({ queryKey: ADMIN_ORDERS_STATS_QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: ["admin-dashboard-charts-orders"] });
       queryClient.invalidateQueries({ queryKey: ["admin-notification-center-orders"] });
     },
   });
@@ -1508,19 +1517,21 @@ export default function AdminOrders() {
         <AdminNavigation />
 
         {/* Main Content */}
-        <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-          <div className="mb-6">
+        <main className="mx-auto max-w-7xl overflow-x-clip px-3 py-5 sm:px-6 sm:py-8 lg:px-8">
+          <div className="mb-4 sm:mb-6">
             <BackButton href="/admin" />
           </div>
-          <div className="space-y-6">
+          <div className="space-y-5 sm:space-y-6">
             {/* Header */}
             <div>
-              <div className="mb-14 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+              <div className="mb-4 flex items-center justify-between gap-2 sm:mb-10 sm:gap-3 lg:mb-14">
+                <h1 className="min-w-0 text-xl font-bold tracking-tight text-gray-900 dark:text-white sm:text-3xl">
                   Gestion des Commandes
                 </h1>
                 <Button
                   type="button"
+                  size="sm"
+                  icon={<FiPlus className="h-3.5 w-3.5 sm:h-4 sm:w-4" />}
                   onClick={() => {
                     setHasSelectedManualReferenceByType({ panneau: false, store: false });
                     setManualOrderError("");
@@ -1534,31 +1545,42 @@ export default function AdminOrders() {
                     }));
                     setIsManualOrderModalOpen(true);
                   }}
-                  className="w-full sm:w-auto"
+                  className="shrink-0 !inline-flex !items-center !leading-none rounded-lg px-2.5 py-1.5 text-xs shadow-md sm:rounded-xl sm:px-4 sm:py-2 sm:text-sm sm:shadow-lg"
                 >
-                  Ajouter une commande
+                  <span className="sm:hidden">Ajouter</span>
+                  <span className="hidden sm:inline">Ajouter une commande</span>
                 </Button>
               </div>
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                <Input
-                  label="Rechercher une commande"
-                  placeholder="ID commande, client ou téléphone"
-                  value={searchTerm}
-                  onChange={(e) => {
-                    setSearchTerm(e.target.value);
-                    setFocusOrderLookup(null);
-                    setCurrentPage(1);
-                  }}
-                />
-                <div className="md:justify-self-end md:w-[10.5rem]">
-                  <label className={formFieldLabelClass}>Filtrer par statut</label>
+              <div className="grid grid-cols-1 gap-2.5 sm:gap-3 md:flex md:items-end md:justify-between md:gap-4">
+                <div className="min-w-0 md:w-full md:max-w-sm">
+                  <Input
+                    label="Rechercher une commande"
+                    placeholder="ID, client ou téléphone"
+                    value={searchTerm}
+                    onChange={(e) => {
+                      setSearchTerm(e.target.value);
+                      setFocusOrderLookup(null);
+                      setCurrentPage(1);
+                    }}
+                    icon={<FiSearch className="h-3.5 w-3.5 sm:h-4 sm:w-4" />}
+                    className="!rounded-lg !py-2 !text-sm sm:!rounded-md"
+                  />
+                </div>
+                <div
+                  className="inline-flex flex-col items-stretch justify-self-start self-start md:!w-[9.84rem] md:!max-w-[9.84rem] md:justify-self-auto md:self-end"
+                  style={{ width: "8.76rem", maxWidth: "8.76rem" }}
+                >
+                  <label className="mb-1 block w-full text-left text-[11px] font-medium leading-tight text-gray-600 dark:text-gray-400 sm:text-sm sm:text-gray-700 dark:sm:text-gray-300">
+                    Filtrer par statut
+                  </label>
                   <select
                     value={selectedStatus}
                     onChange={(e) => {
                       setSelectedStatus(e.target.value);
                       setCurrentPage(1);
                     }}
-                    className={formSelectClass}
+                    className={`${formSelectClass} !box-border !h-8 !w-full !max-w-full !rounded-lg !px-2.5 !py-1 !text-xs !leading-tight sm:!h-auto sm:!rounded-md sm:!px-3 sm:!py-2 sm:!text-sm`}
+                    style={{ width: "100%", maxWidth: "100%" }}
                   >
                     <option value="" className="text-gray-900 dark:text-white">
                       Tous les statuts
@@ -1579,60 +1601,69 @@ export default function AdminOrders() {
 
             {/* Stats Cards */}
             {ordersData?.stats && (
-              <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5">
-                <div className="rounded-lg bg-white p-4 text-center shadow-sm dark:bg-gray-800">
-                  <div className="mb-1 text-xl font-bold text-yellow-600 dark:text-yellow-400">
-                    ⏳
+              <div className="grid grid-cols-3 gap-2 sm:gap-3 lg:grid-cols-5">
+                {[
+                  {
+                    key: "pending",
+                    value: ordersData.stats.pendingOrders,
+                    label: "Attente",
+                    labelFull: "En Attente",
+                    accent: "border-t-yellow-500",
+                    valueClass: "text-yellow-600 dark:text-yellow-400",
+                    soft: "bg-yellow-50/70 dark:bg-yellow-950/20",
+                  },
+                  {
+                    key: "confirmed",
+                    value: ordersData.stats.confirmedOrders || 0,
+                    label: "Confirmées",
+                    labelFull: "Confirmées",
+                    accent: "border-t-blue-500",
+                    valueClass: "text-blue-600 dark:text-blue-400",
+                    soft: "bg-blue-50/70 dark:bg-blue-950/20",
+                  },
+                  {
+                    key: "processing",
+                    value: ordersData.stats.processingOrders || 0,
+                    label: "En cours",
+                    labelFull: "En cours",
+                    accent: "border-t-purple-500",
+                    valueClass: "text-purple-600 dark:text-purple-400",
+                    soft: "bg-purple-50/70 dark:bg-purple-950/20",
+                  },
+                  {
+                    key: "delivered",
+                    value: ordersData.stats.deliveredOrders,
+                    label: "Livrées",
+                    labelFull: "Livrées",
+                    accent: "border-t-green-500",
+                    valueClass: "text-green-600 dark:text-green-400",
+                    soft: "bg-green-50/70 dark:bg-green-950/20",
+                  },
+                  {
+                    key: "cancelled",
+                    value: ordersData.stats.cancelledOrders || 0,
+                    label: "Annulées",
+                    labelFull: "Annulées",
+                    accent: "border-t-red-500",
+                    valueClass: "text-red-600 dark:text-red-400",
+                    soft: "bg-red-50/70 dark:bg-red-950/20",
+                  },
+                ].map((stat) => (
+                  <div
+                    key={stat.key}
+                    className={`flex min-h-[4.25rem] flex-col items-center justify-center rounded-xl border border-gray-200/80 border-t-[3px] ${stat.accent} ${stat.soft} px-1.5 py-2.5 text-center shadow-sm dark:border-gray-700/70 sm:min-h-[5.5rem] sm:rounded-2xl sm:px-3 sm:py-3.5`}
+                  >
+                    <p
+                      className={`flex h-7 items-baseline justify-center text-lg font-bold leading-none tracking-tight sm:h-9 sm:text-2xl ${stat.valueClass}`}
+                    >
+                      {stat.value}
+                    </p>
+                    <p className="mt-1 line-clamp-2 text-[10px] font-medium leading-tight text-gray-600 dark:text-gray-300 sm:mt-1.5 sm:text-xs">
+                      <span className="sm:hidden">{stat.label}</span>
+                      <span className="hidden sm:inline">{stat.labelFull}</span>
+                    </p>
                   </div>
-                  <h3 className="mb-1 text-sm font-semibold text-gray-900 dark:text-white">
-                    En Attente
-                  </h3>
-                  <p className="text-xl font-bold text-yellow-600 dark:text-yellow-400">
-                    {ordersData.stats.pendingOrders}
-                  </p>
-                </div>
-
-                <div className="rounded-lg bg-white p-4 text-center shadow-sm dark:bg-gray-800">
-                  <div className="mb-1 text-xl font-bold text-blue-600 dark:text-blue-400">✅</div>
-                  <h3 className="mb-1 text-sm font-semibold text-gray-900 dark:text-white">
-                    Confirmées
-                  </h3>
-                  <p className="text-xl font-bold text-blue-600 dark:text-blue-400">
-                    {ordersData.stats.confirmedOrders || 0}
-                  </p>
-                </div>
-
-                <div className="rounded-lg bg-white p-4 text-center shadow-sm dark:bg-gray-800">
-                  <div className="mb-1 text-xl font-bold text-purple-600 dark:text-purple-400">🛠️</div>
-                  <h3 className="mb-1 text-sm font-semibold text-gray-900 dark:text-white">
-                    En cours
-                  </h3>
-                  <p className="text-xl font-bold text-purple-600 dark:text-purple-400">
-                    {ordersData.stats.processingOrders || 0}
-                  </p>
-                </div>
-
-                <div className="rounded-lg bg-white p-4 text-center shadow-sm dark:bg-gray-800">
-                  <div className="mb-1 text-xl font-bold text-green-600 dark:text-green-400">
-                    ✓
-                  </div>
-                  <h3 className="mb-1 text-sm font-semibold text-gray-900 dark:text-white">
-                    Livrées
-                  </h3>
-                  <p className="text-xl font-bold text-green-600 dark:text-green-400">
-                    {ordersData.stats.deliveredOrders}
-                  </p>
-                </div>
-
-                <div className="rounded-lg bg-white p-4 text-center shadow-sm dark:bg-gray-800">
-                  <div className="mb-1 text-xl font-bold text-red-600 dark:text-red-400">✕</div>
-                  <h3 className="mb-1 text-sm font-semibold text-gray-900 dark:text-white">
-                    Annulées
-                  </h3>
-                  <p className="text-xl font-bold text-red-600 dark:text-red-400">
-                    {ordersData.stats.cancelledOrders || 0}
-                  </p>
-                </div>
+                ))}
               </div>
             )}
 
@@ -1689,11 +1720,24 @@ export default function AdminOrders() {
                                 </option>
                               )}
                               {selectableManualProducts.map((product) => (
-                                <option key={product._id} value={product._id}>
+                                <option
+                                  key={product._id}
+                                  value={product._id}
+                                  disabled={product.isAvailable === false}
+                                >
                                   {product.name}
+                                  {product.isAvailable === false ? " — rupture de stock" : ""}
                                 </option>
                               ))}
                             </select>
+                            {manualOrderForm.curtainType === "panneau" &&
+                              panneauProducts.length > 0 &&
+                              panneauProducts.length < products.length && (
+                              <p className="mt-1 text-xs text-gray-600 dark:text-gray-400">
+                                Références disponibles en panneau :{" "}
+                                {panneauProducts.map((product) => product.name).join(", ")}
+                              </p>
+                            )}
                             {selectableManualProducts.length === 0 && (
                               <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                                 {manualOrderForm.curtainType === "panneau"
@@ -1701,8 +1745,14 @@ export default function AdminOrders() {
                                   : "Aucune référence active disponible."}
                               </p>
                             )}
+                            {manualOrderForm.curtainType === "panneau" &&
+                              selectableManualProducts.length > 0 &&
+                              selectableManualProducts.every((product) => product.isAvailable === false) && (
+                              <p className="mt-1 text-xs text-red-600 dark:text-red-400">
+                                Toutes les références panneau sont en rupture de stock.
+                              </p>
+                            )}
                           </div>
-
                           <div>
                             <label className={formFieldLabelClass}>
                               Type de rideau
@@ -2276,7 +2326,7 @@ export default function AdminOrders() {
             )}
 
             {/* Orders Table */}
-            <div className={`${adminTableShellClassName} md:w-full`}>
+            <div className="mx-auto w-full max-w-full overflow-visible rounded-lg bg-white shadow-lg dark:bg-gray-800 md:w-full">
               {isLoading ? (
                 <div className="p-8 text-center">
                   <div className="mx-auto h-8 w-8 animate-spin rounded-full border-b-2 border-green-600"></div>
@@ -2286,7 +2336,7 @@ export default function AdminOrders() {
                 </div>
               ) : (
                 <>
-                  <div className="space-y-3 p-3 md:hidden">
+                  <div className="space-y-2.5 overflow-visible p-2.5 md:hidden">
                     {ordersData?.orders?.map((order: any) => {
                       const customer = parseCustomerInfo(order.customerInfo);
                       const displayTotal = getOrderDisplayTotal({
@@ -2295,102 +2345,143 @@ export default function AdminOrders() {
                         installationFee: order.installationFee || 0,
                         customerInfo: order.customerInfo,
                       });
+                      const productLabel =
+                        (order.items || [])
+                          .map((item: any) => normalizeCurtainTypeName(item.curtainTypeName))
+                          .filter(Boolean)
+                          .join(", ") || "N/A";
+                      const normalizedStatus = normalizeStatus(order.status);
                       return (
                       <div
                         key={`${order._id}-mobile`}
                         id={`admin-order-${order._id}`}
-                        className={`rounded-lg border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-900 ${getFocusedOrderClass(order._id)}`}
+                        className={`rounded-xl border border-gray-200/90 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900 ${getFocusedOrderClass(order._id)}`}
                       >
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <p className="font-mono text-sm font-semibold text-gray-900 dark:text-white">
+                        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 bg-gray-50/90 px-3 py-2.5 dark:border-gray-800 dark:bg-gray-800/60">
+                          <div className="min-w-0 flex-1">
+                            <p className="break-words font-mono text-sm font-semibold text-gray-900 dark:text-white">
                               #{order._id.slice(-8)}
+                            </p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                              {new Date(order.createdAt).toLocaleDateString()}
                             </p>
                           </div>
                           <span
-                            className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${
-                              statusColors[normalizeStatus(order.status)] ||
+                            className={`inline-flex max-w-full shrink-0 whitespace-normal rounded-full px-2.5 py-1 text-xs font-semibold ${
+                              statusColors[normalizedStatus] ||
                               "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300"
                             }`}
                           >
-                            {statusLabels[normalizeStatus(order.status)]}
+                            {statusLabels[normalizedStatus]}
                           </span>
                         </div>
-                        <dl className="mt-3 grid grid-cols-1 gap-2 text-xs sm:grid-cols-2">
-                          <div>
-                            <dt className="font-medium text-gray-500 dark:text-gray-400">Client</dt>
-                            <dd className="text-gray-900 dark:text-white">{customer.name}</dd>
+
+                        <div className="space-y-3 p-3">
+                          <div className="flex flex-wrap items-start justify-between gap-2">
+                            <div className="min-w-0 flex-1 basis-[12rem] space-y-2">
+                              <div>
+                                <p className="text-xs font-medium text-gray-500 dark:text-gray-400">
+                                  Client
+                                </p>
+                                <p className="mt-0.5 break-words text-sm font-medium text-gray-900 dark:text-white">
+                                  {customer.name}
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-xs font-medium text-gray-500 dark:text-gray-400">
+                                  Téléphone
+                                </p>
+                                <p className="mt-0.5 break-words text-sm text-gray-900 dark:text-white">
+                                  {customer.phone}
+                                </p>
+                              </div>
+                            </div>
+                            <span
+                              className={`inline-flex max-w-full shrink-0 whitespace-normal rounded-full px-2.5 py-1 text-xs font-semibold ${
+                                customerTypeBadgeClass[
+                                  customer.customerType === "company" ? "company" : "person"
+                                ]
+                              }`}
+                            >
+                              {customer.customerTypeLabel}
+                            </span>
                           </div>
-                          <div>
-                            <dt className="font-medium text-gray-500 dark:text-gray-400">Type client</dt>
-                            <dd className="text-gray-900 dark:text-white">
-                              <span
-                                className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${
-                                  customer.customerType === "company"
-                                    ? "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
-                                    : "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300"
-                                }`}
-                              >
-                                {customer.customerTypeLabel}
-                              </span>
-                              {customer.customerType === "company" && (
-                                <span className="mt-1 block text-gray-500 dark:text-gray-400">
-                                  MF {customer.matriculeFiscale}
-                                </span>
-                              )}
-                            </dd>
+
+                          {customer.customerType === "company" ? (
+                            <p className="-mt-1 break-words text-xs text-gray-500 dark:text-gray-400">
+                              MF {customer.matriculeFiscale}
+                            </p>
+                          ) : null}
+
+                          <div className="grid grid-cols-1 gap-2.5 rounded-lg bg-gray-50 p-2.5 dark:bg-gray-800/50 sm:grid-cols-2">
+                            <div>
+                              <p className="text-xs font-medium text-gray-500 dark:text-gray-400">
+                                Total
+                              </p>
+                              <p className="mt-0.5 break-words text-sm font-semibold text-gray-900 dark:text-white">
+                                {displayTotal.toFixed(2)} TND
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-xs font-medium text-gray-500 dark:text-gray-400">
+                                Produit
+                              </p>
+                              <p className="mt-0.5 break-words text-sm text-gray-900 dark:text-white">
+                                {productLabel}
+                              </p>
+                            </div>
+                            <div className="sm:col-span-2">
+                              <p className="text-xs font-medium text-gray-500 dark:text-gray-400">
+                                Adresse
+                              </p>
+                              <p className="mt-0.5 break-words text-sm leading-relaxed text-gray-700 dark:text-gray-300">
+                                {[customer.address, customer.city, customer.state, customer.postalCode]
+                                  .filter(Boolean)
+                                  .join(" · ") || "N/A"}
+                              </p>
+                            </div>
+                            {customer.email && customer.email !== "N/A" ? (
+                              <div className="sm:col-span-2">
+                                <p className="text-xs font-medium text-gray-500 dark:text-gray-400">
+                                  Email
+                                </p>
+                                <p className="mt-0.5 break-words text-sm text-gray-700 dark:text-gray-300">
+                                  {customer.email}
+                                </p>
+                              </div>
+                            ) : null}
                           </div>
-                          <div>
-                            <dt className="font-medium text-gray-500 dark:text-gray-400">Téléphone</dt>
-                            <dd className="text-gray-900 dark:text-white">{customer.phone}</dd>
+
+                          <div className="flex items-center gap-2 border-t border-gray-100 pt-2.5 dark:border-gray-800">
+                            <label
+                              className="sr-only"
+                              htmlFor={`mobile-status-${order._id}`}
+                            >
+                              Statut
+                            </label>
+                            <select
+                              id={`mobile-status-${order._id}`}
+                              value={normalizedStatus}
+                              onChange={(e) => handleInlineStatusUpdate(order._id, e.target.value)}
+                              disabled={updateStatusMutation.isPending}
+                              className={`${formSelectClass} !box-border h-9 w-[36%] max-w-[36%] shrink-0 !rounded-lg !border-gray-200 !px-2.5 !py-0 !text-sm !leading-none dark:!border-gray-600`}
+                            >
+                              {statusOptions.map((option) => (
+                                <option key={option.value} value={option.value}>
+                                  {option.label}
+                                </option>
+                              ))}
+                            </select>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="secondary"
+                              className="ml-auto box-border !h-9 shrink-0 !rounded-lg !px-3 !py-0 !text-xs !leading-none !shadow-sm"
+                              onClick={() => printInvoice(order)}
+                            >
+                              Imprimer
+                            </Button>
                           </div>
-                          <div>
-                            <dt className="font-medium text-gray-500 dark:text-gray-400">Email</dt>
-                            <dd className="break-all text-gray-900 dark:text-white">{customer.email}</dd>
-                          </div>
-                          <div>
-                            <dt className="font-medium text-gray-500 dark:text-gray-400">Adresse</dt>
-                            <dd className="text-gray-900 dark:text-white">{customer.address}</dd>
-                          </div>
-                          <div>
-                            <dt className="font-medium text-gray-500 dark:text-gray-400">Ville</dt>
-                            <dd className="text-gray-900 dark:text-white">{customer.city}</dd>
-                          </div>
-                          <div>
-                            <dt className="font-medium text-gray-500 dark:text-gray-400">Gouvernorat</dt>
-                            <dd className="text-gray-900 dark:text-white">{customer.state}</dd>
-                          </div>
-                          <div>
-                            <dt className="font-medium text-gray-500 dark:text-gray-400">Code postal</dt>
-                            <dd className="text-gray-900 dark:text-white">{customer.postalCode}</dd>
-                          </div>
-                        </dl>
-                        <div className="mt-2 space-y-1 text-xs text-gray-600 dark:text-gray-400">
-                          <p>Total: {displayTotal.toFixed(2)} TND</p>
-                          <p>Date: {new Date(order.createdAt).toLocaleDateString()}</p>
-                        </div>
-                        <div className="mt-3 flex flex-col gap-2">
-                          <select
-                            value={normalizeStatus(order.status)}
-                            onChange={(e) => handleInlineStatusUpdate(order._id, e.target.value)}
-                            disabled={updateStatusMutation.isPending}
-                              className={formSelectClass}
-                          >
-                            {statusOptions.map((option) => (
-                              <option key={option.value} value={option.value}>
-                                {option.label}
-                              </option>
-                            ))}
-                          </select>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="secondary"
-                            className="w-full"
-                            onClick={() => printInvoice(order)}
-                          >
-                            Imprimer
-                          </Button>
                         </div>
                       </div>
                     );
@@ -2433,16 +2524,26 @@ export default function AdminOrders() {
                           id={`admin-order-${order._id}`}
                           className={getFocusedOrderClass(order._id)}
                         >
-                          <td className={`${orderTableCellClass} font-mono`}>
-                            #{order._id.slice(-8)}
+                          <td className={orderTableCellClass}>
+                            <div className="inline-flex flex-col items-center gap-1.5">
+                              <span className="font-mono">#{order._id.slice(-8)}</span>
+                              <span
+                                className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${
+                                  statusColors[normalizeStatus(order.status)] ||
+                                  "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300"
+                                }`}
+                              >
+                                {statusLabels[normalizeStatus(order.status)]}
+                              </span>
+                            </div>
                           </td>
                           <td className={orderTableCellClass}>{customer.name}</td>
                           <td className={orderTableCellClass}>
                             <span
                               className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${
-                                customer.customerType === "company"
-                                  ? "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
-                                  : "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300"
+                                customerTypeBadgeClass[
+                                  customer.customerType === "company" ? "company" : "person"
+                                ]
                               }`}
                             >
                               {customer.customerTypeLabel}
@@ -2463,7 +2564,7 @@ export default function AdminOrders() {
                             <div className="space-y-1">
                               {(order.items || []).map((item: any, index: number) => (
                                 <div key={`${order._id}-dimension-${index}`}>
-                                  {item.width}cm × {item.height}cm
+                                  Largeur {item.width} cm · Hauteur {item.height} cm
                                 </div>
                               ))}
                               {(!order.items || order.items.length === 0) && <div>N/A</div>}
@@ -2495,7 +2596,8 @@ export default function AdminOrders() {
                               value={normalizeStatus(order.status)}
                               onChange={(e) => handleInlineStatusUpdate(order._id, e.target.value)}
                               disabled={updateStatusMutation.isPending}
-                              className={`${formSelectClass} min-w-[9rem]`}
+                              className={`${formSelectClass} min-w-[8.5rem] !py-1.5 !text-xs`}
+                              aria-label="Modifier le statut"
                             >
                               {statusOptions.map((option) => (
                                 <option key={option.value} value={option.value}>
@@ -2593,6 +2695,7 @@ export default function AdminOrders() {
           </div>
         </main>
 
+        <Footer />
       </div>
     </>
   );
