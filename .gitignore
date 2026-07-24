@@ -44,3 +44,9 @@ public/uploads/*
 
 # Hostinger DB seed (contains password hashes — never commit)
 data/
+
+# Hostinger deploy config & seed tools (local only — do not push)
+HOSTINGER-DEPLOYMENT.md
+ecosystem.config.cjs
+scripts/export-hostinger-seed.mjs
+scripts/import-hostinger-seed.mjs

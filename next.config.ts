@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Hostinger VPS / PM2 — standalone output (see scripts/prepare-standalone.mjs)
+  // Standalone Node server output (see scripts/prepare-standalone.mjs)
   output: "standalone",
 
   experimental: {},
