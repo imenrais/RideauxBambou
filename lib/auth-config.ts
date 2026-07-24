@@ -251,46 +251,13 @@ export const authOptions: NextAuthOptions = {
     },
   },
   callbacks: {
-    async signIn({ user, account }) {
-      // Privileged accounts must use credentials portals (/connexion, /acces-employe).
-      // Google OAuth must never mint admin/worker sessions (no lockout / portal checks).
-      if (account?.provider === "google") {
-        const email = user.email?.trim().toLowerCase();
-        if (!email) return false;
-
-        try {
-          const dbUser = await prisma.user.findUnique({
-            where: { email },
-            select: { role: true },
-          });
-          if (dbUser?.role === "admin" || dbUser?.role === "worker") {
-            logAuditEvent({
-              event: "AUTH_OAUTH_PRIVILEGED_BLOCKED",
-              level: "warning",
-              details: { email, role: dbUser.role, provider: "google" },
-            });
-            return false;
-          }
-        } catch (error) {
-          console.error("Google signIn gate error:", error);
-          return false;
-        }
-      }
-      return true;
-    },
     async jwt({ token, user, account }) {
-      // Handle Google OAuth login (customer accounts only — see signIn callback)
+      // Handle Google OAuth login
       if (account?.provider === "google" && user?.email) {
         try {
           let dbUser = await prisma.user.findUnique({
             where: { email: user.email.toLowerCase() },
           });
-
-          if (dbUser?.role === "admin" || dbUser?.role === "worker") {
-            token.role = "user";
-            token.id = "";
-            return token;
-          }
 
           if (!dbUser) {
             // Create new user for Google OAuth
@@ -327,8 +294,7 @@ export const authOptions: NextAuthOptions = {
             });
           }
 
-          token.authVia = "google";
-          token.role = "user";
+          token.role = dbUser.role as "user" | "worker" | "admin";
           token.id = dbUser.id;
           token.name = dbUser.name;
           token.firstName = dbUser.firstName;
@@ -340,7 +306,6 @@ export const authOptions: NextAuthOptions = {
 
       // Initial sign in with credentials
       if (user && account?.provider !== "google") {
-        token.authVia = "credentials";
         token.role = user.role as "user" | "worker" | "admin";
         token.id = user.id;
         token.name = user.name;
@@ -349,7 +314,6 @@ export const authOptions: NextAuthOptions = {
       }
 
       // Always re-read role from DB so demotions/promotions apply immediately.
-      // Google sessions stay customer-only even if the linked email is later promoted.
       const userId = token.id ? String(token.id) : token.sub ? String(token.sub) : null;
       if (userId) {
         try {
@@ -372,15 +336,10 @@ export const authOptions: NextAuthOptions = {
           }
 
           token.id = dbUser.id;
+          token.role = dbUser.role as "user" | "worker" | "admin";
           token.name = dbUser.name;
           token.firstName = dbUser.firstName;
           token.lastName = dbUser.lastName;
-
-          if (token.authVia === "google") {
-            token.role = "user";
-          } else {
-            token.role = dbUser.role as "user" | "worker" | "admin";
-          }
         } catch (error) {
           console.error("JWT role refresh error:", error);
         }

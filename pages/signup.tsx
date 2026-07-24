@@ -128,20 +128,7 @@ export default function SignupPage({ title }: SignupPageProps) {
     setError("");
 
     try {
-      console.warn("Attempting Google signup...");
-      const result = await signIn("google", {
-        callbackUrl: "/",
-        redirect: false,
-      });
-
-      console.warn("Google signup result:", result);
-
-      if (result?.error) {
-        setError(`Erreur lors de l'inscription avec Google: ${result.error}`);
-        setIsLoading(false);
-      } else if (result?.ok) {
-        router.push("/");
-      }
+      await signIn("google", { callbackUrl: "/" });
     } catch (error) {
       console.error("Google signup error:", error);
       setError("Erreur lors de l'inscription avec Google");

@@ -119,12 +119,9 @@ const authMiddleware = withAuth(
 export default function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  // Handle outside withAuth — NextAuth can error when signIn page is /404.
-  if (
-    pathname === "/api/auth/signin" ||
-    pathname.startsWith("/api/auth/signin/") ||
-    pathname === "/api/auth/error"
-  ) {
+  // Hide the generic NextAuth sign-in page and error endpoint (404 JSON).
+  // Do NOT block /api/auth/signin/<provider> — Google OAuth starts there.
+  if (pathname === "/api/auth/signin" || pathname === "/api/auth/error") {
     return notFoundJson();
   }
 
@@ -140,7 +137,6 @@ export const config = {
     "/api/orders",
     "/api/users",
     "/api/auth/signin",
-    "/api/auth/signin/:path*",
     "/api/auth/error",
     "/login",
     "/connexion",

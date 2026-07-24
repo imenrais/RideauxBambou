@@ -29,6 +29,5 @@ declare module "next-auth/jwt" {
     firstName: string;
     lastName: string;
     role: "user" | "worker" | "admin";
-    authVia?: "credentials" | "google";
   }
 }

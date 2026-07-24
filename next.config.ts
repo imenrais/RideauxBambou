@@ -50,7 +50,7 @@ const nextConfig: NextConfig = {
               // Next.js needs 'unsafe-inline' (and typically 'unsafe-eval' in practice)
               // for the app to run. Other hardening (admin 404s, rate limits, live
               // roles, server-side pricing, upload locks) stays independent of this.
-              "default-src 'self'; img-src 'self' data: blob: https:; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self' data: https:; connect-src 'self' https:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; upgrade-insecure-requests;",
+              "default-src 'self'; img-src 'self' data: blob: https:; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self' data: https:; connect-src 'self' https:; frame-ancestors 'none'; base-uri 'self'; form-action 'self' https://accounts.google.com; object-src 'none'; upgrade-insecure-requests;",
           },
           {
             key: "X-Frame-Options",
