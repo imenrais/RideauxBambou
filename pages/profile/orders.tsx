@@ -27,7 +27,7 @@ export default function UserOrders({ title }: UserOrdersProps) {
   useEffect(() => {
     if (status === "loading") return;
     if (!session) {
-      router.push("/connexion?callbackUrl=/profil/commandes");
+      router.push("/");
     }
   }, [session, status, router]);
 

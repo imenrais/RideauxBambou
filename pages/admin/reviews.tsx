@@ -1,6 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Image from "next/image";
-import { useRouter } from "next/router";
 import { useSession } from "next-auth/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { FiMenu, FiPlus } from "react-icons/fi";
@@ -36,7 +35,6 @@ const modalActionBtnClass =
 
 export default function AdminReviews() {
   const { data: session, status } = useSession();
-  const router = useRouter();
   const queryClient = useQueryClient();
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingReview, setEditingReview] = useState<ReviewItem | null>(null);
@@ -50,13 +48,6 @@ export default function AdminReviews() {
   const [dragOverReviewId, setDragOverReviewId] = useState<string | null>(null);
   const { success, error, warning } = useToast();
 
-  useEffect(() => {
-    if (status === "loading") return;
-    if (!session || session.user?.role !== "admin") {
-      router.push("/connexion");
-    }
-  }, [session, status, router]);
-
   const { data: reviewsData, isLoading } = useQuery({
     queryKey: ["admin-reviews"],
     queryFn: async () => {
@@ -67,6 +58,7 @@ export default function AdminReviews() {
       }
       return data.data as ReviewItem[];
     },
+    enabled: status === "authenticated" && session?.user?.role === "admin",
   });
 
   const reviews = useMemo(() => (Array.isArray(reviewsData) ? reviewsData : []), [reviewsData]);
@@ -389,14 +381,21 @@ export default function AdminReviews() {
                       >
                         <FiMenu className="h-4 w-4" aria-hidden="true" />
                       </button>
-                      <Image
-                        src={review.image || "/images/logo.png"}
-                        alt="Capture d'écran d'avis client"
-                        width={40}
-                        height={40}
-                        className="h-10 w-10 shrink-0 rounded-lg object-cover"
-                        draggable={false}
-                      />
+                      {review.image ? (
+                        <Image
+                          src={review.image}
+                          alt="Capture d'écran d'avis client"
+                          width={40}
+                          height={40}
+                          className="h-10 w-10 shrink-0 rounded-lg object-cover"
+                          draggable={false}
+                        />
+                      ) : (
+                        <div
+                          className="h-10 w-10 shrink-0 rounded-lg bg-gray-200 dark:bg-gray-700"
+                          aria-hidden="true"
+                        />
+                      )}
                       <div className="min-w-0">
                         <p className="break-words text-sm font-semibold text-gray-900 dark:text-white">
                           Avis #{index + 1}
@@ -414,14 +413,16 @@ export default function AdminReviews() {
                   <div className="space-y-3 p-3">
                     <div className="overflow-hidden rounded-lg bg-gray-50 dark:bg-gray-800/50">
                       <div className="relative h-52 w-full">
-                        <Image
-                          src={review.image}
-                          alt="Capture d'écran d'avis client"
-                          fill
-                          sizes="100vw"
-                          className="object-contain"
-                          draggable={false}
-                        />
+                        {review.image ? (
+                          <Image
+                            src={review.image}
+                            alt="Capture d'écran d'avis client"
+                            fill
+                            sizes="100vw"
+                            className="object-contain"
+                            draggable={false}
+                          />
+                        ) : null}
                       </div>
                       {review.caption ? (
                         <div className="p-2.5">
@@ -473,14 +474,16 @@ export default function AdminReviews() {
                     className={`flex w-[15.5rem] flex-col overflow-hidden rounded-xl border border-gray-200/90 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900 ${dragClassName(review._id)}`}
                   >
                     <div className="relative h-52 w-full shrink-0 bg-gray-100 dark:bg-gray-700">
-                      <Image
-                        src={review.image}
-                        alt="Capture d'écran d'avis client"
-                        fill
-                        sizes="248px"
-                        className="object-cover object-top"
-                        draggable={false}
-                      />
+                      {review.image ? (
+                        <Image
+                          src={review.image}
+                          alt="Capture d'écran d'avis client"
+                          fill
+                          sizes="248px"
+                          className="object-cover object-top"
+                          draggable={false}
+                        />
+                      ) : null}
                     </div>
                     <div className="flex flex-1 flex-col space-y-2 p-4">
                       <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
@@ -615,3 +618,6 @@ export default function AdminReviews() {
     </AdminLayout>
   );
 }
+
+export { requireAdminPage as getServerSideProps } from "../../lib/require-admin-page";
+

@@ -23,7 +23,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     const ip = getRequestIp(req);
-    const rateLimitCheck = enforceIpRateLimit("api-auth-forgot-password", ip, 8, 15 * 60 * 1000);
+    const rateLimitCheck = await enforceIpRateLimit("api-auth-forgot-password", ip, 8, 15 * 60 * 1000);
     if (!rateLimitCheck.allowed) {
       res.setHeader("Retry-After", String(rateLimitCheck.retryAfterSeconds));
       return res.status(429).json({
@@ -43,21 +43,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const { email } = validationResult.data;
 
+    const genericMessage =
+      "If an account exists with this email, a password reset link has been sent.";
+
     // Find user by email
     const user = await prisma.user.findUnique({ where: { email } });
 
-    // Only proceed if user exists
-    if (!user) {
-      return res.status(200).json({
-        success: false,
-        message: "Aucun compte trouvé avec cette adresse email.",
-      });
-    }
-
-    // Generate reset token
+    // Always do comparable work so response timing does not leak whether the email exists.
     const resetToken = crypto.randomBytes(32).toString("hex");
     const resetTokenHash = crypto.createHash("sha256").update(resetToken).digest("hex");
     const resetTokenExpiry = new Date(Date.now() + 3600000); // 1 hour
+
+    if (!user) {
+      // Burn roughly the same CPU as a real reset, then return the same message.
+      await new Promise((resolve) => setTimeout(resolve, 200 + Math.floor(Math.random() * 200)));
+      return res.status(200).json({
+        success: true,
+        message: genericMessage,
+      });
+    }
 
     // Save reset token to user
     await prisma.user.update({
@@ -132,13 +136,8 @@ L'équipe Rideaux Bambou
         `.trim(),
       };
 
-      console.log("📧 Sending password reset email to:", user.email);
-      console.log("📧 Email from:", mailOptions.from);
-      console.log("📧 Email to:", mailOptions.to);
       const emailResult = await transporter.sendMail(mailOptions);
-      console.log("✅ Email sent successfully:", emailResult.messageId);
-      console.log("📧 Accepted recipients:", emailResult.accepted);
-      console.log("📧 Rejected recipients:", emailResult.rejected);
+      console.log("Password reset email accepted:", emailResult.messageId);
 
       return res.status(200).json({
         success: true,

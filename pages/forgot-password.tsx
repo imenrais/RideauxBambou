@@ -70,7 +70,7 @@ export default function ForgotPasswordPage({ title }: ForgotPasswordPageProps) {
       <div className={authContentClass}>
         {/* Back Button and Main Content */}
         <div className="px-4 py-6 sm:px-6 sm:py-8">
-          <BackButton href="/connexion" />
+          <BackButton href="/" />
 
           {/* Main Content */}
           <main className="mx-auto w-full max-w-md px-0 pb-12 sm:px-6">
@@ -220,17 +220,14 @@ export default function ForgotPasswordPage({ title }: ForgotPasswordPageProps) {
                 </motion.button>
               </form>
 
-              {/* Back to Login */}
+              {/* Back home — do not link to admin login from public pages */}
               <div className="mt-6 text-center">
-                <p className="text-gray-600 dark:text-gray-400">
-                  Vous avez votre mot de passe?{" "}
-                  <Link
-                    href="/connexion"
-                    className="text-gray-900 hover:underline dark:text-gray-100"
-                  >
-                    Se connecter
-                  </Link>
-                </p>
+                <Link
+                  href="/"
+                  className="text-gray-900 hover:underline dark:text-gray-100"
+                >
+                  Retour à l&apos;accueil
+                </Link>
               </div>
             </motion.div>
           </main>

@@ -22,7 +22,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     const ip = getRequestIp(req);
-    const rateLimitCheck = enforceIpRateLimit("api-auth-reset-password", ip, 12, 15 * 60 * 1000);
+    const rateLimitCheck = await enforceIpRateLimit("api-auth-reset-password", ip, 12, 15 * 60 * 1000);
     if (!rateLimitCheck.allowed) {
       res.setHeader("Retry-After", String(rateLimitCheck.retryAfterSeconds));
       return res.status(429).json({
@@ -61,7 +61,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     // Hash new password
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const hashedPassword = await bcrypt.hash(password, 12);
 
     // Update user password and clear reset token
     await prisma.user.update({

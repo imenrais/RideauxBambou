@@ -1,14 +1,13 @@
 import { NextApiRequest, NextApiResponse } from "next";
 import formidable from "formidable";
-import { v2 as cloudinary } from "cloudinary";
+import { randomUUID } from "crypto";
 import fs from "fs/promises";
 import os from "os";
+import path from "path";
+import { createReadStream } from "fs";
 
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
-});
+import { requireAdmin } from "../../lib/auth-helpers";
+import { UPLOADS_URL_PREFIX, UPLOAD_EXTENSION_BY_MIME, getUploadsDir } from "../../lib/uploads";
 
 export const config = {
   api: {
@@ -16,10 +15,61 @@ export const config = {
   },
 };
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+const ALLOWED_MIME_TYPES = new Set([
+  "image/jpeg",
+  "image/jpg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+]);
+
+function normalizeMime(mime: string): string {
+  if (mime === "image/jpg") return "image/jpeg";
+  return mime;
+}
+
+const MAGIC_SIGNATURES: Array<{ mime: string; bytes: number[] }> = [
+  { mime: "image/jpeg", bytes: [0xff, 0xd8, 0xff] },
+  { mime: "image/png", bytes: [0x89, 0x50, 0x4e, 0x47] },
+  { mime: "image/gif", bytes: [0x47, 0x49, 0x46, 0x38] },
+  { mime: "image/webp", bytes: [0x52, 0x49, 0x46, 0x46] }, // RIFF....WEBP checked below
+];
+
+async function readFileHeader(filepath: string, length: number): Promise<Buffer> {
+  const chunks: Buffer[] = [];
+  const stream = createReadStream(filepath, { start: 0, end: length - 1 });
+  for await (const chunk of stream) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+  return Buffer.concat(chunks);
+}
+
+async function detectImageMime(filepath: string): Promise<string | null> {
+  const header = await readFileHeader(filepath, 16);
+  if (header.length < 3) return null;
+
+  for (const signature of MAGIC_SIGNATURES) {
+    if (signature.bytes.every((byte, index) => header[index] === byte)) {
+      if (signature.mime === "image/webp") {
+        // RIFF....WEBP
+        if (header.length >= 12 && header.toString("ascii", 8, 12) === "WEBP") {
+          return "image/webp";
+        }
+        continue;
+      }
+      return signature.mime;
+    }
+  }
+
+  return null;
+}
+
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "POST") {
     return res.status(405).json({ success: false, error: "Method not allowed" });
   }
+
+  let tempFilePath: string | null = null;
 
   try {
     const form = formidable({
@@ -27,41 +77,47 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       keepExtensions: true,
       maxFileSize: 5 * 1024 * 1024, // 5MB
       filter: function ({ mimetype }) {
-        return Boolean(mimetype && mimetype.includes("image"));
+        return Boolean(mimetype && ALLOWED_MIME_TYPES.has(mimetype));
       },
     });
 
-    const [fields, files] = await form.parse(req);
+    const [, files] = await form.parse(req);
     const file = Array.isArray(files.image) ? files.image[0] : files.image;
 
     if (!file) {
       return res.status(400).json({ success: false, error: "No image file provided" });
     }
 
-    if (
-      !process.env.CLOUDINARY_CLOUD_NAME ||
-      !process.env.CLOUDINARY_API_KEY ||
-      !process.env.CLOUDINARY_API_SECRET
-    ) {
-      return res.status(500).json({
+    tempFilePath = file.filepath;
+
+    const declaredMime = normalizeMime(file.mimetype || "");
+    const detectedMime = await detectImageMime(file.filepath);
+
+    if (!detectedMime) {
+      return res.status(400).json({
         success: false,
-        error: "Cloudinary is not configured on the server",
+        error: "File content does not match an allowed image type",
       });
     }
 
-    const uploadedImage = await cloudinary.uploader.upload(file.filepath, {
-      folder: "rideaux-bamboux/products",
-      resource_type: "image",
-      use_filename: true,
-      unique_filename: true,
-      overwrite: false,
-    });
+    // Prefer magic-byte detection; declared MIME must agree when present.
+    if (declaredMime && declaredMime !== detectedMime) {
+      return res.status(400).json({
+        success: false,
+        error: "File content does not match an allowed image type",
+      });
+    }
 
-    await fs.unlink(file.filepath).catch(() => null);
+    const uploadsDir = getUploadsDir();
+    await fs.mkdir(uploadsDir, { recursive: true });
+
+    const filename = `${randomUUID()}${UPLOAD_EXTENSION_BY_MIME[detectedMime]}`;
+    // Copy (not rename): the temp dir may live on another filesystem.
+    await fs.copyFile(file.filepath, path.join(uploadsDir, filename));
 
     return res.status(200).json({
       success: true,
-      url: uploadedImage.secure_url,
+      url: `${UPLOADS_URL_PREFIX}/${filename}`,
     });
   } catch (error) {
     console.error("Upload error:", error);
@@ -69,5 +125,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       success: false,
       error: "Failed to upload image",
     });
+  } finally {
+    if (tempFilePath) {
+      await fs.unlink(tempFilePath).catch(() => null);
+    }
   }
 }
+
+export default requireAdmin(handler);

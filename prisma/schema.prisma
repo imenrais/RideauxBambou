@@ -131,3 +131,17 @@ model PromoSubscriber {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
+
+/// Shared across Node/PM2 processes — rate limits and auth lockouts.
+model RateLimitEntry {
+  key     String   @id
+  count   Int      @default(0)
+  resetAt DateTime
+}
+
+model AuthLockout {
+  key         String    @id
+  failedCount Int       @default(0)
+  lockUntil   DateTime?
+  updatedAt   DateTime  @updatedAt
+}

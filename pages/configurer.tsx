@@ -23,6 +23,7 @@ import {
 import { usePublicProductsQuery } from "../lib/products-query";
 import { OUT_OF_STOCK_CLIENT_MESSAGE } from "../lib/product-availability-sync";
 import {
+  MAX_STORE_WIDTH_CM,
   getStorePanelCountFromWidth,
   getStorePanelMeasurements,
 } from "../lib/store-panel-count";
@@ -196,7 +197,7 @@ export default function ConfigurerProduitPage() {
     return {
       productId: selectedProduct._id,
       productName: selectedProduct.name,
-      productImage: selectedProduct.image || "/images/14.jpeg",
+      productImage: selectedProduct.image || "",
       isAvailable: selectedProduct.isAvailable !== false,
     };
   }, [selectedProduct]);
@@ -317,12 +318,14 @@ export default function ConfigurerProduitPage() {
                 {product ? (
                   <>
                     <div className="relative mb-3 h-48 overflow-hidden rounded-lg bg-gray-100 sm:mb-4 sm:h-72 dark:bg-gray-700">
-                      <Image
-                        src={product.productImage}
-                        alt={product.productName}
-                        fill
-                        className="object-cover"
-                      />
+                      {product.productImage ? (
+                        <Image
+                          src={product.productImage}
+                          alt={product.productName}
+                          fill
+                          className="object-cover"
+                        />
+                      ) : null}
                       {!product.isAvailable && (
                         <div className="absolute inset-0 flex items-center justify-center bg-gray-900/35">
                           <span className="rounded-full bg-white/95 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-red-700 shadow-sm dark:bg-gray-900/95 dark:text-red-300">
@@ -472,6 +475,7 @@ export default function ConfigurerProduitPage() {
                         <input
                           type="number"
                           min={1}
+                          max={MAX_STORE_WIDTH_CM}
                           value={width}
                           onChange={(e) => {
                             const raw = e.target.value;
@@ -483,7 +487,7 @@ export default function ConfigurerProduitPage() {
                             if (Number.isNaN(parsed)) {
                               return;
                             }
-                            setWidth(parsed);
+                            setWidth(Math.min(MAX_STORE_WIDTH_CM, Math.max(1, parsed)));
                           }}
                           className={formNumberFieldClass}
                           required

@@ -631,14 +631,6 @@ export default function AdminOrders() {
     resolvedHeightValue,
   ]);
 
-  // Redirect if not admin
-  useEffect(() => {
-    if (status === "loading") return;
-    if (!session || session.user?.role !== "admin") {
-      router.push("/connexion");
-    }
-  }, [session, status, router]);
-
   useEffect(() => {
     if (!router.isReady) {
       return;
@@ -2700,4 +2692,7 @@ export default function AdminOrders() {
     </>
   );
 }
+
+
+export { requireAdminPage as getServerSideProps } from "../../lib/require-admin-page";
 

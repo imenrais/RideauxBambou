@@ -1,9 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { pageMainClass, pageShellClass } from "../../lib/design-system";
 import Head from "next/head";
-import { useRouter } from "next/router";
 import { useSession } from "next-auth/react";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 
 import AdminNavigation from "../../components/AdminNavigation";
 import BackButton from "../../components/BackButton";
@@ -37,7 +36,6 @@ const roleColors = {
 
 export default function AdminUsers() {
   const { data: session, status } = useSession();
-  const router = useRouter();
   const queryClient = useQueryClient();
   const [selectedRole] = useState("worker");
   const [currentPage, setCurrentPage] = useState(1);
@@ -65,14 +63,6 @@ export default function AdminUsers() {
   const [workerEditEmailError, setWorkerEditEmailError] = useState("");
   const { success, error } = useToast();
 
-  // Redirect if not admin
-  useEffect(() => {
-    if (status === "loading") return;
-    if (!session || session.user?.role !== "admin") {
-      router.push("/connexion");
-    }
-  }, [session, status, router]);
-
   // Fetch users
   const { data: usersData, isLoading } = useQuery({
     queryKey: ["admin-users", selectedRole, currentPage],
@@ -90,6 +80,7 @@ export default function AdminUsers() {
       }
       return data.data;
     },
+    enabled: status === "authenticated" && session?.user?.role === "admin",
   });
   const workers = (usersData?.users || []).filter((user: any) => user.role === "worker");
 
@@ -783,3 +774,6 @@ export default function AdminUsers() {
     </>
   );
 }
+
+export { requireAdminPage as getServerSideProps } from "../../lib/require-admin-page";
+

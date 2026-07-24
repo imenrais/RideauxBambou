@@ -319,6 +319,7 @@ export default function CheckoutPage() {
       items: items.map((item) => ({
         curtainTypeId: item.productId,
         curtainTypeName: formatCurtainTypeName(item.productName, item.curtainType),
+        curtainType: item.curtainType,
         width: item.width,
         height: item.height,
         quantity: item.quantity,

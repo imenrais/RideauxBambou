@@ -1,44 +1,53 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { withAuth } from "next-auth/middleware";
 
-export default withAuth(
+function notFoundRewrite(req: { url: string }) {
+  // Serve the public 404 page without revealing that /admin exists.
+  // Keep the browser URL as-is (rewrite, not redirect) and use HTTP 404.
+  return NextResponse.rewrite(new URL("/404", req.url), { status: 404 });
+}
+
+function notFoundJson() {
+  return NextResponse.json({ error: "Not found" }, { status: 404 });
+}
+
+const authMiddleware = withAuth(
   function middleware(req) {
     const { pathname } = req.nextUrl;
     const token = req.nextauth.token;
-    const isAdminSurface = pathname.startsWith("/admin") || pathname.startsWith("/api/admin");
+    const isAdminSurface =
+      pathname.startsWith("/admin") ||
+      pathname.startsWith("/api/admin") ||
+      pathname.startsWith("/api/upload");
 
     if (pathname === "/connexion" && token && token.role !== "admin") {
       return NextResponse.redirect(new URL("/403", req.url));
     }
 
-    if (pathname === "/worker/login" && token && token.role !== "worker") {
+    if (pathname === "/acces-employe" && token && token.role !== "worker") {
       return NextResponse.redirect(new URL("/403", req.url));
     }
 
-    // Admin routes protection
-    if (pathname.startsWith("/admin")) {
-      if (!token) {
-        return NextResponse.rewrite(new URL("/404", req.url));
-      }
+    if (pathname === "/login" || pathname === "/worker/login" || pathname.startsWith("/worker/login/")) {
+      return notFoundRewrite(req);
+    }
 
-      if (token.role !== "admin") {
-        return NextResponse.rewrite(new URL("/404", req.url));
+    // Admin pages: never redirect to login — always look like a missing page.
+    if (pathname.startsWith("/admin")) {
+      if (!token || token.role !== "admin") {
+        return notFoundRewrite(req);
       }
     }
 
-    // API admin routes protection
-    if (pathname.startsWith("/api/admin")) {
-      if (!token) {
-        return NextResponse.json({ error: "Not found" }, { status: 404 });
-      }
-
-      if (token.role !== "admin") {
-        return NextResponse.json({ error: "Not found" }, { status: 404 });
+    // Admin APIs / uploads: same not-found posture for probes.
+    if (pathname.startsWith("/api/admin") || pathname.startsWith("/api/upload")) {
+      if (!token || token.role !== "admin") {
+        return notFoundJson();
       }
     }
 
     const response = NextResponse.next();
-    if (isAdminSurface) {
+    if (isAdminSurface || pathname === "/connexion" || pathname === "/acces-employe") {
       response.headers.set("Cache-Control", "no-store");
       response.headers.set("Pragma", "no-cache");
       response.headers.set("Expires", "0");
@@ -52,15 +61,24 @@ export default withAuth(
       authorized: ({ token, req }) => {
         const { pathname } = req.nextUrl;
 
-        // Let middleware return JSON for admin APIs instead of redirecting.
-        if (pathname.startsWith("/api/admin")) {
+        // CRITICAL: return true for /admin* so NextAuth does NOT redirect
+        // unauthenticated users to a login page.
+        // The middleware body above returns a 404 rewrite instead.
+        if (
+          pathname.startsWith("/admin") ||
+          pathname === "/login" ||
+          pathname === "/worker/login" ||
+          pathname.startsWith("/worker/login/") ||
+          pathname.startsWith("/api/admin") ||
+          pathname.startsWith("/api/upload")
+        ) {
           return true;
         }
 
         // Allow public routes
         if (
           pathname === "/connexion" ||
-          pathname === "/worker/login" ||
+          pathname === "/acces-employe" ||
           pathname.startsWith("/api/price") ||
           pathname.startsWith("/api/installation-fee") ||
           pathname.startsWith("/api/delivery-fees") ||
@@ -98,6 +116,36 @@ export default withAuth(
   }
 );
 
+export default function middleware(req: NextRequest) {
+  const { pathname } = req.nextUrl;
+
+  // Handle outside withAuth — NextAuth can error when signIn page is /404.
+  if (
+    pathname === "/api/auth/signin" ||
+    pathname.startsWith("/api/auth/signin/") ||
+    pathname === "/api/auth/error"
+  ) {
+    return notFoundJson();
+  }
+
+  return (authMiddleware as (req: NextRequest) => ReturnType<typeof NextResponse.next>)(req);
+}
+
 export const config = {
-  matcher: ["/admin/:path*", "/api/admin/:path*", "/api/orders", "/api/users", "/connexion", "/worker/login"],
+  matcher: [
+    "/admin",
+    "/admin/:path*",
+    "/api/admin/:path*",
+    "/api/upload",
+    "/api/orders",
+    "/api/users",
+    "/api/auth/signin",
+    "/api/auth/signin/:path*",
+    "/api/auth/error",
+    "/login",
+    "/connexion",
+    "/worker/login",
+    "/worker/login/:path*",
+    "/acces-employe",
+  ],
 };

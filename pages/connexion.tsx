@@ -1,1 +1,1 @@
-export { default, getServerSideProps } from "./login";
+export { default, getServerSideProps } from "../components/auth/AdminLoginPage";

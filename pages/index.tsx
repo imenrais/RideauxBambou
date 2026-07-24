@@ -67,16 +67,18 @@ function ProductCard({
             onPointerCancel={() => setIsImagePopped(false)}
             onPointerLeave={() => setIsImagePopped(false)}
           >
-            <Image
-              src={item.image || "/images/14.jpeg"}
-              alt={item.name}
-              fill
-              sizes="(max-width: 768px) 72vw, (max-width: 1024px) 45vw, 30vw"
-              draggable={false}
-              className={`select-none object-cover transition-transform duration-300 ease-out ${
-                isImagePopped ? "scale-110" : "scale-100"
-              }`}
-            />
+            {item.image ? (
+              <Image
+                src={item.image}
+                alt={item.name}
+                fill
+                sizes="(max-width: 768px) 72vw, (max-width: 1024px) 45vw, 30vw"
+                draggable={false}
+                className={`select-none object-cover transition-transform duration-300 ease-out ${
+                  isImagePopped ? "scale-110" : "scale-100"
+                }`}
+              />
+            ) : null}
             {!item.isAvailable && (
               <div className="absolute inset-0 flex items-center justify-center bg-gray-900/35">
                 <span className="rounded-full bg-white/95 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-red-700 shadow-sm dark:bg-gray-900/95 dark:text-red-300">
@@ -189,7 +191,9 @@ export default function Home({ title }: HomeProps) {
 
   const products = Array.isArray(productsData) ? productsData : [];
   const listPrice = Number(globalPriceData?.pricePerM2 ?? 50);
-  const reviewImages = Array.isArray(reviewImagesData) ? reviewImagesData : [];
+  const reviewImages = (Array.isArray(reviewImagesData) ? reviewImagesData : []).filter(
+    (review) => Boolean(review.image?.trim())
+  );
 
   const handleBuyNow = (product: PublicProduct) => {
     if (!product.isAvailable) {
@@ -200,7 +204,7 @@ export default function Home({ title }: HomeProps) {
       query: {
         productId: product._id,
         productName: product.name,
-        productImage: product.image || "/images/14.jpeg",
+        productImage: product.image || "",
       },
     });
   };
@@ -567,7 +571,7 @@ export default function Home({ title }: HomeProps) {
           </div>
         </section>
 
-        {/* Reviews — includes space formerly between newsletter and footer */}
+        {/* Reviews — section always visible; cards only when images exist */}
         <section className="mx-auto max-w-7xl px-3 pt-8 pb-36 sm:px-6 sm:pt-12 sm:pb-44 lg:px-8 lg:pb-48">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -614,13 +618,7 @@ export default function Home({ title }: HomeProps) {
                   </div>
                 ))}
               </div>
-            ) : (
-              <Card className="mx-auto max-w-2xl p-8 text-center">
-                <p className="text-gray-600 dark:text-gray-300">
-                  Les avis images seront affiches ici des qu&apos;ils sont ajoutes par l&apos;admin.
-                </p>
-              </Card>
-            )}
+            ) : null}
           </motion.div>
         </section>
 

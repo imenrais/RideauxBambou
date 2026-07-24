@@ -59,7 +59,13 @@ export const authOptions: NextAuthOptions = {
         const portal = String(credentials.portal || "").toLowerCase();
         const ip = getRequestIpFromHeaders((_req as any)?.headers);
 
-        const ipRate = enforceIpRateLimit("nextauth-login", ip, AUTH_IP_LIMIT, AUTH_IP_WINDOW_MS);
+        const ipRate = await enforceIpRateLimit(
+          "nextauth-login",
+          ip,
+          AUTH_IP_LIMIT,
+          AUTH_IP_WINDOW_MS,
+          { failClosed: isProduction }
+        );
         if (!ipRate.allowed) {
           logAuditEvent({
             event: "AUTH_RATE_LIMIT_HIT",
@@ -72,7 +78,7 @@ export const authOptions: NextAuthOptions = {
 
         const isPrivilegedPortal = portal === "admin" || portal === "worker";
         if (isPrivilegedPortal) {
-          const lockStatus = isCredentialLocked(normalizedEmail, portal);
+          const lockStatus = await isCredentialLocked(normalizedEmail, portal);
           if (lockStatus.locked) {
             logAuditEvent({
               event: "AUTH_LOCKOUT_BLOCKED",
@@ -95,7 +101,7 @@ export const authOptions: NextAuthOptions = {
 
           if (!user || !user.password) {
             if (isPrivilegedPortal) {
-              const lockResult = recordCredentialFailure(
+              const lockResult = await recordCredentialFailure(
                 normalizedEmail,
                 portal,
                 PRIVILEGED_LOGIN_MAX_FAILURES,
@@ -119,7 +125,7 @@ export const authOptions: NextAuthOptions = {
           const isPasswordValid = await bcrypt.compare(credentials.password, user.password);
           if (!isPasswordValid) {
             if (isPrivilegedPortal) {
-              const lockResult = recordCredentialFailure(
+              const lockResult = await recordCredentialFailure(
                 normalizedEmail,
                 portal,
                 PRIVILEGED_LOGIN_MAX_FAILURES,
@@ -141,7 +147,7 @@ export const authOptions: NextAuthOptions = {
           }
 
           if (portal === "admin" && user.role !== "admin") {
-            const lockResult = recordCredentialFailure(
+            const lockResult = await recordCredentialFailure(
               normalizedEmail,
               portal,
               PRIVILEGED_LOGIN_MAX_FAILURES,
@@ -161,7 +167,7 @@ export const authOptions: NextAuthOptions = {
             return null;
           }
           if (portal === "worker" && user.role !== "worker") {
-            const lockResult = recordCredentialFailure(
+            const lockResult = await recordCredentialFailure(
               normalizedEmail,
               portal,
               PRIVILEGED_LOGIN_MAX_FAILURES,
@@ -182,7 +188,7 @@ export const authOptions: NextAuthOptions = {
           }
 
           if (isPrivilegedPortal) {
-            clearCredentialFailures(normalizedEmail, portal);
+            await clearCredentialFailures(normalizedEmail, portal);
             logAuditEvent({
               event: "AUTH_PRIVILEGED_LOGIN_SUCCESS",
               actorId: user.id,
@@ -210,7 +216,7 @@ export const authOptions: NextAuthOptions = {
   session: {
     strategy: "jwt" as const,
     maxAge: 8 * 60 * 60, // 8 hours
-    updateAge: 60 * 60, // 1 hour
+    updateAge: 60, // re-encode JWT often so role demotions apply quickly
   },
   jwt: {
     maxAge: 8 * 60 * 60, // 8 hours
@@ -245,13 +251,46 @@ export const authOptions: NextAuthOptions = {
     },
   },
   callbacks: {
+    async signIn({ user, account }) {
+      // Privileged accounts must use credentials portals (/connexion, /acces-employe).
+      // Google OAuth must never mint admin/worker sessions (no lockout / portal checks).
+      if (account?.provider === "google") {
+        const email = user.email?.trim().toLowerCase();
+        if (!email) return false;
+
+        try {
+          const dbUser = await prisma.user.findUnique({
+            where: { email },
+            select: { role: true },
+          });
+          if (dbUser?.role === "admin" || dbUser?.role === "worker") {
+            logAuditEvent({
+              event: "AUTH_OAUTH_PRIVILEGED_BLOCKED",
+              level: "warning",
+              details: { email, role: dbUser.role, provider: "google" },
+            });
+            return false;
+          }
+        } catch (error) {
+          console.error("Google signIn gate error:", error);
+          return false;
+        }
+      }
+      return true;
+    },
     async jwt({ token, user, account }) {
-      // Handle Google OAuth login
+      // Handle Google OAuth login (customer accounts only — see signIn callback)
       if (account?.provider === "google" && user?.email) {
         try {
           let dbUser = await prisma.user.findUnique({
             where: { email: user.email.toLowerCase() },
           });
+
+          if (dbUser?.role === "admin" || dbUser?.role === "worker") {
+            token.role = "user";
+            token.id = "";
+            return token;
+          }
 
           if (!dbUser) {
             // Create new user for Google OAuth
@@ -262,12 +301,12 @@ export const authOptions: NextAuthOptions = {
 
             dbUser = await prisma.user.create({
               data: {
-              name: fullName,
-              firstName,
-              lastName,
-              email: user.email.toLowerCase(),
-              password: "", // No password for OAuth users
-              role: "user",
+                name: fullName,
+                firstName,
+                lastName,
+                email: user.email.toLowerCase(),
+                password: "", // No password for OAuth users
+                role: "user",
               },
             });
           } else {
@@ -288,7 +327,8 @@ export const authOptions: NextAuthOptions = {
             });
           }
 
-          token.role = dbUser.role as "user" | "worker" | "admin";
+          token.authVia = "google";
+          token.role = "user";
           token.id = dbUser.id;
           token.name = dbUser.name;
           token.firstName = dbUser.firstName;
@@ -299,7 +339,8 @@ export const authOptions: NextAuthOptions = {
       }
 
       // Initial sign in with credentials
-      if (user) {
+      if (user && account?.provider !== "google") {
+        token.authVia = "credentials";
         token.role = user.role as "user" | "worker" | "admin";
         token.id = user.id;
         token.name = user.name;
@@ -307,38 +348,53 @@ export const authOptions: NextAuthOptions = {
         token.lastName = user.lastName;
       }
 
+      // Always re-read role from DB so demotions/promotions apply immediately.
+      // Google sessions stay customer-only even if the linked email is later promoted.
+      const userId = token.id ? String(token.id) : token.sub ? String(token.sub) : null;
+      if (userId) {
+        try {
+          const dbUser = await prisma.user.findUnique({
+            where: { id: userId },
+            select: {
+              id: true,
+              role: true,
+              name: true,
+              firstName: true,
+              lastName: true,
+            },
+          });
+
+          if (!dbUser) {
+            // User deleted — strip privileges from the token.
+            token.role = "user";
+            token.id = "";
+            return token;
+          }
+
+          token.id = dbUser.id;
+          token.name = dbUser.name;
+          token.firstName = dbUser.firstName;
+          token.lastName = dbUser.lastName;
+
+          if (token.authVia === "google") {
+            token.role = "user";
+          } else {
+            token.role = dbUser.role as "user" | "worker" | "admin";
+          }
+        } catch (error) {
+          console.error("JWT role refresh error:", error);
+        }
+      }
+
       return token;
     },
     async session({ session, token }) {
       if (token) {
-        session.user.id = token.id || token.sub || "";
-        session.user.role = token.role as "user" | "worker" | "admin";
-
-        // Use token data as fallback, then fetch from database for latest data
-        session.user.name = token.name || "";
-        session.user.firstName = token.firstName || "";
-        session.user.lastName = token.lastName || "";
-
-        // Fetch user data to include firstName and lastName
-        try {
-          const dbUser = await prisma.user.findUnique({
-            where: { id: String(token.id) },
-          });
-          if (dbUser) {
-            session.user.name = dbUser.name || token.name || "";
-            session.user.firstName = dbUser.firstName || token.firstName || "";
-            session.user.lastName = dbUser.lastName || token.lastName || "";
-            console.warn("Session callback - User data:", {
-              firstName: dbUser.firstName,
-              lastName: dbUser.lastName,
-              name: dbUser.name,
-            });
-          } else {
-            console.error("User not found in database for token:", token.id);
-          }
-        } catch (error) {
-          console.error("Session error:", error);
-        }
+        session.user.id = (token.id as string) || token.sub || "";
+        session.user.role = (token.role as "user" | "worker" | "admin") || "user";
+        session.user.name = (token.name as string) || "";
+        session.user.firstName = (token.firstName as string) || "";
+        session.user.lastName = (token.lastName as string) || "";
       }
       return session;
     },
@@ -358,8 +414,10 @@ export const authOptions: NextAuthOptions = {
       return baseUrl;
     },
   },
-  pages: {
-    signIn: "/connexion",
+    pages: {
+    // Never advertise the real admin login via NextAuth redirects.
+    // Admins must open /connexion directly.
+    signIn: "/404",
   },
   secret: nextAuthSecret || "dev-only-nextauth-secret",
 };

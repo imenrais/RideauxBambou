@@ -49,11 +49,9 @@ Thumbs.db
 
 # Docs (optional in image builds)
 README.md
-HOSTINGER-DEPLOYMENT.md
 *.md
 
-# Docker / PM2 (mounted or copied separately on VPS)
+# Docker (mounted or copied separately on VPS)
 Dockerfile
 .dockerignore
 docker-compose*.yml
-ecosystem.config.cjs

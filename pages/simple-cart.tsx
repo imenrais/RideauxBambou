@@ -147,13 +147,15 @@ export default function SimpleCartPage() {
                         <div className="flex items-start justify-between">
                           <div className="flex flex-1 space-x-4">
                             {/* Product Image */}
-                            <div className="relative h-16 w-16 shrink-0 sm:h-20 sm:w-20">
-                              <Image
-                                src={item.productImage}
-                                alt={item.productName}
-                                fill
-                                className="rounded-lg object-cover"
-                              />
+                            <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-gray-100 sm:h-20 sm:w-20 dark:bg-gray-700">
+                              {item.productImage ? (
+                                <Image
+                                  src={item.productImage}
+                                  alt={item.productName}
+                                  fill
+                                  className="rounded-lg object-cover"
+                                />
+                              ) : null}
                             </div>
 
                             {/* Product Details */}

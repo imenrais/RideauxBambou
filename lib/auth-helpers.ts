@@ -2,6 +2,8 @@ import { NextApiRequest, NextApiResponse } from "next";
 import { getServerSession } from "next-auth";
 
 import { authOptions } from "./auth-config";
+import { getLiveUserRole } from "./live-role";
+import { enforceSharedRateLimit } from "./rate-limit-store";
 import { logAuditEvent } from "./security-audit";
 import { setSecurityHeaders } from "./security";
 
@@ -12,13 +14,6 @@ export interface AuthenticatedUser {
   lastName: string;
   role: "user" | "worker" | "admin";
 }
-
-type RateLimitState = {
-  count: number;
-  resetAt: number;
-};
-
-const rateLimitStore = new Map<string, RateLimitState>();
 
 function getClientIp(req: NextApiRequest): string {
   const forwarded = req.headers["x-forwarded-for"];
@@ -35,26 +30,18 @@ function getRequestPath(req: NextApiRequest): string {
   return req.url || "";
 }
 
-function applyRateLimit(
+async function applyRateLimit(
   req: NextApiRequest,
   res: NextApiResponse,
   keyPrefix: string,
   limit: number,
   windowMs: number
-): boolean {
+): Promise<boolean> {
   const ip = getClientIp(req);
-  const key = `${keyPrefix}:${ip}`;
-  const now = Date.now();
-  const current = rateLimitStore.get(key);
+  const result = await enforceSharedRateLimit(`${keyPrefix}:${ip}`, limit, windowMs);
 
-  if (!current || now >= current.resetAt) {
-    rateLimitStore.set(key, { count: 1, resetAt: now + windowMs });
-    return true;
-  }
-
-  if (current.count >= limit) {
-    const retryAfter = Math.ceil((current.resetAt - now) / 1000);
-    res.setHeader("Retry-After", String(Math.max(1, retryAfter)));
+  if (!result.allowed) {
+    res.setHeader("Retry-After", String(Math.max(1, result.retryAfterSeconds)));
     res.status(429).json({
       success: false,
       error: "Too many requests, please try again later.",
@@ -62,8 +49,6 @@ function applyRateLimit(
     return false;
   }
 
-  current.count += 1;
-  rateLimitStore.set(key, current);
   return true;
 }
 
@@ -155,7 +140,7 @@ export function requireAuth(
     setSecurityHeaders(res);
     res.setHeader("Cache-Control", "no-store");
 
-    if (!applyRateLimit(req, res, "auth", 150, 15 * 60 * 1000)) {
+    if (!(await applyRateLimit(req, res, "auth", 150, 15 * 60 * 1000))) {
       return;
     }
 
@@ -183,6 +168,12 @@ export function requireAuth(
       return res.status(401).json({ error: "Authentication required" });
     }
 
+    const liveRole = await getLiveUserRole(user.id);
+    if (!liveRole) {
+      return res.status(401).json({ error: "Authentication required" });
+    }
+    user.role = liveRole;
+
     return handler(req, res, user);
   };
 }
@@ -197,9 +188,12 @@ export function requireAdmin(
     setSecurityHeaders(res);
     res.setHeader("Cache-Control", "no-store");
 
-    if (!applyRateLimit(req, res, "admin", 100, 15 * 60 * 1000)) {
+    if (!(await applyRateLimit(req, res, "admin", 100, 15 * 60 * 1000))) {
       return;
     }
+
+    // Probe-style 404 — do not reveal that an admin API exists.
+    const notFound = () => res.status(404).json({ error: "Not found" });
 
     if (requiresOriginCheck(req) && !hasTrustedOrigin(req)) {
       logAuditEvent({
@@ -209,7 +203,7 @@ export function requireAdmin(
         path: getRequestPath(req),
         method: req.method || "",
       });
-      return res.status(403).json({ error: "Invalid request origin" });
+      return notFound();
     }
 
     const user = await getCurrentUser(req, res);
@@ -222,21 +216,23 @@ export function requireAdmin(
         path: getRequestPath(req),
         method: req.method || "",
       });
-      return res.status(401).json({ error: "Authentication required" });
+      return notFound();
     }
 
-    if (user.role !== "admin") {
+    const liveRole = await getLiveUserRole(user.id);
+    if (liveRole !== "admin") {
       logAuditEvent({
         event: "ADMIN_FORBIDDEN_REJECTED",
         level: "warning",
         actorId: user.id,
-        actorRole: user.role,
+        actorRole: liveRole || user.role,
         ip: getClientIp(req),
         path: getRequestPath(req),
         method: req.method || "",
       });
-      return res.status(403).json({ error: "Admin access required" });
+      return notFound();
     }
+    user.role = "admin";
 
     if (requiresOriginCheck(req)) {
       logAuditEvent({

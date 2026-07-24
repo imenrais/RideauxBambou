@@ -810,7 +810,7 @@ export default function UserSettings({ title }: UserSettingsProps) {
   useEffect(() => {
     if (status === "loading") return;
     if (!session) {
-      router.push("/connexion?callbackUrl=/profile/settings");
+      router.push("/");
       return;
     }
     if (session.user?.role === "worker") {

@@ -2,6 +2,7 @@ import { NextApiRequest, NextApiResponse } from "next";
 import { z } from "zod";
 
 import { requireAdmin } from "../../../lib/auth-helpers";
+import { isValidUploadImageUrl } from "../../../lib/uploads";
 import { prisma } from "../../../lib/prisma";
 
 const normalizeAvailability = (value: unknown) => {
@@ -69,15 +70,9 @@ const productSchema = z.object({
   image: z
     .string()
     .min(1, "Image is required")
-    .refine(
-      (value) => {
-        // Accept both URLs and relative paths starting with /uploads/
-        return value.startsWith("http") || value.startsWith("/uploads/");
-      },
-      {
-        message: "Invalid image URL",
-      }
-    ),
+    .refine((value) => isValidUploadImageUrl(value), {
+      message: "Image must be an uploaded file (/uploads/...)",
+    }),
 });
 
 const updateProductSchema = productSchema

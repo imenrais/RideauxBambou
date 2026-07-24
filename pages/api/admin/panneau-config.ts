@@ -155,10 +155,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         });
       } catch (error) {
         console.error("Error updating panneau config:", error);
-        const message = error instanceof Error ? error.message : "Failed to update panneau configuration";
         return res.status(400).json({
           success: false,
-          error: message,
+          error: "Failed to update panneau configuration",
         });
       }
     })(req, res);

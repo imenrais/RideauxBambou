@@ -81,7 +81,7 @@ export default function ResetPasswordPage({ title, token }: ResetPasswordPagePro
           text: "Votre mot de passe a été réinitialisé avec succès. Vous pouvez maintenant vous connecter.",
         });
         setTimeout(() => {
-          router.push("/connexion");
+          router.push("/");
         }, 2000);
       } else {
         setMessage({

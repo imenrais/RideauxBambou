@@ -1,6 +1,7 @@
 import { NextApiRequest, NextApiResponse } from "next";
 import { z } from "zod";
 
+import { enforceIpRateLimit, getRequestIp } from "../../lib/auth-throttle";
 import { requiredEmailSchema } from "../../lib/email-validation";
 import { subscribePromoEmail } from "../../lib/promo-subscriber-store";
 import { notifyPromoSubscriberIfSalesActive } from "../../lib/sale-notifications";
@@ -18,6 +19,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
+    const ip = getRequestIp(req);
+    const rateLimitCheck = await enforceIpRateLimit("api-newsletter", ip, 8, 15 * 60 * 1000);
+    if (!rateLimitCheck.allowed) {
+      res.setHeader("Retry-After", String(rateLimitCheck.retryAfterSeconds));
+      return res.status(429).json({
+        success: false,
+        error: "Trop de tentatives. Réessayez plus tard.",
+      });
+    }
+
     const validation = newsletterSchema.safeParse(req.body);
     if (!validation.success) {
       return res.status(400).json({

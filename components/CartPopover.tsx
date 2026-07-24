@@ -136,13 +136,15 @@ export default function CartPopover() {
                     return (
                       <li key={item.id} className="flex gap-3 px-4 py-3">
                         <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-800">
-                          <Image
-                            src={item.productImage}
-                            alt={item.productName}
-                            fill
-                            sizes="56px"
-                            className="object-cover"
-                          />
+                          {item.productImage ? (
+                            <Image
+                              src={item.productImage}
+                              alt={item.productName}
+                              fill
+                              sizes="56px"
+                              className="object-cover"
+                            />
+                          ) : null}
                         </div>
 
                         <div className="min-w-0 flex-1">

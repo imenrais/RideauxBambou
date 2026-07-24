@@ -1,7 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import dynamic from "next/dynamic";
 import Head from "next/head";
-import { useRouter } from "next/router";
 import { useSession } from "next-auth/react";
 import { useState, useEffect, useRef } from "react";
 
@@ -63,7 +62,6 @@ interface AdminProduct {
 
 export default function AdminDashboard() {
   const { data: session, status } = useSession();
-  const router = useRouter();
   const queryClient = useQueryClient();
   const [newPrice, setNewPrice] = useState("");
   const [newSalePrice, setNewSalePrice] = useState("");
@@ -83,14 +81,6 @@ export default function AdminDashboard() {
   const installationFeeHydrated = useRef(false);
   const panneauConfigHydrated = useRef(false);
 
-  // Redirect if not admin
-  useEffect(() => {
-    if (status === "loading") return;
-    if (!session || session.user?.role !== "admin") {
-      router.push("/connexion");
-    }
-  }, [session, status, router]);
-
   // Fetch current price
   const { data: priceData, isPending: priceInitialLoading } = useQuery({
     queryKey: ["admin-price"],
@@ -100,6 +90,7 @@ export default function AdminDashboard() {
       return data.data;
     },
     staleTime: 0,
+    enabled: status === "authenticated" && session?.user?.role === "admin",
   });
 
   const pushPriceUpdates = (
@@ -1944,4 +1935,6 @@ export default function AdminDashboard() {
     </>
   );
 }
+
+export { requireAdminPage as getServerSideProps } from "../lib/require-admin-page";
 

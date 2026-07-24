@@ -1,5 +1,4 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useRouter } from "next/router";
 import { useSession } from "next-auth/react";
 import { useState, useEffect, useMemo } from "react";
 
@@ -99,18 +98,9 @@ function parseDeliveryFeesResponse(data: {
 
 export default function AdminDeliveryFees() {
   const { data: session, status } = useSession();
-  const router = useRouter();
   const queryClient = useQueryClient();
   const [feeDrafts, setFeeDrafts] = useState<Record<string, string>>({});
   const [confirmModal, setConfirmModal] = useState<FreeDeliveryConfirmModal>(null);
-
-  // Redirect if not admin
-  useEffect(() => {
-    if (status === "loading") return;
-    if (!session || session.user?.role !== "admin") {
-      router.push("/connexion");
-    }
-  }, [session, status, router]);
 
   // Fetch delivery fees
   const { data: deliveryFeesResponse, isLoading } = useQuery<DeliveryFeesResponse>({
@@ -123,6 +113,7 @@ export default function AdminDeliveryFees() {
       }
       return parseDeliveryFeesResponse(data);
     },
+    enabled: status === "authenticated" && session?.user?.role === "admin",
   });
 
   const deliveryFees = deliveryFeesResponse?.fees;
@@ -508,3 +499,6 @@ export default function AdminDeliveryFees() {
     </AdminLayout>
   );
 }
+
+export { requireAdminPage as getServerSideProps } from "../../lib/require-admin-page";
+

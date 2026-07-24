@@ -115,11 +115,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         });
       } catch (error) {
         console.error("Error refreshing delivery fees:", error);
-        const message =
-          error instanceof Error ? error.message : "Failed to refresh delivery fees";
         return res.status(500).json({
           success: false,
-          error: message,
+          error: "Failed to refresh delivery fees",
         });
       }
     })(req, res);

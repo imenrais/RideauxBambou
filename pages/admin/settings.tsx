@@ -1,6 +1,5 @@
-import { useRouter } from "next/router";
 import { useSession } from "next-auth/react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import BackButton from "../../components/BackButton";
 import AdminLayout from "../../components/layout/AdminLayout";
@@ -32,7 +31,6 @@ const PASSWORD_STRENGTH_BAR_COLORS = [
 
 export default function AdminSettings() {
   const { data: session, status } = useSession();
-  const router = useRouter();
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -41,13 +39,6 @@ export default function AdminSettings() {
   const { success, error: showError } = useToast();
 
   const passwordStrength = checkPasswordStrength(newPassword);
-
-  useEffect(() => {
-    if (status === "loading") return;
-    if (!session || session.user?.role !== "admin") {
-      void router.push("/connexion");
-    }
-  }, [session, status, router]);
 
   if (status === "loading") {
     return <Loading fullScreen text="Chargement..." />;
@@ -271,3 +262,6 @@ export default function AdminSettings() {
     </AdminLayout>
   );
 }
+
+export { requireAdminPage as getServerSideProps } from "../../lib/require-admin-page";
+

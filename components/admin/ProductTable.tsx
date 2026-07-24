@@ -128,13 +128,20 @@ export default function ProductTable({
             >
               <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 bg-gray-50/90 px-3 py-2.5 dark:border-gray-800 dark:bg-gray-800/60">
                 <div className="flex min-w-0 flex-1 items-center gap-2.5">
-                  <Image
-                    src={product.image || "/images/logo.png"}
-                    alt={product.name || "Product image"}
-                    width={40}
-                    height={40}
-                    className="h-10 w-10 shrink-0 rounded-lg object-cover"
-                  />
+                  {product.image ? (
+                    <Image
+                      src={product.image}
+                      alt={product.name || "Product image"}
+                      width={40}
+                      height={40}
+                      className="h-10 w-10 shrink-0 rounded-lg object-cover"
+                    />
+                  ) : (
+                    <div
+                      className="h-10 w-10 shrink-0 rounded-lg bg-gray-200 dark:bg-gray-700"
+                      aria-hidden="true"
+                    />
+                  )}
                   <div className="min-w-0">
                     <p className="break-words text-sm font-semibold text-gray-900 dark:text-white">
                       {product.name || "Nom non défini"}
@@ -233,13 +240,20 @@ export default function ProductTable({
               <TableRow key={product._id}>
                 <TableCell align="center">
                   <div className="flex justify-center">
-                    <Image
-                      src={product.image || "/images/logo.png"}
-                      alt={product.name || "Product image"}
-                      width={48}
-                      height={48}
-                      className="h-12 w-12 rounded-lg object-cover"
-                    />
+                    {product.image ? (
+                      <Image
+                        src={product.image}
+                        alt={product.name || "Product image"}
+                        width={48}
+                        height={48}
+                        className="h-12 w-12 rounded-lg object-cover"
+                      />
+                    ) : (
+                      <div
+                        className="h-12 w-12 rounded-lg bg-gray-200 dark:bg-gray-700"
+                        aria-hidden="true"
+                      />
+                    )}
                   </div>
                 </TableCell>
                 <TableCell align="center">

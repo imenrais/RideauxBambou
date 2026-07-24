@@ -2,14 +2,15 @@ import { NextApiRequest, NextApiResponse } from "next";
 import { z } from "zod";
 
 import { requireAdmin } from "../../../lib/auth-helpers";
+import { isValidUploadImageUrl } from "../../../lib/uploads";
 import { prisma } from "../../../lib/prisma";
 
 const reviewSchema = z.object({
   image: z
     .string()
     .min(1, "L'image est requise")
-    .refine((value) => value.startsWith("http") || value.startsWith("/uploads/"), {
-      message: "L'URL de l'image doit etre valide",
+    .refine((value) => isValidUploadImageUrl(value), {
+      message: "L'image doit etre un fichier televerse (/uploads/...)",
     }),
   caption: z.string().max(240, "Le texte ne doit pas depasser 240 caracteres").optional(),
   isActive: z.boolean().optional(),

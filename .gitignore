@@ -42,11 +42,13 @@ next-env.d.ts
 public/uploads/*
 !public/uploads/.gitkeep
 
-# Hostinger DB seed (contains password hashes — never commit)
+# Local DB dumps / seed exports (may contain password hashes)
 data/
+**/hostinger-seed.json
 
-# Hostinger deploy config & seed tools (local only — do not push)
+# Local-only Hostinger helpers (never push)
 HOSTINGER-DEPLOYMENT.md
+HOSTINGER-DEPLOYMENT.md.tmp
 ecosystem.config.cjs
 scripts/export-hostinger-seed.mjs
 scripts/import-hostinger-seed.mjs

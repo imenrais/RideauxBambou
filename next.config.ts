@@ -9,12 +9,8 @@ const nextConfig: NextConfig = {
   serverExternalPackages: ["@prisma/client", "bcryptjs", "nodemailer"],
 
   images: {
+    // Product / review images are uploaded to the VPS and served from /uploads.
     remotePatterns: [
-      {
-        protocol: "https",
-        hostname: "res.cloudinary.com",
-        pathname: "/**",
-      },
       {
         protocol: "https",
         hostname: "lh3.googleusercontent.com",
@@ -51,7 +47,10 @@ const nextConfig: NextConfig = {
           {
             key: "Content-Security-Policy",
             value:
-              "default-src 'self'; img-src 'self' data: blob: https: res.cloudinary.com; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self' data: https:; connect-src 'self' https:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; upgrade-insecure-requests;",
+              // Next.js needs 'unsafe-inline' (and typically 'unsafe-eval' in practice)
+              // for the app to run. Other hardening (admin 404s, rate limits, live
+              // roles, server-side pricing, upload locks) stays independent of this.
+              "default-src 'self'; img-src 'self' data: blob: https:; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self' data: https:; connect-src 'self' https:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; upgrade-insecure-requests;",
           },
           {
             key: "X-Frame-Options",
@@ -106,11 +105,6 @@ const nextConfig: NextConfig = {
   async redirects() {
     return [
       {
-        source: "/login",
-        destination: "/connexion",
-        permanent: true,
-      },
-      {
         source: "/signup",
         destination: "/inscription",
         permanent: true,
@@ -164,7 +158,14 @@ const nextConfig: NextConfig = {
   },
 
   async rewrites() {
-    return [];
+    // Files already on disk at build time are served straight from public/;
+    // anything uploaded after the server booted falls through to this route.
+    return [
+      {
+        source: "/uploads/:file",
+        destination: "/api/uploads/:file",
+      },
+    ];
   },
 
   webpack: (config, { isServer }) => {

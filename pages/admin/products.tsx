@@ -1,8 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import dynamic from "next/dynamic";
-import { useRouter } from "next/router";
 import { useSession } from "next-auth/react";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { FiPlus } from "react-icons/fi";
 
 import BackButton from "../../components/BackButton";
@@ -97,19 +96,10 @@ const ADMIN_PRODUCTS_STATS_QUERY_KEY = ["admin-products-stats"] as const;
 
 export default function AdminProducts() {
   const { data: session, status } = useSession();
-  const router = useRouter();
   const queryClient = useQueryClient();
   const [showModal, setShowModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const { success, error } = useToast();
-
-  // Redirect if not admin
-  useEffect(() => {
-    if (status === "loading") return;
-    if (!session || session.user?.role !== "admin") {
-      router.push("/connexion");
-    }
-  }, [session, status, router]);
 
   // Fetch global price
   const { data: globalPriceData } = useQuery({
@@ -119,6 +109,7 @@ export default function AdminProducts() {
       const data = await response.json();
       return data.success ? data.data : { pricePerM2: 50 };
     },
+    enabled: status === "authenticated" && session?.user?.role === "admin",
   });
 
   // Fetch products
@@ -133,6 +124,7 @@ export default function AdminProducts() {
 
       return data.data.map((product: Product) => normalizeProduct(product));
     },
+    enabled: status === "authenticated" && session?.user?.role === "admin",
   });
 
   // Create/Update product mutation
@@ -366,3 +358,6 @@ export default function AdminProducts() {
     </AdminLayout>
   );
 }
+
+export { requireAdminPage as getServerSideProps } from "../../lib/require-admin-page";
+

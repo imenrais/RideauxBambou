@@ -1,9 +1,8 @@
 import { motion } from "framer-motion";
 import { GetServerSideProps } from "next";
 import Head from "next/head";
-import Link from "next/link";
 import { useRouter } from "next/router";
-import { signIn, getSession } from "next-auth/react";
+import { signIn } from "next-auth/react";
 import { useState } from "react";
 
 import BackButton from "../components/BackButton";
@@ -141,13 +140,7 @@ export default function SignupPage({ title }: SignupPageProps) {
         setError(`Erreur lors de l'inscription avec Google: ${result.error}`);
         setIsLoading(false);
       } else if (result?.ok) {
-        // Check if user is admin and redirect accordingly
-        const session = await getSession();
-        if (session?.user?.role === "admin") {
-          router.push("/admin");
-        } else {
-          router.push("/");
-        }
+        router.push("/");
       }
     } catch (error) {
       console.error("Google signup error:", error);
@@ -409,19 +402,6 @@ export default function SignupPage({ title }: SignupPageProps) {
                 >
                   S'inscrire avec Google
                 </Button>
-
-                {/* Login Link */}
-                <div className="mt-8 text-center">
-                  <p className="text-gray-600 dark:text-gray-400">
-                    Déjà un compte?{" "}
-                    <Link
-                      href="/connexion"
-                      className="font-medium text-gray-900 transition-colors hover:text-gray-700 dark:text-gray-100 dark:hover:text-white"
-                    >
-                      Se connecter
-                    </Link>
-                  </p>
-                </div>
               </motion.div>
             </main>
           </div>

@@ -10,20 +10,12 @@ const createWorkerSchema = z.object({
   firstName: z.string().min(2, "Le prénom doit contenir au moins 2 caractères"),
   lastName: z.string().min(2, "Le nom doit contenir au moins 2 caractères"),
   email: requiredEmailSchema,
-  role: z
-    .string()
-    .min(1, "Le rôle est requis")
-    .transform((value) => value.trim().toLowerCase()),
   password: strongPasswordSchema,
 });
 
 const updateUserSchema = z
   .object({
-    role: z
-      .string()
-      .min(1, "Le rôle est requis")
-      .transform((value) => value.trim().toLowerCase())
-      .optional(),
+    role: z.enum(["user", "worker", "admin"]).optional(),
     firstName: z.string().min(2, "Le prénom doit contenir au moins 2 caractères").optional(),
     lastName: z.string().min(2, "Le nom doit contenir au moins 2 caractères").optional(),
     email: optionalEmailSchema.optional(),
@@ -45,7 +37,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           });
         }
 
-        const { firstName, lastName, email, role, password } = validationResult.data;
+        const { firstName, lastName, email, password } = validationResult.data;
 
         const existingUser = await prisma.user.findUnique({ where: { email } });
         if (existingUser) {
@@ -63,7 +55,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             name: `${firstName.trim()} ${lastName.trim()}`,
             email,
             password: hashedPassword,
-            role,
+            role: "worker",
           },
         });
 
