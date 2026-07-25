@@ -231,6 +231,44 @@ const incrementStatsWithOrder = (stats: OrderStats | undefined, orderStatus: str
   return nextStats;
 };
 
+const applyOrderDeleteUpdate = (
+  oldData: AdminOrdersQueryData | undefined,
+  orderId: string
+) => {
+  if (!oldData?.orders) {
+    return oldData;
+  }
+
+  const orderToRemove = oldData.orders.find((order) => order._id === orderId);
+  if (!orderToRemove) {
+    return oldData;
+  }
+
+  const nextOrders = oldData.orders.filter((order) => order._id !== orderId);
+  const normalizedStatus = normalizeStatus(orderToRemove.status);
+  const statsKey = statusToStatsKey[normalizedStatus];
+  const nextStats: OrderStats = { ...(oldData.stats || {}) };
+  nextStats.totalOrders = Math.max(0, (nextStats.totalOrders || 0) - 1);
+  nextStats[statsKey] = Math.max(0, (nextStats[statsKey] || 0) - 1);
+
+  const previousTotalOrders = oldData.pagination?.totalOrders || 0;
+  const pageSize = Math.max(oldData.orders.length || 10, 1);
+  const nextTotalOrders = Math.max(0, previousTotalOrders - 1);
+
+  return {
+    ...oldData,
+    orders: nextOrders,
+    stats: nextStats,
+    pagination: oldData.pagination
+      ? {
+          ...oldData.pagination,
+          totalOrders: nextTotalOrders,
+          totalPages: Math.max(1, Math.ceil(Math.max(nextTotalOrders, 1) / pageSize)),
+        }
+      : oldData.pagination,
+  };
+};
+
 const parseOrdersListQueryMeta = (queryKey: readonly unknown[]) => {
   if (queryKey[0] !== "admin-orders") {
     return null;
@@ -883,6 +921,75 @@ export default function AdminOrders() {
 
   const handleInlineStatusUpdate = (orderId: string, status: string) => {
     updateStatusMutation.mutate({ orderId, status });
+  };
+
+  const deleteOrderMutation = useMutation({
+    mutationFn: async (orderId: string) => {
+      const response = await fetch(`/api/admin/orders?id=${orderId}`, {
+        method: "DELETE",
+      });
+      const data = await response.json();
+      if (!data.success) {
+        throw new Error(data.error);
+      }
+      return data.data;
+    },
+    onMutate: async (orderId) => {
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: ADMIN_ORDERS_LIST_QUERY_KEY }),
+        queryClient.cancelQueries({ queryKey: ADMIN_ORDERS_STATS_QUERY_KEY }),
+      ]);
+
+      const previousOrderQueries = queryClient.getQueriesData<AdminOrdersQueryData>({
+        queryKey: ADMIN_ORDERS_LIST_QUERY_KEY,
+      });
+      const previousOrderStatsQuery = queryClient.getQueryData<AdminOrdersQueryData>(
+        ADMIN_ORDERS_STATS_QUERY_KEY
+      );
+
+      for (const [queryKey] of previousOrderQueries) {
+        queryClient.setQueryData<AdminOrdersQueryData>(queryKey, (oldData) =>
+          applyOrderDeleteUpdate(oldData, orderId)
+        );
+      }
+      queryClient.setQueryData<AdminOrdersQueryData>(ADMIN_ORDERS_STATS_QUERY_KEY, (oldData) =>
+        applyOrderDeleteUpdate(oldData, orderId)
+      );
+
+      return { previousOrderQueries, previousOrderStatsQuery };
+    },
+    onSuccess: () => {
+      success("Commande supprimée.");
+    },
+    onError: (mutationError, _orderId, context) => {
+      if (context?.previousOrderQueries) {
+        for (const [queryKey, queryData] of context.previousOrderQueries) {
+          queryClient.setQueryData(queryKey, queryData);
+        }
+      }
+      if (context?.previousOrderStatsQuery) {
+        queryClient.setQueryData(ADMIN_ORDERS_STATS_QUERY_KEY, context.previousOrderStatsQuery);
+      }
+
+      const message = mutationError instanceof Error ? mutationError.message : "Erreur inconnue";
+      error(`Erreur: ${message}`);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ADMIN_ORDERS_LIST_QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: ADMIN_ORDERS_STATS_QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: ["admin-dashboard-charts-orders"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-notification-center-orders"] });
+    },
+  });
+
+  const handleDeleteOrder = (orderId: string) => {
+    const confirmed = window.confirm(
+      `Supprimer la commande #${orderId.slice(-8)} ? Cette action est irréversible.`
+    );
+    if (!confirmed) {
+      return;
+    }
+    deleteOrderMutation.mutate(orderId);
   };
 
   const createOrderMutation = useMutation({
@@ -2444,7 +2551,7 @@ export default function AdminOrders() {
                             ) : null}
                           </div>
 
-                          <div className="flex items-center gap-2 border-t border-gray-100 pt-2.5 dark:border-gray-800">
+                          <div className="flex flex-wrap items-center gap-2 border-t border-gray-100 pt-2.5 dark:border-gray-800">
                             <label
                               className="sr-only"
                               htmlFor={`mobile-status-${order._id}`}
@@ -2473,6 +2580,17 @@ export default function AdminOrders() {
                             >
                               Imprimer
                             </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="danger"
+                              className="box-border !h-9 shrink-0 !rounded-lg !px-3 !py-0 !text-xs !leading-none !shadow-sm"
+                              disabled={deleteOrderMutation.isPending}
+                              loading={deleteOrderMutation.isPending}
+                              onClick={() => handleDeleteOrder(order._id)}
+                            >
+                              Supprimer
+                            </Button>
                           </div>
                         </div>
                       </div>
@@ -2499,6 +2617,7 @@ export default function AdminOrders() {
                         <th className={orderTableHeadClass}>Statut</th>
                         <th className={orderTableHeadClass}>Date</th>
                         <th className={orderTableHeadClass}>Facture</th>
+                        <th className={orderTableHeadClass}>Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-800">
@@ -2604,6 +2723,18 @@ export default function AdminOrders() {
                           <td className={orderTableCellClass}>
                             <Button type="button" size="sm" variant="secondary" onClick={() => printInvoice(order)}>
                               Imprimer
+                            </Button>
+                          </td>
+                          <td className={orderTableCellClass}>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="danger"
+                              disabled={deleteOrderMutation.isPending}
+                              loading={deleteOrderMutation.isPending}
+                              onClick={() => handleDeleteOrder(order._id)}
+                            >
+                              Supprimer
                             </Button>
                           </td>
                         </tr>

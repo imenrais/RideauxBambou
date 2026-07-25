@@ -327,6 +327,42 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     })(req, res);
   }
 
+  if (req.method === "DELETE") {
+    return requireAdmin(async (req: NextApiRequest, res: NextApiResponse, _user) => {
+      try {
+        const { id } = req.query;
+
+        if (!id || typeof id !== "string") {
+          return res.status(400).json({
+            success: false,
+            error: "Order ID is required",
+          });
+        }
+
+        const existingOrder = await prisma.order.findUnique({ where: { id } });
+        if (!existingOrder) {
+          return res.status(404).json({
+            success: false,
+            error: "Order not found",
+          });
+        }
+
+        await prisma.order.delete({ where: { id } });
+
+        return res.status(200).json({
+          success: true,
+          data: { _id: id, id },
+        });
+      } catch (error) {
+        console.error("Admin order delete error:", error);
+        return res.status(500).json({
+          success: false,
+          error: "Failed to delete order",
+        });
+      }
+    })(req, res);
+  }
+
   return res.status(405).json({
     success: false,
     error: "Method not allowed",
