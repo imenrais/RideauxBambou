@@ -34,15 +34,22 @@ const buildStatusWhere = (status?: string | string[]): Prisma.OrderWhereInput =>
   return { status: normalizedStatus };
 };
 
+const adminOrderItemSchema = z.object({
+  curtainTypeId: z.string().min(1).max(64).optional(),
+  curtainTypeName: z.string().min(1, "Le nom du produit est requis").max(200),
+  curtainType: z.enum(["panneau", "store"]).optional(),
+  width: z.number().positive("La largeur doit être supérieure à 0"),
+  height: z.number().positive("La hauteur doit être supérieure à 0"),
+  totalCost: z.number().min(0, "Le prix produit doit être positif"),
+  quantity: z.number().int().min(1, "La quantité doit être au moins 1").max(20).default(1),
+});
+
 const createAdminOrderSchema = z.object({
   customerInfo: adminCustomerInfoSchema,
-  item: z.object({
-    curtainTypeName: z.string().min(1, "Le nom du produit est requis"),
-    width: z.number().positive("La largeur doit être supérieure à 0"),
-    height: z.number().positive("La hauteur doit être supérieure à 0"),
-    totalCost: z.number().min(0, "Le prix produit doit être positif"),
-    quantity: z.number().int().min(1, "La quantité doit être au moins 1").default(1),
-  }),
+  items: z
+    .array(adminOrderItemSchema)
+    .min(1, "Au moins un produit est requis")
+    .max(20, "Trop de produits dans une commande"),
   wantsInstallation: z.boolean(),
   deliveryFee: z.number().min(0, "Les frais de livraison doivent être positifs"),
   installationFee: z.number().min(0, "Les frais de pose doivent être positifs"),
@@ -61,25 +68,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           });
         }
 
-        const { customerInfo, item, wantsInstallation, deliveryFee, installationFee, notes } =
+        const { customerInfo, items, wantsInstallation, deliveryFee, installationFee, notes } =
           validationResult.data;
         const resolvedInstallationFee = wantsInstallation ? installationFee : 0;
-        const totalAmount = Math.max(0, item.totalCost + deliveryFee + resolvedInstallationFee);
+        const itemsTotal = items.reduce((sum, item) => sum + item.totalCost, 0);
+        const totalAmount = Math.max(0, itemsTotal + deliveryFee + resolvedInstallationFee);
         const serializedCustomerInfo = serializeCustomerInfo(customerInfo);
+        const persistedItems = items.map((item) => ({
+          curtainTypeId: item.curtainTypeId || "manual-admin",
+          curtainTypeName: item.curtainTypeName,
+          ...(item.curtainType ? { curtainType: item.curtainType } : {}),
+          width: item.width,
+          height: item.height,
+          quantity: item.quantity,
+          totalCost: item.totalCost,
+        }));
 
         const createdOrder = await prisma.order.create({
           data: {
             userId: adminUser.id,
-            items: [
-              {
-                curtainTypeId: "manual-admin",
-                curtainTypeName: item.curtainTypeName,
-                width: item.width,
-                height: item.height,
-                quantity: item.quantity,
-                totalCost: item.totalCost,
-              },
-            ] as unknown as Prisma.InputJsonValue,
+            items: persistedItems as unknown as Prisma.InputJsonValue,
             customerInfo: serializedCustomerInfo as unknown as Prisma.InputJsonValue,
             wantsInstallation,
             deliveryFee,
@@ -264,7 +272,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return requireAdmin(async (req: NextApiRequest, res: NextApiResponse, _user) => {
       try {
         const { id } = req.query;
-        const { status } = req.body;
 
         if (!id || typeof id !== "string") {
           return res.status(400).json({
@@ -273,21 +280,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           });
         }
 
-        const validStatuses = [
-          "pending",
-          "confirmed",
-          "processing",
-          "delivered",
-          "cancelled",
-        ];
-        if (!status || !validStatuses.includes(status)) {
-          return res.status(400).json({
-            success: false,
-            error: `Invalid status. Must be one of: ${validStatuses.join(", ")}`,
-          });
-        }
-
-        // Update order status
         const existingOrder = await prisma.order.findUnique({ where: { id } });
 
         if (!existingOrder) {
@@ -297,9 +289,72 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           });
         }
 
+        const hasItemsUpdate = Array.isArray(req.body?.items);
+        const hasStatusUpdate = typeof req.body?.status === "string";
+
+        if (!hasItemsUpdate && !hasStatusUpdate) {
+          return res.status(400).json({
+            success: false,
+            error: "Status or items update is required",
+          });
+        }
+
+        const data: Prisma.OrderUpdateInput = {};
+
+        if (hasItemsUpdate) {
+          const itemsResult = z
+            .array(adminOrderItemSchema)
+            .min(1, "Au moins un produit est requis")
+            .max(20, "Trop de produits dans une commande")
+            .safeParse(req.body.items);
+
+          if (!itemsResult.success) {
+            return res.status(400).json({
+              success: false,
+              error: itemsResult.error.issues[0].message,
+            });
+          }
+
+          const items = itemsResult.data;
+          const persistedItems = items.map((item) => ({
+            curtainTypeId: item.curtainTypeId || "manual-admin",
+            curtainTypeName: item.curtainTypeName,
+            ...(item.curtainType ? { curtainType: item.curtainType } : {}),
+            width: item.width,
+            height: item.height,
+            quantity: item.quantity,
+            totalCost: item.totalCost,
+          }));
+          const itemsTotal = items.reduce((sum, item) => sum + item.totalCost, 0);
+          const deliveryFee = Number(existingOrder.deliveryFee) || 0;
+          const installationFee = existingOrder.wantsInstallation
+            ? Number(existingOrder.installationFee) || 0
+            : 0;
+
+          data.items = persistedItems as unknown as Prisma.InputJsonValue;
+          data.totalAmount = Math.max(0, itemsTotal + deliveryFee + installationFee);
+        }
+
+        if (hasStatusUpdate) {
+          const validStatuses = [
+            "pending",
+            "confirmed",
+            "processing",
+            "delivered",
+            "cancelled",
+          ];
+          if (!validStatuses.includes(req.body.status)) {
+            return res.status(400).json({
+              success: false,
+              error: `Invalid status. Must be one of: ${validStatuses.join(", ")}`,
+            });
+          }
+          data.status = req.body.status;
+        }
+
         const updatedOrder = await prisma.order.update({
           where: { id },
-          data: { status },
+          data,
           include: {
             user: {
               select: { name: true, email: true },

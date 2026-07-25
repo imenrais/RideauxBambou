@@ -7,15 +7,13 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import AdminNavigation from "../../components/AdminNavigation";
 import BackButton from "../../components/BackButton";
 import Footer from "../../components/Footer";
-import StorePanelBreakdown, {
-  StorePanelQuantityHint,
-} from "../../components/StorePanelBreakdown";
+import StorePanelBreakdown from "../../components/StorePanelBreakdown";
 import Button from "../../components/ui/Button";
 import Card from "../../components/ui/Card";
 import Input from "../../components/ui/Input";
 import Loading from "../../components/ui/Loading";
 import { useToast } from "../../contexts/ToastContext";
-import { FiPlus, FiSearch } from "react-icons/fi";
+import { FiPlus, FiSearch, FiTrash2 } from "react-icons/fi";
 import { escapeHtml } from "../../lib/email-templates";
 import { getEmailValidationError, normalizeEmailValue } from "../../lib/email-validation";
 import {
@@ -67,6 +65,7 @@ import {
   TUNISIAN_GOVERNORATES,
   normalizeGovernorate,
 } from "../../lib/tunisia-locations";
+import { parseMeasurement, sanitizeMeasurementInput } from "../../lib/measurement-input";
 
 const PAGE_TITLE = "Gestion des Commandes - Rideaux Bambou Admin";
 
@@ -79,6 +78,60 @@ interface Product {
 
 type CanonicalOrderStatus = "pending" | "confirmed" | "processing" | "delivered" | "cancelled";
 type CurtainType = "panneau" | "store";
+
+type ManualOrderLineItem = {
+  id: string;
+  productId: string;
+  productName: string;
+  curtainType: CurtainType;
+  width: number;
+  height: number;
+  quantity: number;
+  totalCost: number;
+};
+
+const parseStoredCurtainType = (item: Record<string, unknown>): CurtainType => {
+  if (item.curtainType === "panneau" || item.curtainType === "store") {
+    return item.curtainType;
+  }
+  const name = String(item.curtainTypeName || "");
+  if (/\bpanneau\b/i.test(name)) {
+    return "panneau";
+  }
+  return "store";
+};
+
+const parseStoredProductName = (item: Record<string, unknown>): string => {
+  const raw = String(item.curtainTypeName || "").trim();
+  const dashMatch = raw.match(/^(.+?)\s*-\s*(Panneau|Store)\s*$/i);
+  if (dashMatch) {
+    return dashMatch[1].trim();
+  }
+  const parenMatch = raw.match(/^(.+?)\s*\((Panneau|Store)\)\s*$/i);
+  if (parenMatch) {
+    return parenMatch[1].trim();
+  }
+  return raw || "Produit";
+};
+
+const mapOrderItemsToManualLines = (items: unknown): ManualOrderLineItem[] => {
+  if (!Array.isArray(items)) {
+    return [];
+  }
+  return items.map((raw, index) => {
+    const item = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+    return {
+      id: `existing-${index}-${String(item.curtainTypeId || index)}`,
+      productId: String(item.curtainTypeId || "manual-admin"),
+      productName: parseStoredProductName(item),
+      curtainType: parseStoredCurtainType(item),
+      width: Number(item.width) || 0,
+      height: Number(item.height) || 0,
+      quantity: Math.max(1, Number(item.quantity) || 1),
+      totalCost: Math.max(0, Number(item.totalCost) || 0),
+    };
+  });
+};
 
 const statusAliases: Record<string, CanonicalOrderStatus> = {
   shipped: "processing",
@@ -380,6 +433,34 @@ const replaceOrderById = (
   };
 };
 
+const applyOrderItemsUpdate = (
+  oldData: AdminOrdersQueryData | undefined,
+  orderId: string,
+  items: any[],
+  totalAmount: number,
+  updatedOrder?: any
+) => {
+  if (!oldData?.orders) {
+    return oldData;
+  }
+
+  return {
+    ...oldData,
+    orders: oldData.orders.map((order) => {
+      if (order._id !== orderId) {
+        return order;
+      }
+      return {
+        ...order,
+        ...(updatedOrder || {}),
+        items,
+        totalAmount,
+        _id: orderId,
+      };
+    }),
+  };
+};
+
 export default function AdminOrders() {
   const { data: session, status } = useSession();
   const router = useRouter();
@@ -391,6 +472,13 @@ export default function AdminOrders() {
   const [focusedOrderId, setFocusedOrderId] = useState<string | null>(null);
   const hasScrolledToFocusedOrder = useRef(false);
   const [isManualOrderModalOpen, setIsManualOrderModalOpen] = useState(false);
+  const [editingOrder, setEditingOrder] = useState<{
+    id: string;
+    deliveryFee: number;
+    installationFee: number;
+    wantsInstallation: boolean;
+  } | null>(null);
+  const [orderToDelete, setOrderToDelete] = useState<{ id: string; label: string } | null>(null);
   const [manualOrderError, setManualOrderError] = useState("");
   const [manualEmailError, setManualEmailError] = useState("");
   const [manualPhoneError, setManualPhoneError] = useState("");
@@ -423,6 +511,7 @@ export default function AdminOrders() {
     wantsInstallation: null as boolean | null,
     notes: "",
   });
+  const [manualOrderItems, setManualOrderItems] = useState<ManualOrderLineItem[]>([]);
   const isManualCompanyOrder = manualOrderForm.customerType === "company";
   const { success, error } = useToast();
   const getFocusedOrderClass = (orderId: string) =>
@@ -550,8 +639,8 @@ export default function AdminOrders() {
       )?.fee ?? 0
     : 0;
 
-  const widthValue = Number(manualOrderForm.width);
-  const heightValue = Number(manualOrderForm.height);
+  const widthValue = parseMeasurement(manualOrderForm.width);
+  const heightValue = parseMeasurement(manualOrderForm.height);
   const quantityValue = Number(manualOrderForm.quantity);
   const installationFeeValue =
     typeof installationFeeData?.fee === "number" ? installationFeeData.fee : Number(manualOrderForm.installationFee);
@@ -606,37 +695,30 @@ export default function AdminOrders() {
   const formatPrice = (price: number) =>
     new Intl.NumberFormat("fr-FR", { style: "currency", currency: "TND" }).format(price);
 
+  const draftItemsTotal = useMemo(
+    () => manualOrderItems.reduce((sum, item) => sum + item.totalCost, 0),
+    [manualOrderItems]
+  );
+
+  const activeDeliveryFee = editingOrder
+    ? editingOrder.deliveryFee
+    : Number(autoDeliveryFee) || 0;
+
   const displayOrderTotal = useMemo(() => {
-    if (!isQuantityValid) {
-      return 0;
-    }
-
-    const productTotal =
-      manualOrderForm.curtainType === "store"
-        ? priceCalculation.total
-        : priceCalculation.total * quantityValue;
-
-    return productTotal + (installationSelected ? installationFeeValue : 0);
-  }, [
-    priceCalculation.total,
-    quantityValue,
-    isQuantityValid,
-    installationSelected,
-    installationFeeValue,
-    manualOrderForm.curtainType,
-  ]);
+    return draftItemsTotal + (installationSelected ? installationFeeValue : 0);
+  }, [draftItemsTotal, installationSelected, installationFeeValue]);
 
   const manualInvoiceTotals = useMemo(
     () =>
       calculateOrderInvoiceTotals({
-        totalAmount: displayOrderTotal + (Number(autoDeliveryFee) || 0),
-        deliveryFee: Number(autoDeliveryFee) || 0,
+        totalAmount: displayOrderTotal + activeDeliveryFee,
+        deliveryFee: activeDeliveryFee,
         installationFee: installationSelected ? installationFeeValue : 0,
         customerInfo: { customerType: manualOrderForm.customerType },
       }),
     [
       displayOrderTotal,
-      autoDeliveryFee,
+      activeDeliveryFee,
       installationSelected,
       installationFeeValue,
       manualOrderForm.customerType,
@@ -646,10 +728,10 @@ export default function AdminOrders() {
   const manualInvoiceLines = useMemo(
     () =>
       getOrderSummaryLines(manualInvoiceTotals, {
-        regionSelected: hasSelectedRegion,
+        regionSelected: Boolean(editingOrder) || hasSelectedRegion,
         isFreeDeliveryActive,
       }),
-    [manualInvoiceTotals, hasSelectedRegion, isFreeDeliveryActive]
+    [manualInvoiceTotals, editingOrder, hasSelectedRegion, isFreeDeliveryActive]
   );
 
   const storePanelMeasurements = useMemo(() => {
@@ -699,6 +781,7 @@ export default function AdminOrders() {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setIsManualOrderModalOpen(false);
+        setEditingOrder(null);
       }
     };
 
@@ -784,7 +867,7 @@ export default function AdminOrders() {
       return;
     }
 
-    const widthCm = Number(manualOrderForm.width);
+    const widthCm = parseMeasurement(manualOrderForm.width);
     const nextQuantity =
       manualOrderForm.width === "" || Number.isNaN(widthCm) || widthCm <= 0
         ? "1"
@@ -959,6 +1042,7 @@ export default function AdminOrders() {
       return { previousOrderQueries, previousOrderStatsQuery };
     },
     onSuccess: () => {
+      setOrderToDelete(null);
       success("Commande supprimée.");
     },
     onError: (mutationError, _orderId, context) => {
@@ -982,14 +1066,34 @@ export default function AdminOrders() {
     },
   });
 
+  useEffect(() => {
+    if (!orderToDelete) return;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !deleteOrderMutation.isPending) {
+        setOrderToDelete(null);
+      }
+    };
+
+    const { overflow } = document.body.style;
+    document.body.style.overflow = "hidden";
+    document.addEventListener("keydown", onKeyDown);
+
+    return () => {
+      document.body.style.overflow = overflow;
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [orderToDelete, deleteOrderMutation.isPending]);
+
   const handleDeleteOrder = (orderId: string) => {
-    const confirmed = window.confirm(
-      `Supprimer la commande #${orderId.slice(-8)} ? Cette action est irréversible.`
-    );
-    if (!confirmed) {
+    setOrderToDelete({ id: orderId, label: `#${orderId.slice(-8)}` });
+  };
+
+  const closeDeleteOrderModal = () => {
+    if (deleteOrderMutation.isPending) {
       return;
     }
-    deleteOrderMutation.mutate(orderId);
+    setOrderToDelete(null);
   };
 
   const createOrderMutation = useMutation({
@@ -1007,13 +1111,15 @@ export default function AdminOrders() {
         state: string;
         postalCode: string;
       };
-      item: {
+      items: Array<{
+        curtainTypeId: string;
         curtainTypeName: string;
+        curtainType: CurtainType;
         width: number;
         height: number;
         quantity: number;
         totalCost: number;
-      };
+      }>;
       wantsInstallation: boolean;
       deliveryFee: number;
       installationFee: number;
@@ -1045,6 +1151,7 @@ export default function AdminOrders() {
         ADMIN_ORDERS_STATS_QUERY_KEY
       );
 
+      const itemsTotal = payload.items.reduce((sum, item) => sum + item.totalCost, 0);
       const optimisticOrderId = `optimistic-${Date.now()}`;
       const optimisticOrder = {
         _id: optimisticOrderId,
@@ -1052,7 +1159,7 @@ export default function AdminOrders() {
         status: "confirmed",
         totalAmount: Math.max(
           0,
-          payload.item.totalCost +
+          itemsTotal +
             payload.deliveryFee +
             (payload.wantsInstallation ? payload.installationFee : 0)
         ),
@@ -1062,15 +1169,15 @@ export default function AdminOrders() {
           name: session?.user?.name || "Admin",
           email: session?.user?.email || "",
         },
-        items: [
-          {
-            curtainTypeName: payload.item.curtainTypeName,
-            width: payload.item.width,
-            height: payload.item.height,
-            quantity: payload.item.quantity,
-            totalCost: payload.item.totalCost,
-          },
-        ],
+        items: payload.items.map((item) => ({
+          curtainTypeId: item.curtainTypeId,
+          curtainTypeName: item.curtainTypeName,
+          curtainType: item.curtainType,
+          width: item.width,
+          height: item.height,
+          quantity: item.quantity,
+          totalCost: item.totalCost,
+        })),
       };
 
       for (const [queryKey] of previousOrderQueries) {
@@ -1118,6 +1225,8 @@ export default function AdminOrders() {
         wantsInstallation: null,
         notes: "",
       });
+      setManualOrderItems([]);
+      setEditingOrder(null);
       setHasSelectedManualReferenceByType({ panneau: false, store: false });
       setManualOrderError("");
       setManualEmailError("");
@@ -1125,6 +1234,121 @@ export default function AdminOrders() {
       setManualMatriculeFiscaleError("");
       setIsManualOrderModalOpen(false);
       success("Commande créée avec succès.");
+    },
+    onError: (mutationError, _variables, context) => {
+      if (context?.previousOrderQueries) {
+        for (const [queryKey, queryData] of context.previousOrderQueries) {
+          queryClient.setQueryData(queryKey, queryData);
+        }
+      }
+      if (context?.previousOrderStatsQuery) {
+        queryClient.setQueryData(ADMIN_ORDERS_STATS_QUERY_KEY, context.previousOrderStatsQuery);
+      }
+
+      const message = mutationError instanceof Error ? mutationError.message : "Erreur inconnue";
+      setManualOrderError(message);
+      error(`Erreur: ${message}`);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ADMIN_ORDERS_LIST_QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: ADMIN_ORDERS_STATS_QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: ["admin-dashboard-charts-orders"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-notification-center-orders"] });
+    },
+  });
+
+  const updateOrderItemsMutation = useMutation({
+    mutationFn: async (payload: {
+      orderId: string;
+      items: Array<{
+        curtainTypeId: string;
+        curtainTypeName: string;
+        curtainType: CurtainType;
+        width: number;
+        height: number;
+        quantity: number;
+        totalCost: number;
+      }>;
+    }) => {
+      const response = await fetch(`/api/admin/orders?id=${payload.orderId}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ items: payload.items }),
+      });
+      const data = await response.json();
+      if (!data.success) {
+        throw new Error(data.error);
+      }
+      return data.data;
+    },
+    onMutate: async (payload) => {
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: ADMIN_ORDERS_LIST_QUERY_KEY }),
+        queryClient.cancelQueries({ queryKey: ADMIN_ORDERS_STATS_QUERY_KEY }),
+      ]);
+
+      const previousOrderQueries = queryClient.getQueriesData<AdminOrdersQueryData>({
+        queryKey: ADMIN_ORDERS_LIST_QUERY_KEY,
+      });
+      const previousOrderStatsQuery = queryClient.getQueryData<AdminOrdersQueryData>(
+        ADMIN_ORDERS_STATS_QUERY_KEY
+      );
+
+      const itemsTotal = payload.items.reduce((sum, item) => sum + item.totalCost, 0);
+      const deliveryFee = editingOrder?.deliveryFee ?? 0;
+      const installationFee = editingOrder?.wantsInstallation
+        ? editingOrder.installationFee
+        : 0;
+      const nextTotal = Math.max(0, itemsTotal + deliveryFee + installationFee);
+
+      for (const [queryKey] of previousOrderQueries) {
+        queryClient.setQueryData<AdminOrdersQueryData>(queryKey, (oldData) =>
+          applyOrderItemsUpdate(oldData, payload.orderId, payload.items, nextTotal)
+        );
+      }
+      queryClient.setQueryData<AdminOrdersQueryData>(ADMIN_ORDERS_STATS_QUERY_KEY, (oldData) =>
+        applyOrderItemsUpdate(oldData, payload.orderId, payload.items, nextTotal)
+      );
+
+      return { previousOrderQueries, previousOrderStatsQuery };
+    },
+    onSuccess: (updatedOrder, variables) => {
+      queryClient.setQueriesData<AdminOrdersQueryData>(
+        { queryKey: ADMIN_ORDERS_LIST_QUERY_KEY },
+        (oldData) =>
+          applyOrderItemsUpdate(
+            oldData,
+            variables.orderId,
+            updatedOrder.items || variables.items,
+            updatedOrder.totalAmount,
+            updatedOrder
+          )
+      );
+      queryClient.setQueryData<AdminOrdersQueryData>(ADMIN_ORDERS_STATS_QUERY_KEY, (oldData) =>
+        applyOrderItemsUpdate(
+          oldData,
+          variables.orderId,
+          updatedOrder.items || variables.items,
+          updatedOrder.totalAmount,
+          updatedOrder
+        )
+      );
+
+      setEditingOrder(null);
+      setManualOrderItems([]);
+      setManualOrderForm((prev) => ({
+        ...prev,
+        productId: "",
+        width: "",
+        height: "",
+        quantity: "1",
+      }));
+      setHasSelectedManualReferenceByType({ panneau: false, store: false });
+      setManualOrderError("");
+      setIsManualOrderModalOpen(false);
+      success("Commande mise à jour.");
     },
     onError: (mutationError, _variables, context) => {
       if (context?.previousOrderQueries) {
@@ -1161,6 +1385,128 @@ export default function AdminOrders() {
     }
   };
 
+  const resetManualProductFields = () => {
+    setManualOrderForm((prev) => ({
+      ...prev,
+      productId: "",
+      width: "",
+      height: "",
+      quantity: "1",
+    }));
+    setHasSelectedManualReferenceByType({ panneau: false, store: false });
+  };
+
+  const buildCurrentManualLine = (): ManualOrderLineItem | null => {
+    const width = parseMeasurement(manualOrderForm.width);
+    const height =
+      manualOrderForm.curtainType === "panneau"
+        ? panneauConfig.fixedHeightCm
+        : parseMeasurement(manualOrderForm.height);
+    const quantity = Number(manualOrderForm.quantity);
+    const productName = selectedProductName;
+
+    if (!productName) {
+      setManualOrderError("Veuillez sélectionner une référence.");
+      return null;
+    }
+    if (
+      manualOrderForm.curtainType === "panneau" &&
+      !panneauProducts.some((product) => product._id === manualOrderForm.productId)
+    ) {
+      setManualOrderError("Veuillez sélectionner une référence panneau autorisée.");
+      return null;
+    }
+    if ([width, height, quantity].some((n) => Number.isNaN(n))) {
+      setManualOrderError("Veuillez saisir des valeurs numériques valides.");
+      return null;
+    }
+    if (width <= 0 || height <= 0) {
+      setManualOrderError("Les dimensions doivent être supérieures à 0.");
+      return null;
+    }
+    if (manualOrderForm.curtainType === "panneau" && !panneauWidthValues.has(width)) {
+      setManualOrderError("Veuillez sélectionner une largeur panneau valide.");
+      return null;
+    }
+    if (quantity <= 0) {
+      setManualOrderError("La quantité doit être supérieure à 0.");
+      return null;
+    }
+    if (!isQuantityValid || computedItemTotalCost < 0) {
+      setManualOrderError("Impossible de calculer le prix de ce produit.");
+      return null;
+    }
+
+    return {
+      id: `line-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+      productId: manualOrderForm.productId,
+      productName,
+      curtainType: manualOrderForm.curtainType,
+      width,
+      height,
+      quantity,
+      totalCost: computedItemTotalCost,
+    };
+  };
+
+  const handleAddManualProduct = () => {
+    setManualOrderError("");
+    if (manualOrderItems.length >= 20) {
+      setManualOrderError("Trop de produits dans une commande (maximum 20).");
+      return;
+    }
+    const line = buildCurrentManualLine();
+    if (!line) {
+      return;
+    }
+    setManualOrderItems((prev) => [...prev, line]);
+    resetManualProductFields();
+    success("Produit ajouté à la commande.");
+  };
+
+  const handleRemoveManualProduct = (lineId: string) => {
+    setManualOrderItems((prev) => prev.filter((item) => item.id !== lineId));
+  };
+
+  const closeManualOrderModal = () => {
+    if (createOrderMutation.isPending || updateOrderItemsMutation.isPending) {
+      return;
+    }
+    setIsManualOrderModalOpen(false);
+    setEditingOrder(null);
+    setManualOrderError("");
+  };
+
+  const openEditOrder = (order: any) => {
+    const lines = mapOrderItemsToManualLines(order.items);
+
+    setEditingOrder({
+      id: order._id,
+      deliveryFee: Number(order.deliveryFee) || 0,
+      installationFee: Number(order.installationFee) || 0,
+      wantsInstallation: order.wantsInstallation === true,
+    });
+    setManualOrderItems(lines);
+    setHasSelectedManualReferenceByType({ panneau: false, store: false });
+    setManualOrderError("");
+    setManualOrderForm((prev) => ({
+      ...prev,
+      productId: "",
+      width: "",
+      height: "",
+      quantity: "1",
+      curtainType: "panneau",
+      wantsInstallation: order.wantsInstallation === true,
+      installationFee:
+        typeof order.installationFee === "number"
+          ? order.installationFee.toFixed(2)
+          : typeof installationFeeData?.fee === "number"
+            ? installationFeeData.fee.toFixed(2)
+            : prev.installationFee,
+    }));
+    setIsManualOrderModalOpen(true);
+  };
+
   const handleCreateManualOrder = (e: React.FormEvent) => {
     e.preventDefault();
     setManualOrderError("");
@@ -1168,23 +1514,50 @@ export default function AdminOrders() {
     setManualPhoneError("");
     setManualMatriculeFiscaleError("");
 
-    const width = Number(manualOrderForm.width);
-    const height =
-      manualOrderForm.curtainType === "panneau"
-        ? panneauConfig.fixedHeightCm
-        : Number(manualOrderForm.height);
-    const quantity = Number(manualOrderForm.quantity);
+    let lines = manualOrderItems;
+    if (lines.length === 0 && selectedProductName && isDimensionValid && isQuantityValid) {
+      const line = buildCurrentManualLine();
+      if (!line) {
+        return;
+      }
+      lines = [line];
+    }
+
+    if (lines.length === 0) {
+      setManualOrderError("Ajoutez au moins un produit à la commande.");
+      return;
+    }
+
+    const payloadItems = lines.map((item) => ({
+      curtainTypeId: item.productId,
+      curtainTypeName: formatCurtainTypeName(item.productName, item.curtainType),
+      curtainType: item.curtainType,
+      width: item.width,
+      height: item.height,
+      quantity: item.quantity,
+      totalCost: item.totalCost,
+    }));
+
+    if (editingOrder) {
+      updateOrderItemsMutation.mutate({
+        orderId: editingOrder.id,
+        items: payloadItems,
+      });
+      return;
+    }
+
     const deliveryFee = Number(autoDeliveryFee);
     const installationFee =
-      typeof installationFeeData?.fee === "number" ? installationFeeData.fee : Number(manualOrderForm.installationFee);
-    const productName = selectedProductName;
+      typeof installationFeeData?.fee === "number"
+        ? installationFeeData.fee
+        : Number(manualOrderForm.installationFee);
     const normalizedEmail = normalizeEmailValue(manualOrderForm.email);
     const normalizedPhone = normalizePhoneValue(manualOrderForm.phone);
     const formattedMatriculeFiscale = formatMatriculeFiscale(manualOrderForm.matriculeFiscale);
     const emailValidationError = getEmailValidationError(normalizedEmail);
     const phoneValidationError = getPhoneValidationError(normalizedPhone, { required: true });
     const matriculeValidationError =
-      manualOrderForm.customerType === "company"
+      manualOrderForm.customerType === "company" && formattedMatriculeFiscale
         ? getMatriculeFiscaleValidationError(formattedMatriculeFiscale)
         : "";
 
@@ -1212,49 +1585,40 @@ export default function AdminOrders() {
       return;
     }
     if (manualOrderForm.customerType === "person") {
-      if (manualOrderForm.firstName.trim().length < 2) {
+      const firstName = manualOrderForm.firstName.trim();
+      const lastName = manualOrderForm.lastName.trim();
+      if (firstName && firstName.length < 2) {
         setManualOrderError("Le prénom doit contenir au moins 2 caractères.");
         return;
       }
-      if (manualOrderForm.lastName.trim().length < 2) {
+      if (lastName && lastName.length < 2) {
         setManualOrderError("Le nom doit contenir au moins 2 caractères.");
         return;
       }
-    } else if (manualOrderForm.companyName.trim().length < 2) {
-      setManualOrderError("Le nom de l'entreprise doit contenir au moins 2 caractères.");
+    } else {
+      const companyName = manualOrderForm.companyName.trim();
+      if (companyName && companyName.length < 2) {
+        setManualOrderError("Le nom de l'entreprise doit contenir au moins 2 caractères.");
+        return;
+      }
+    }
+
+    const address = manualOrderForm.address.trim();
+    if (address && address.length < 5) {
+      setManualOrderError("L'adresse doit contenir au moins 5 caractères.");
+      return;
+    }
+    const postalCode = manualOrderForm.postalCode.trim();
+    if (postalCode && postalCode.length < 4) {
+      setManualOrderError("Le code postal doit contenir au moins 4 caractères.");
       return;
     }
 
-    if ([width, height, quantity, deliveryFee, installationFee].some((n) => Number.isNaN(n))) {
+    if ([deliveryFee, installationFee].some((n) => Number.isNaN(n))) {
       setManualOrderError("Veuillez saisir des valeurs numériques valides.");
       return;
     }
-    if (!productName) {
-      setManualOrderError("Veuillez sélectionner une référence.");
-      return;
-    }
-    if (
-      manualOrderForm.curtainType === "panneau" &&
-      !panneauProducts.some((product) => product._id === manualOrderForm.productId)
-    ) {
-      setManualOrderError("Veuillez sélectionner une référence panneau autorisée.");
-      return;
-    }
-    if (width <= 0 || height <= 0) {
-      setManualOrderError("Les dimensions doivent être supérieures à 0.");
-      return;
-    }
-    if (
-      manualOrderForm.curtainType === "panneau" &&
-      !panneauWidthValues.has(width)
-    ) {
-      setManualOrderError("Veuillez sélectionner une largeur panneau valide.");
-      return;
-    }
-    if (quantity <= 0) {
-      setManualOrderError("La quantité doit être supérieure à 0.");
-      return;
-    }
+
     if (manualOrderForm.wantsInstallation === null) {
       setManualOrderError("Veuillez préciser si le client souhaite la pose.");
       return;
@@ -1279,13 +1643,7 @@ export default function AdminOrders() {
         state: manualOrderForm.state.trim(),
         postalCode: manualOrderForm.postalCode.trim(),
       },
-      item: {
-        curtainTypeName: formatCurtainTypeName(productName, manualOrderForm.curtainType),
-        width,
-        height,
-        quantity,
-        totalCost: computedItemTotalCost,
-      },
+      items: payloadItems,
       wantsInstallation: manualOrderForm.wantsInstallation === true,
       deliveryFee,
       installationFee,
@@ -1632,11 +1990,17 @@ export default function AdminOrders() {
                   size="sm"
                   icon={<FiPlus className="h-3.5 w-3.5 sm:h-4 sm:w-4" />}
                   onClick={() => {
+                    setEditingOrder(null);
                     setHasSelectedManualReferenceByType({ panneau: false, store: false });
+                    setManualOrderItems([]);
                     setManualOrderError("");
                     setManualOrderForm((prev) => ({
                       ...prev,
                       productId: "",
+                      width: "",
+                      height: "",
+                      quantity: "1",
+                      wantsInstallation: null,
                       installationFee:
                         typeof installationFeeData?.fee === "number"
                           ? installationFeeData.fee.toFixed(2)
@@ -1769,20 +2133,24 @@ export default function AdminOrders() {
             {isManualOrderModalOpen && (
               <div
                 className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 px-3 py-6"
-                onClick={() => setIsManualOrderModalOpen(false)}
+                onClick={closeManualOrderModal}
               >
                 <div onClick={(e) => e.stopPropagation()} className="w-full max-w-4xl">
                   <Card className="max-h-[95vh] w-full overflow-y-auto overscroll-contain p-4 sm:p-6">
                     <div className="mb-4 flex items-start justify-between gap-3">
                       <div>
                         <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                          Ajouter une commande
+                          {editingOrder
+                            ? `Modifier la commande #${editingOrder.id.slice(-8)}`
+                            : "Ajouter une commande"}
                         </h3>
                       </div>
                       <button
                         type="button"
-                        onClick={() => setIsManualOrderModalOpen(false)}
-                        disabled={createOrderMutation.isPending}
+                        onClick={closeManualOrderModal}
+                        disabled={
+                          createOrderMutation.isPending || updateOrderItemsMutation.isPending
+                        }
                         aria-label="Fermer"
                         className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-gray-300 bg-white text-xl leading-none text-gray-700 transition-colors hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-green-500 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
                       >
@@ -1791,7 +2159,11 @@ export default function AdminOrders() {
                     </div>
 
                     <form onSubmit={handleCreateManualOrder} className="space-y-5">
-                      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+                      <div
+                        className={`grid grid-cols-1 gap-5 ${
+                          editingOrder ? "" : "lg:grid-cols-2"
+                        }`}
+                      >
                         <div className="space-y-4 rounded-xl border border-gray-200 p-4 dark:border-gray-700">
                           <h4 className="text-sm font-semibold text-gray-900 dark:text-white">
                             Configuration produit
@@ -1809,7 +2181,6 @@ export default function AdminOrders() {
                                   ? "text-gray-400 dark:text-gray-400"
                                   : "text-gray-900 dark:text-white"
                               }`}
-                              required
                               disabled={isProductsLoading || selectableManualProducts.length === 0}
                             >
                               {!hasSelectedManualReferenceForCurrentType &&
@@ -1925,7 +2296,6 @@ export default function AdminOrders() {
                                   style={{
                                     color: manualOrderForm.width === "" ? "#9CA3AF" : undefined,
                                   }}
-                                  required
                                 >
                                   <option value="" style={{ color: "#9CA3AF" }}>
                                     Choisir la largeur
@@ -1938,18 +2308,17 @@ export default function AdminOrders() {
                                 </select>
                               ) : (
                                 <input
-                                  type="number"
+                                  type="text"
+                                  inputMode="decimal"
                                   value={manualOrderForm.width}
                                   onChange={(e) => {
                                     setManualOrderForm((prev) => ({
                                       ...prev,
-                                      width: e.target.value,
+                                      width: sanitizeMeasurementInput(e.target.value),
                                     }));
                                   }}
-                                  min={1}
-                                  step={1}
+                                  placeholder="ex. 120,5"
                                   className={formNumberFieldClass}
-                                  required
                                 />
                               )}
                             </div>
@@ -1974,12 +2343,12 @@ export default function AdminOrders() {
                                   min={1}
                                   step={1}
                                   className={formNumberFieldClass}
-                                  required
                                 />
                               )}
                             </div>
                           </div>
 
+                          {!editingOrder && (
                           <div>
                             <label className={formFieldLabelClass}>Pose</label>
                             <div className="flex flex-wrap gap-4">
@@ -2014,6 +2383,7 @@ export default function AdminOrders() {
                               ))}
                             </div>
                           </div>
+                          )}
 
                           <div>
                             <label className={formFieldLabelClass}>
@@ -2054,8 +2424,6 @@ export default function AdminOrders() {
                                 +
                               </button>
                             </div>
-                            {manualOrderForm.curtainType === "store" &&
-                              storePanelMeasurements.length === 0 && <StorePanelQuantityHint />}
                           </div>
 
                           {manualOrderForm.curtainType === "store" &&
@@ -2066,37 +2434,63 @@ export default function AdminOrders() {
                               />
                             )}
 
+                          <div className="flex flex-wrap justify-end gap-2">
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              onClick={handleAddManualProduct}
+                              disabled={
+                                !selectedProductName ||
+                                !isDimensionValid ||
+                                !isQuantityValid ||
+                                manualOrderItems.length >= 20
+                              }
+                            >
+                              Ajouter ce produit
+                            </Button>
+                          </div>
+
                           <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
                             <h4 className="mb-3 text-sm font-semibold text-gray-900 dark:text-white">
                               Résumé de la commande
                             </h4>
                             <div className="space-y-3">
-                              <div className="flex flex-col gap-2 text-sm sm:flex-row sm:justify-between">
-                                <div>
-                                  <p className="font-medium text-gray-900 dark:text-white">
-                                    {selectedProductName || "Référence"}
-                                  </p>
-                                  {(hasWidth || hasHeight) && (
-                                    <p className="text-gray-500 dark:text-gray-400">
-                                      {hasWidth ? `${widthValue}cm` : "—"} ×{" "}
-                                      {hasHeight ? `${resolvedHeightValue}cm` : "—"}
-                                    </p>
-                                  )}
-                                  <p className="text-gray-500 dark:text-gray-400">
-                                    {manualOrderForm.curtainType === "panneau"
-                                      ? "Panneau"
-                                      : "Store"}
-                                    {isQuantityValid ? ` - Qté: ${quantityValue}` : ""}
-                                  </p>
-                                </div>
-                                <span className="text-gray-900 dark:text-white">
-                                  {formatPrice(
-                                    isDimensionValid && isQuantityValid
-                                      ? computedItemTotalCost
-                                      : 0
-                                  )}
-                                </span>
-                              </div>
+                              {manualOrderItems.length === 0 ? (
+                                <p className="text-sm text-gray-500 dark:text-gray-400">
+                                  Aucun produit ajouté pour le moment.
+                                </p>
+                              ) : (
+                                manualOrderItems.map((item) => (
+                                  <div
+                                    key={`summary-${item.id}`}
+                                    className="flex items-start justify-between gap-3 text-sm"
+                                  >
+                                    <div className="min-w-0 flex-1">
+                                      <p className="font-medium text-gray-900 dark:text-white">
+                                        {item.productName}
+                                      </p>
+                                      <p className="text-gray-500 dark:text-gray-400">
+                                        {item.width}cm × {item.height}cm ·{" "}
+                                        {item.curtainType === "panneau" ? "Panneau" : "Store"} · Qté{" "}
+                                        {item.quantity}
+                                      </p>
+                                    </div>
+                                    <div className="flex shrink-0 items-center gap-2">
+                                      <span className="text-gray-900 dark:text-white">
+                                        {formatPrice(item.totalCost)}
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleRemoveManualProduct(item.id)}
+                                        className="rounded-md p-1.5 text-red-600 transition-colors hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/30"
+                                        aria-label="Retirer ce produit"
+                                      >
+                                        <FiTrash2 className="h-4 w-4" />
+                                      </button>
+                                    </div>
+                                  </div>
+                                ))
+                              )}
 
                               <div className="border-t border-gray-200 pt-3 dark:border-gray-700">
                                 <div className="space-y-2 text-sm">
@@ -2129,6 +2523,7 @@ export default function AdminOrders() {
                           </div>
                         </div>
 
+                        {!editingOrder && (
                         <div className="space-y-4 rounded-xl border border-gray-200 p-4 dark:border-gray-700">
                           <h4 className="text-sm font-semibold text-gray-900 dark:text-white">
                             Informations client
@@ -2166,7 +2561,9 @@ export default function AdminOrders() {
                           {isManualCompanyOrder ? (
                             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                               <div className="sm:col-span-2">
-                                <label className={formFieldLabelClass}>Nom de l&apos;entreprise</label>
+                                <label className={formFieldLabelClass}>
+                                  Nom de l&apos;entreprise (optionnel)
+                                </label>
                                 <input
                                   type="text"
                                   value={manualOrderForm.companyName}
@@ -2177,11 +2574,12 @@ export default function AdminOrders() {
                                     }))
                                   }
                                   className={formFieldClass}
-                                  required
                                 />
                               </div>
                               <div className="sm:col-span-2">
-                                <label className={formFieldLabelClass}>Matricule fiscale</label>
+                                <label className={formFieldLabelClass}>
+                                  Matricule fiscale (optionnel)
+                                </label>
                                 <input
                                   type="text"
                                   value={manualOrderForm.matriculeFiscale}
@@ -2195,16 +2593,24 @@ export default function AdminOrders() {
                                       matriculeFiscale: nextMatricule,
                                     }));
                                     if (manualMatriculeFiscaleError) {
+                                      const normalized = formatMatriculeFiscale(nextMatricule);
                                       setManualMatriculeFiscaleError(
-                                        getMatriculeFiscaleValidationError(nextMatricule)
+                                        normalized
+                                          ? getMatriculeFiscaleValidationError(nextMatricule)
+                                          : ""
                                       );
                                     }
                                   }}
                                   onBlur={() => {
+                                    const normalized = formatMatriculeFiscale(
+                                      manualOrderForm.matriculeFiscale
+                                    );
                                     setManualMatriculeFiscaleError(
-                                      getMatriculeFiscaleValidationError(
-                                        manualOrderForm.matriculeFiscale
-                                      )
+                                      normalized
+                                        ? getMatriculeFiscaleValidationError(
+                                            manualOrderForm.matriculeFiscale
+                                          )
+                                        : ""
                                     );
                                   }}
                                   placeholder={MATRICULE_FISCALE_FORMAT}
@@ -2214,7 +2620,6 @@ export default function AdminOrders() {
                                   className={`${formFieldClass} ${
                                     manualMatriculeFiscaleError ? formFieldErrorClass : ""
                                   }`}
-                                  required
                                 />
                                 {manualMatriculeFiscaleError && (
                                   <p className="mt-1 text-xs text-red-500">
@@ -2226,7 +2631,7 @@ export default function AdminOrders() {
                           ) : (
                             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                               <div>
-                                <label className={formFieldLabelClass}>Prénom</label>
+                                <label className={formFieldLabelClass}>Prénom (optionnel)</label>
                                 <input
                                   type="text"
                                   value={manualOrderForm.firstName}
@@ -2237,11 +2642,10 @@ export default function AdminOrders() {
                                     }))
                                   }
                                   className={formFieldClass}
-                                  required
                                 />
                               </div>
                               <div>
-                                <label className={formFieldLabelClass}>Nom</label>
+                                <label className={formFieldLabelClass}>Nom (optionnel)</label>
                                 <input
                                   type="text"
                                   value={manualOrderForm.lastName}
@@ -2252,7 +2656,6 @@ export default function AdminOrders() {
                                     }))
                                   }
                                   className={formFieldClass}
-                                  required
                                 />
                               </div>
                             </div>
@@ -2310,7 +2713,7 @@ export default function AdminOrders() {
                             )}
                           </div>
                           <div>
-                            <label className={formFieldLabelClass}>Adresse</label>
+                            <label className={formFieldLabelClass}>Adresse (optionnel)</label>
                             <input
                               type="text"
                               value={manualOrderForm.address}
@@ -2318,12 +2721,11 @@ export default function AdminOrders() {
                                 setManualOrderForm((prev) => ({ ...prev, address: e.target.value }))
                               }
                               className={formFieldClass}
-                              required
                             />
                           </div>
                           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                             <div>
-                              <label className={formFieldLabelClass}>Région</label>
+                              <label className={formFieldLabelClass}>Région (optionnel)</label>
                               <select
                                 value={manualOrderForm.state}
                                 onChange={(e) =>
@@ -2334,7 +2736,6 @@ export default function AdminOrders() {
                                   }))
                                 }
                                 className={formSelectClass}
-                                required
                               >
                                 <option value="">Sélectionnez un gouvernorat</option>
                                 {TUNISIAN_GOVERNORATES.map((governorate) => (
@@ -2345,7 +2746,7 @@ export default function AdminOrders() {
                               </select>
                             </div>
                             <div>
-                              <label className={formFieldLabelClass}>Ville</label>
+                              <label className={formFieldLabelClass}>Ville (optionnel)</label>
                               <select
                                 value={manualOrderForm.city}
                                 onChange={(e) =>
@@ -2353,7 +2754,6 @@ export default function AdminOrders() {
                                 }
                                 disabled={!manualOrderForm.state}
                                 className={formSelectDisabledClass}
-                                required
                               >
                                 <option value="">
                                   {manualOrderForm.state
@@ -2369,7 +2769,7 @@ export default function AdminOrders() {
                             </div>
                           </div>
                           <div>
-                            <label className={formFieldLabelClass}>Code postal</label>
+                            <label className={formFieldLabelClass}>Code postal (optionnel)</label>
                             <input
                               type="text"
                               value={manualOrderForm.postalCode}
@@ -2377,12 +2777,13 @@ export default function AdminOrders() {
                                 setManualOrderForm((prev) => ({ ...prev, postalCode: e.target.value }))
                               }
                               className={formFieldClass}
-                              required
                             />
                           </div>
                         </div>
+                        )}
                       </div>
 
+                      {!editingOrder && (
                       <div>
                         <label className={formFieldLabelClass}>
                           Notes (optionnel)
@@ -2396,6 +2797,7 @@ export default function AdminOrders() {
                           className={formTextareaClass}
                         />
                       </div>
+                      )}
 
                       {manualOrderError && (
                         <p className="text-sm font-medium text-red-600 dark:text-red-400">
@@ -2406,16 +2808,27 @@ export default function AdminOrders() {
                       <div className="flex justify-end">
                         <Button
                           type="submit"
-                          loading={createOrderMutation.isPending}
+                          loading={
+                            createOrderMutation.isPending || updateOrderItemsMutation.isPending
+                          }
                           disabled={
                             createOrderMutation.isPending ||
-                            Boolean(manualEmailError) ||
-                            Boolean(manualPhoneError) ||
-                            Boolean(manualMatriculeFiscaleError)
+                            updateOrderItemsMutation.isPending ||
+                            (!editingOrder &&
+                              (Boolean(manualEmailError) ||
+                                Boolean(manualPhoneError) ||
+                                Boolean(manualMatriculeFiscaleError))) ||
+                            (Boolean(editingOrder) && manualOrderItems.length === 0)
                           }
                           className="w-full sm:w-auto"
                         >
-                          {createOrderMutation.isPending ? "Création..." : "Créer la commande"}
+                          {editingOrder
+                            ? updateOrderItemsMutation.isPending
+                              ? "Enregistrement..."
+                              : "Enregistrer"
+                            : createOrderMutation.isPending
+                              ? "Création..."
+                              : "Créer la commande"}
                         </Button>
                       </div>
                     </form>
@@ -2563,7 +2976,7 @@ export default function AdminOrders() {
                               value={normalizedStatus}
                               onChange={(e) => handleInlineStatusUpdate(order._id, e.target.value)}
                               disabled={updateStatusMutation.isPending}
-                              className={`${formSelectClass} !box-border h-9 w-[36%] max-w-[36%] shrink-0 !rounded-lg !border-gray-200 !px-2.5 !py-0 !text-sm !leading-none dark:!border-gray-600`}
+                              className="box-border h-9 w-auto shrink-0 cursor-pointer rounded-lg border border-gray-300 bg-white px-3 py-0 text-xs font-semibold leading-none text-gray-800 shadow-sm outline-none focus:ring-2 focus:ring-gray-400/40 disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
                             >
                               {statusOptions.map((option) => (
                                 <option key={option.value} value={option.value}>
@@ -2576,6 +2989,15 @@ export default function AdminOrders() {
                               size="sm"
                               variant="secondary"
                               className="ml-auto box-border !h-9 shrink-0 !rounded-lg !px-3 !py-0 !text-xs !leading-none !shadow-sm"
+                              onClick={() => openEditOrder(order)}
+                            >
+                              Modifier
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="secondary"
+                              className="box-border !h-9 shrink-0 !rounded-lg !px-3 !py-0 !text-xs !leading-none !shadow-sm"
                               onClick={() => printInvoice(order)}
                             >
                               Imprimer
@@ -2707,7 +3129,7 @@ export default function AdminOrders() {
                               value={normalizeStatus(order.status)}
                               onChange={(e) => handleInlineStatusUpdate(order._id, e.target.value)}
                               disabled={updateStatusMutation.isPending}
-                              className={`${formSelectClass} min-w-[8.5rem] !py-1.5 !text-xs`}
+                              className="box-border h-[2.125rem] min-w-[7.65rem] cursor-pointer rounded-xl border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold leading-none text-gray-800 shadow-sm outline-none focus:ring-2 focus:ring-gray-400/40 disabled:cursor-not-allowed disabled:opacity-60 sm:h-9 sm:px-4 sm:py-2 sm:text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
                               aria-label="Modifier le statut"
                             >
                               {statusOptions.map((option) => (
@@ -2721,21 +3143,39 @@ export default function AdminOrders() {
                             {new Date(order.createdAt).toLocaleDateString()}
                           </td>
                           <td className={orderTableCellClass}>
-                            <Button type="button" size="sm" variant="secondary" onClick={() => printInvoice(order)}>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="secondary"
+                              className="!h-[2.125rem] !px-3 !py-0 !text-xs !leading-none sm:!h-9 sm:!px-4 sm:!text-sm"
+                              onClick={() => printInvoice(order)}
+                            >
                               Imprimer
                             </Button>
                           </td>
                           <td className={orderTableCellClass}>
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="danger"
-                              disabled={deleteOrderMutation.isPending}
-                              loading={deleteOrderMutation.isPending}
-                              onClick={() => handleDeleteOrder(order._id)}
-                            >
-                              Supprimer
-                            </Button>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="secondary"
+                                className="!h-[2.125rem] !px-3 !py-0 !text-xs !leading-none sm:!h-9 sm:!px-4 sm:!text-sm"
+                                onClick={() => openEditOrder(order)}
+                              >
+                                Modifier
+                              </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="danger"
+                                className="!h-[2.125rem] !px-3 !py-0 !text-xs !leading-none sm:!h-9 sm:!px-4 sm:!text-sm"
+                                disabled={deleteOrderMutation.isPending}
+                                loading={deleteOrderMutation.isPending}
+                                onClick={() => handleDeleteOrder(order._id)}
+                              >
+                                Supprimer
+                              </Button>
+                            </div>
                           </td>
                         </tr>
                       );
@@ -2817,6 +3257,53 @@ export default function AdminOrders() {
             </div>
           </div>
         </main>
+
+        {orderToDelete && (
+          <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
+            <button
+              type="button"
+              className="absolute inset-0 bg-gray-900/50 backdrop-blur-sm"
+              onClick={closeDeleteOrderModal}
+              aria-label="Fermer la confirmation"
+            />
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="delete-order-confirm-title"
+              className="relative w-full max-w-md rounded-2xl border border-gray-200 bg-white p-6 shadow-2xl dark:border-gray-700 dark:bg-gray-800"
+            >
+              <h3
+                id="delete-order-confirm-title"
+                className="text-lg font-semibold text-gray-900 dark:text-white"
+              >
+                Supprimer la commande {orderToDelete.label} ?
+              </h3>
+              <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">
+                Cette action est irréversible. La commande sera définitivement retirée de la
+                liste.
+              </p>
+              <div className="mt-6 flex flex-wrap justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={closeDeleteOrderModal}
+                  disabled={deleteOrderMutation.isPending}
+                >
+                  Annuler
+                </Button>
+                <Button
+                  type="button"
+                  variant="danger"
+                  loading={deleteOrderMutation.isPending}
+                  disabled={deleteOrderMutation.isPending}
+                  onClick={() => deleteOrderMutation.mutate(orderToDelete.id)}
+                >
+                  Supprimer
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
 
         <Footer />
       </div>

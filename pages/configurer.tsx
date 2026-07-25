@@ -12,6 +12,7 @@ import Button from "../components/ui/Button";
 import Card from "../components/ui/Card";
 import PriceDisplay from "../components/ui/PriceDisplay";
 import { useSimpleCart } from "../contexts/SimpleCartContext";
+import { useToast } from "../contexts/ToastContext";
 import { formatPanneauWidthOption } from "../lib/panneau-pricing";
 import {
   formFieldClass,
@@ -27,6 +28,11 @@ import {
   getStorePanelCountFromWidth,
   getStorePanelMeasurements,
 } from "../lib/store-panel-count";
+import {
+  formatMeasurement,
+  parseMeasurement,
+  sanitizeMeasurementInput,
+} from "../lib/measurement-input";
 
 interface Product {
   _id: string;
@@ -38,9 +44,12 @@ interface Product {
 
 export default function ConfigurerProduitPage() {
   const router = useRouter();
-  const { addItem, calculatePrice, storePriceSettings, panneauConfig, pricesLoaded } = useSimpleCart();
+  const { addItem, calculatePrice, storePriceSettings, panneauConfig, pricesLoaded, getTotalItems } =
+    useSimpleCart();
+  const { success } = useToast();
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [width, setWidth] = useState<number | "">("");
+  const [storeWidthInput, setStoreWidthInput] = useState("");
   const [height, setHeight] = useState<number | "">("");
   const [curtainType, setCurtainType] = useState<"panneau" | "store">("panneau");
   const [quantity, setQuantity] = useState(1);
@@ -221,6 +230,7 @@ export default function ConfigurerProduitPage() {
       setWidth((prevWidth) =>
         typeof prevWidth === "number" && panneauWidthValues.has(prevWidth) ? prevWidth : ""
       );
+      setStoreWidthInput("");
       setQuantity(1);
       return;
     }
@@ -284,8 +294,18 @@ export default function ConfigurerProduitPage() {
       curtainType,
     });
 
-    void router.push("/paiement");
+    success("Produit ajouté au panier. Vous pouvez en ajouter d'autres.");
+    setWidth("");
+    setStoreWidthInput("");
+    if (curtainType === "store") {
+      setHeight("");
+      setQuantity(1);
+    } else {
+      setQuantity(1);
+    }
   };
+
+  const cartItemCount = getTotalItems();
 
   const formatPrice = (price: number) =>
     new Intl.NumberFormat("fr-FR", { style: "currency", currency: "TND" }).format(price);
@@ -473,22 +493,29 @@ export default function ConfigurerProduitPage() {
                         </select>
                       ) : (
                         <input
-                          type="number"
-                          min={1}
-                          max={MAX_STORE_WIDTH_CM}
-                          value={width}
+                          type="text"
+                          inputMode="decimal"
+                          value={storeWidthInput}
                           onChange={(e) => {
-                            const raw = e.target.value;
-                            if (raw === "") {
+                            const nextInput = sanitizeMeasurementInput(e.target.value);
+                            const parsed = parseMeasurement(nextInput);
+
+                            if (nextInput === "" || Number.isNaN(parsed)) {
+                              setStoreWidthInput(nextInput);
                               setWidth("");
                               return;
                             }
-                            const parsed = Number(raw);
-                            if (Number.isNaN(parsed)) {
+
+                            if (parsed > MAX_STORE_WIDTH_CM) {
+                              setStoreWidthInput(formatMeasurement(MAX_STORE_WIDTH_CM));
+                              setWidth(MAX_STORE_WIDTH_CM);
                               return;
                             }
-                            setWidth(Math.min(MAX_STORE_WIDTH_CM, Math.max(1, parsed)));
+
+                            setStoreWidthInput(nextInput);
+                            setWidth(parsed > 0 ? parsed : "");
                           }}
+                          placeholder="ex. 120,5"
                           className={formNumberFieldClass}
                           required
                         />
@@ -557,7 +584,7 @@ export default function ConfigurerProduitPage() {
                         type="number"
                         value={quantity}
                         readOnly
-                        className="h-8 w-10 rounded-md border border-gray-300 px-0 text-center text-sm font-medium leading-none [text-align-last:center] focus:outline-none [-moz-appearance:textfield] dark:border-gray-600 dark:bg-gray-700 dark:text-white [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                        className="h-8 w-10 rounded-md border border-gray-300 px-0 text-center text-base font-medium leading-none [text-align-last:center] focus:outline-none [-moz-appearance:textfield] sm:text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                       />
                       <button
                         type="button"
@@ -634,7 +661,7 @@ export default function ConfigurerProduitPage() {
                     </div>
                   </div>
 
-                  <div className="pt-2">
+                  <div className="space-y-2 pt-2">
                     <Button
                       type="submit"
                       disabled={
@@ -646,8 +673,20 @@ export default function ConfigurerProduitPage() {
                     >
                       {product && !product.isAvailable
                         ? OUT_OF_STOCK_CLIENT_MESSAGE
-                        : "Continuer"}
+                        : "Ajouter au panier"}
                     </Button>
+                    {cartItemCount > 0 && (
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        className="w-full"
+                        onClick={() => {
+                          void router.push("/paiement");
+                        }}
+                      >
+                        Commander ({cartItemCount})
+                      </Button>
+                    )}
                   </div>
                 </form>
               </Card>
