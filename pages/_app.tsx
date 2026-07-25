@@ -42,7 +42,10 @@ export default function App({ Component, pageProps: { session, ...pageProps } }:
     <SessionProvider session={session}>
       <QueryClientProvider client={queryClient}>
         <Head>
-          <meta name="viewport" content="width=device-width, initial-scale=1" />
+          <meta
+            name="viewport"
+            content="width=device-width, initial-scale=1, viewport-fit=cover"
+          />
           <meta name="format-detection" content="telephone=no" />
         </Head>
         <DarkModeProvider>

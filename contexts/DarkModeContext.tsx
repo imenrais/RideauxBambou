@@ -9,7 +9,6 @@ const DarkModeContext = createContext<DarkModeContextType | undefined>(undefined
 
 export function DarkModeProvider({ children }: { children: React.ReactNode }) {
   const [isDarkMode, setIsDarkMode] = useState(false);
-  const [isInitialized, setIsInitialized] = useState(false);
 
   useEffect(() => {
     // Check initial dark mode state from localStorage or system preference
@@ -18,7 +17,6 @@ export function DarkModeProvider({ children }: { children: React.ReactNode }) {
       stored === "true" || (!stored && window.matchMedia("(prefers-color-scheme: dark)").matches);
 
     setIsDarkMode(isDark);
-    setIsInitialized(true);
 
     if (isDark) {
       document.documentElement.classList.add("dark");
@@ -43,11 +41,6 @@ export function DarkModeProvider({ children }: { children: React.ReactNode }) {
 
     localStorage.setItem("darkMode", newDarkMode.toString());
   };
-
-  // Don't render children until dark mode is initialized to prevent flash
-  if (!isInitialized) {
-    return null;
-  }
 
   return (
     <DarkModeContext.Provider value={{ isDarkMode, toggleDarkMode }}>

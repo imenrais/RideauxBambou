@@ -217,12 +217,15 @@ export default function Home({ title }: HomeProps) {
           name="description"
           content="Décorez Votre Espace de Rêve Avec Notre Collection d'Exception"
         />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta
+          name="viewport"
+          content="width=device-width, initial-scale=1, viewport-fit=cover"
+        />
         <link rel="icon" href="/images/logo.png" />
         <link rel="apple-touch-icon" href="/images/logo.png" />
       </Head>
 
-      <div className="min-h-screen bg-gray-100 dark:bg-gray-900">
+      <div className="min-h-dvh bg-gray-100 dark:bg-gray-900">
         <Navigation />
 
         <div className="overflow-x-clip">

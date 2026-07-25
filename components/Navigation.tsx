@@ -174,7 +174,7 @@ export default function Navigation({ showCartIcon = true }: NavigationProps) {
 
   return (
     <>
-      <nav className="fixed inset-x-0 top-0 z-50 w-full border-b border-gray-200/80 bg-gray-100/90 shadow-[0_1px_0_rgba(17,24,39,0.04)] backdrop-blur-md dark:border-gray-700/80 dark:bg-gray-900/90">
+      <nav className="fixed inset-x-0 top-0 z-50 w-full border-b border-gray-200/80 bg-gray-100/90 pt-[env(safe-area-inset-top,0px)] shadow-[0_1px_0_rgba(17,24,39,0.04)] backdrop-blur-md dark:border-gray-700/80 dark:bg-gray-900/90">
         <div className="mx-auto max-w-7xl px-3 sm:px-6 lg:px-8">
           <div className="relative flex h-16 items-center justify-between">
           <div className="flex min-w-0 items-center">
@@ -429,7 +429,10 @@ export default function Navigation({ showCartIcon = true }: NavigationProps) {
         </div>
       </nav>
       {/* Reserves the fixed navbar height so page content stays aligned */}
-      <div className="h-16 shrink-0" aria-hidden="true" />
+      <div
+        className="h-[calc(4rem+env(safe-area-inset-top,0px))] shrink-0"
+        aria-hidden="true"
+      />
 
       {router.pathname === "/" && (
         <button

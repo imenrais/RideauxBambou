@@ -52,7 +52,7 @@ export default function Footer() {
   ];
 
   return (
-    <footer className="border-t border-gray-200 bg-gray-100 text-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-white">
+    <footer className="border-t border-gray-200 bg-gray-100 pb-[env(safe-area-inset-bottom,0px)] text-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-white">
       <div className="mx-auto max-w-7xl px-3 pt-6 sm:px-6 sm:pt-12 lg:px-8">
         <div className="flex flex-col gap-6 sm:gap-8 lg:flex-row lg:items-start lg:gap-40 xl:gap-48">
           {/* Logo and Social */}

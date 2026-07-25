@@ -11,7 +11,16 @@ export default function Document() {
         />
         <meta name="keywords" content="rideaux, bambou, nature, décoration, maison" />
         <meta name="author" content="Rideaux Bambou" />
-        <meta name="theme-color" content="#16a34a" />
+        <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f3f4f6" />
+        <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#111827" />
+        <meta name="theme-color" content="#f3f4f6" />
+
+        {/* Apply dark class before paint to avoid black/empty phone chrome flash */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var s=localStorage.getItem("darkMode");var d=s==="true"||(s===null&&window.matchMedia("(prefers-color-scheme: dark)").matches);if(d){document.documentElement.classList.add("dark");document.documentElement.style.colorScheme="dark";}else{document.documentElement.style.colorScheme="light";}}catch(e){}})();`,
+          }}
+        />
 
         {/* Favicon and Icons */}
         <link rel="icon" href="/images/logo.png" />

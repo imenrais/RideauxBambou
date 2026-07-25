@@ -24,12 +24,15 @@ export default function StandardLayout({
       <Head>
         <title>{title}</title>
         <meta name="description" content={description} />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta
+          name="viewport"
+          content="width=device-width, initial-scale=1, viewport-fit=cover"
+        />
         <link rel="icon" href="/images/logo.png" />
         <link rel="apple-touch-icon" href="/images/logo.png" />
       </Head>
 
-      <div className="min-h-screen bg-gray-100 dark:bg-gray-900">
+      <div className="min-h-dvh bg-gray-100 dark:bg-gray-900">
         <Navigation showCartIcon={showCartIcon} />
 
         <main className="mx-auto max-w-7xl overflow-x-clip px-3 py-5 sm:px-6 sm:py-8 lg:px-8">
