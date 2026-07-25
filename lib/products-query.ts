@@ -42,17 +42,26 @@ const normalizeAvailability = (value: unknown) => {
 };
 
 export async function fetchPublicProducts(): Promise<PublicProduct[]> {
-  const response = await fetch("/api/products");
-  const data = await response.json();
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 12000);
 
-  if (!data.success || !Array.isArray(data.data)) {
+  try {
+    const response = await fetch("/api/products", { signal: controller.signal });
+    const data = await response.json();
+
+    if (!data.success || !Array.isArray(data.data)) {
+      return [];
+    }
+
+    return (data.data as PublicProduct[]).map((product) => ({
+      ...product,
+      isAvailable: normalizeAvailability(product.isAvailable),
+    }));
+  } catch {
     return [];
+  } finally {
+    clearTimeout(timeoutId);
   }
-
-  return (data.data as PublicProduct[]).map((product) => ({
-    ...product,
-    isAvailable: normalizeAvailability(product.isAvailable),
-  }));
 }
 
 export function useProductsSubscription() {
@@ -75,6 +84,7 @@ export function usePublicProductsQuery<TData = PublicProduct[]>(
   return useQuery({
     queryKey: PRODUCTS_QUERY_KEY,
     queryFn: fetchPublicProducts,
+    refetchOnMount: true,
     ...options,
   });
 }

@@ -60,16 +60,12 @@ export const computeCurtainPrice = (
 };
 
 /**
- * Store line total is already the full opening (surface + per-curtain addons).
- * Cart quantity is manufacturing panel count — do not multiply again.
+ * Line total for a cart/order item.
+ * Store unit price already covers the full opening (all spit panels);
+ * quantity is the number of identical openings ordered.
  */
 export const getCurtainLineTotal = (
-  curtainType: "panneau" | "store",
+  _curtainType: "panneau" | "store",
   unitTotal: number,
   quantity: number
-): number => {
-  if (curtainType === "store") {
-    return Math.trunc(unitTotal);
-  }
-  return Math.trunc(unitTotal * quantity);
-};
+): number => Math.trunc(unitTotal * quantity);

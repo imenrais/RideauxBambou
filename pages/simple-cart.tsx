@@ -193,7 +193,6 @@ export default function SimpleCartPage() {
                             <div className="flex items-center space-x-2">
                               <button
                                 onClick={() => handleQuantityChange(item.id, item.quantity - 1)}
-                                disabled={item.curtainType === "store"}
                                 className="rounded-full bg-gray-200 p-1 hover:bg-gray-300 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-gray-600 dark:hover:bg-gray-500"
                               >
                                 <svg
@@ -215,7 +214,6 @@ export default function SimpleCartPage() {
                               </span>
                               <button
                                 onClick={() => handleQuantityChange(item.id, item.quantity + 1)}
-                                disabled={item.curtainType === "store"}
                                 className="rounded-full bg-gray-200 p-1 hover:bg-gray-300 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-gray-600 dark:hover:bg-gray-500"
                               >
                                 <svg

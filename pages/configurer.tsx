@@ -25,7 +25,6 @@ import { usePublicProductsQuery } from "../lib/products-query";
 import { OUT_OF_STOCK_CLIENT_MESSAGE } from "../lib/product-availability-sync";
 import {
   MAX_STORE_WIDTH_CM,
-  getStorePanelCountFromWidth,
   getStorePanelMeasurements,
 } from "../lib/store-panel-count";
 import { getCurtainLineTotal } from "../lib/order-pricing";
@@ -245,17 +244,6 @@ export default function ConfigurerProduitPage() {
       typeof prevWidth === "number" && panneauWidthValues.has(prevWidth) ? "" : prevWidth
     );
   }, [curtainType, panneauConfig.fixedHeightCm, panneauWidthValues]);
-
-  useEffect(() => {
-    if (curtainType !== "store") {
-      return;
-    }
-    if (width === "" || width <= 0) {
-      setQuantity(1);
-      return;
-    }
-    setQuantity(getStorePanelCountFromWidth(width));
-  }, [curtainType, width]);
 
   useEffect(() => {
     if (width === "" || height === "" || width <= 0 || height <= 0) {
@@ -610,7 +598,6 @@ export default function ConfigurerProduitPage() {
                         <button
                           type="button"
                           onClick={() => setQuantity((prev) => Math.max(1, prev - 1))}
-                          disabled={curtainType === "store"}
                           className="flex h-7 w-7 items-center justify-center rounded-md border border-gray-300 text-base font-medium text-gray-700 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
                         >
                           -
@@ -625,7 +612,6 @@ export default function ConfigurerProduitPage() {
                         <button
                           type="button"
                           onClick={() => setQuantity((prev) => Math.min(10, prev + 1))}
-                          disabled={curtainType === "store"}
                           className="flex h-7 w-7 items-center justify-center rounded-md border border-gray-300 text-base font-medium text-gray-700 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
                         >
                           +

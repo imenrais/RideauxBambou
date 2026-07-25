@@ -36,7 +36,6 @@ import { parseDeliveryFeesResponse } from "../../lib/delivery-fees-query";
 import { formatCurtainTypeName, normalizeCurtainTypeName } from "../../lib/curtain-type-name";
 import { computeCurtainPrice, getCurtainLineTotal } from "../../lib/order-pricing";
 import {
-  getStorePanelCountFromWidth,
   getStorePanelMeasurements,
 } from "../../lib/store-panel-count";
 import {
@@ -674,12 +673,9 @@ export default function AdminOrders() {
   ]);
 
   // Same pricing as the client configurator (lib/order-pricing):
-  // store = ((h+20)×largeur×€/m²) + 4,3/8,6 per spit curtain; trunc; do not × panel qty.
+  // store unit = full opening (surface + spit addons); × quantity of openings.
   const computedItemTotalCost = useMemo(() => {
     if (!isQuantityValid) return 0;
-    if (manualOrderForm.curtainType === "store") {
-      return Math.trunc(priceCalculation.total);
-    }
     return getCurtainLineTotal(
       manualOrderForm.curtainType,
       priceCalculation.total,
@@ -863,22 +859,6 @@ export default function AdminOrders() {
       };
     });
   }, [manualOrderForm.curtainType, panneauProducts, products, hasSelectedManualReferenceByType, panneauConfig.fixedHeightCm, panneauWidthValues]);
-
-  useEffect(() => {
-    if (manualOrderForm.curtainType !== "store") {
-      return;
-    }
-
-    const widthCm = parseMeasurement(manualOrderForm.width);
-    const nextQuantity =
-      manualOrderForm.width === "" || Number.isNaN(widthCm) || widthCm <= 0
-        ? "1"
-        : String(getStorePanelCountFromWidth(widthCm));
-
-    setManualOrderForm((prev) =>
-      prev.quantity === nextQuantity ? prev : { ...prev, quantity: nextQuantity }
-    );
-  }, [manualOrderForm.curtainType, manualOrderForm.width]);
 
   const orderIdLookup = focusOrderLookup?.trim() || "";
 
@@ -2462,7 +2442,6 @@ export default function AdminOrders() {
                                     quantity: Math.max(1, Number(prev.quantity || "1") - 1).toString(),
                                   }))
                                 }
-                                disabled={manualOrderForm.curtainType === "store"}
                                 className="flex h-7 w-7 items-center justify-center rounded-md border border-gray-300 text-base font-medium text-gray-700 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
                               >
                                 -
@@ -2482,7 +2461,6 @@ export default function AdminOrders() {
                                     quantity: Math.min(10, Number(prev.quantity || "1") + 1).toString(),
                                   }))
                                 }
-                                disabled={manualOrderForm.curtainType === "store"}
                                 className="flex h-7 w-7 items-center justify-center rounded-md border border-gray-300 text-base font-medium text-gray-700 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
                               >
                                 +
