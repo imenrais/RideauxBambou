@@ -291,15 +291,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         const hasItemsUpdate = Array.isArray(req.body?.items);
         const hasStatusUpdate = typeof req.body?.status === "string";
+        const hasCustomerUpdate = req.body?.customerInfo != null;
+        const hasFeesUpdate =
+          typeof req.body?.wantsInstallation === "boolean" ||
+          typeof req.body?.deliveryFee === "number" ||
+          typeof req.body?.installationFee === "number" ||
+          typeof req.body?.notes === "string";
 
-        if (!hasItemsUpdate && !hasStatusUpdate) {
+        if (!hasItemsUpdate && !hasStatusUpdate && !hasCustomerUpdate && !hasFeesUpdate) {
           return res.status(400).json({
             success: false,
-            error: "Status or items update is required",
+            error: "No valid order fields to update",
           });
         }
 
         const data: Prisma.OrderUpdateInput = {};
+
+        let nextItems = Array.isArray(existingOrder.items) ? existingOrder.items : [];
+        let nextDeliveryFee = Number(existingOrder.deliveryFee) || 0;
+        let nextWantsInstallation = existingOrder.wantsInstallation === true;
+        let nextInstallationFee = Number(existingOrder.installationFee) || 0;
 
         if (hasItemsUpdate) {
           const itemsResult = z
@@ -315,8 +326,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             });
           }
 
-          const items = itemsResult.data;
-          const persistedItems = items.map((item) => ({
+          nextItems = itemsResult.data.map((item) => ({
             curtainTypeId: item.curtainTypeId || "manual-admin",
             curtainTypeName: item.curtainTypeName,
             ...(item.curtainType ? { curtainType: item.curtainType } : {}),
@@ -325,14 +335,50 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             quantity: item.quantity,
             totalCost: item.totalCost,
           }));
-          const itemsTotal = items.reduce((sum, item) => sum + item.totalCost, 0);
-          const deliveryFee = Number(existingOrder.deliveryFee) || 0;
-          const installationFee = existingOrder.wantsInstallation
-            ? Number(existingOrder.installationFee) || 0
-            : 0;
+          data.items = nextItems as unknown as Prisma.InputJsonValue;
+        }
 
-          data.items = persistedItems as unknown as Prisma.InputJsonValue;
-          data.totalAmount = Math.max(0, itemsTotal + deliveryFee + installationFee);
+        if (hasCustomerUpdate) {
+          const customerResult = adminCustomerInfoSchema.safeParse(req.body.customerInfo);
+          if (!customerResult.success) {
+            return res.status(400).json({
+              success: false,
+              error: customerResult.error.issues[0].message,
+            });
+          }
+          data.customerInfo = serializeCustomerInfo(
+            customerResult.data
+          ) as unknown as Prisma.InputJsonValue;
+        }
+
+        if (typeof req.body?.wantsInstallation === "boolean") {
+          nextWantsInstallation = req.body.wantsInstallation;
+          data.wantsInstallation = nextWantsInstallation;
+        }
+
+        if (typeof req.body?.deliveryFee === "number") {
+          if (req.body.deliveryFee < 0) {
+            return res.status(400).json({
+              success: false,
+              error: "Les frais de livraison doivent être positifs",
+            });
+          }
+          nextDeliveryFee = req.body.deliveryFee;
+          data.deliveryFee = nextDeliveryFee;
+        }
+
+        if (typeof req.body?.installationFee === "number") {
+          if (req.body.installationFee < 0) {
+            return res.status(400).json({
+              success: false,
+              error: "Les frais de pose doivent être positifs",
+            });
+          }
+          nextInstallationFee = req.body.installationFee;
+        }
+
+        if (typeof req.body?.notes === "string") {
+          data.notes = req.body.notes.trim();
         }
 
         if (hasStatusUpdate) {
@@ -350,6 +396,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             });
           }
           data.status = req.body.status;
+        }
+
+        if (hasItemsUpdate || hasFeesUpdate || hasCustomerUpdate) {
+          const resolvedInstallationFee = nextWantsInstallation ? nextInstallationFee : 0;
+          data.installationFee = resolvedInstallationFee;
+          const itemsTotal = (nextItems as Array<{ totalCost?: number }>).reduce(
+            (sum, item) => sum + (Number(item.totalCost) || 0),
+            0
+          );
+          data.totalAmount = Math.max(0, itemsTotal + nextDeliveryFee + resolvedInstallationFee);
         }
 
         const updatedOrder = await prisma.order.update({

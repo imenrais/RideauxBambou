@@ -540,21 +540,21 @@ export default function ConfigurerProduitPage() {
                         />
                       ) : (
                         <input
-                          type="number"
-                          min={1}
-                          value={height}
+                          type="text"
+                          inputMode="decimal"
+                          value={height === "" ? "" : String(height)}
                           onChange={(e) => {
-                            const raw = e.target.value;
-                            if (raw === "") {
+                            const sanitized = sanitizeMeasurementInput(e.target.value);
+                            if (sanitized === "") {
                               setHeight("");
                               return;
                             }
-                            const parsed = Number(raw);
-                            if (Number.isNaN(parsed)) {
-                              return;
+                            const parsed = parseMeasurement(sanitized);
+                            if (!Number.isNaN(parsed)) {
+                              setHeight(parsed);
                             }
-                            setHeight(parsed);
                           }}
+                          placeholder="ex. 200"
                           className={formNumberFieldClass}
                           required
                         />

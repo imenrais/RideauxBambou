@@ -700,9 +700,11 @@ export default function AdminOrders() {
     [manualOrderItems]
   );
 
-  const activeDeliveryFee = editingOrder
-    ? editingOrder.deliveryFee
-    : Number(autoDeliveryFee) || 0;
+  const activeDeliveryFee = hasSelectedRegion
+    ? Number(autoDeliveryFee) || 0
+    : editingOrder
+      ? editingOrder.deliveryFee
+      : Number(autoDeliveryFee) || 0;
 
   const displayOrderTotal = useMemo(() => {
     return draftItemsTotal + (installationSelected ? installationFeeValue : 0);
@@ -1260,6 +1262,19 @@ export default function AdminOrders() {
   const updateOrderItemsMutation = useMutation({
     mutationFn: async (payload: {
       orderId: string;
+      customerInfo: {
+        customerType: CustomerType;
+        firstName?: string;
+        lastName?: string;
+        companyName?: string;
+        matriculeFiscale?: string;
+        email?: string;
+        phone: string;
+        address: string;
+        city: string;
+        state: string;
+        postalCode: string;
+      };
       items: Array<{
         curtainTypeId: string;
         curtainTypeName: string;
@@ -1269,13 +1284,24 @@ export default function AdminOrders() {
         quantity: number;
         totalCost: number;
       }>;
+      wantsInstallation: boolean;
+      deliveryFee: number;
+      installationFee: number;
+      notes?: string;
     }) => {
       const response = await fetch(`/api/admin/orders?id=${payload.orderId}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ items: payload.items }),
+        body: JSON.stringify({
+          customerInfo: payload.customerInfo,
+          items: payload.items,
+          wantsInstallation: payload.wantsInstallation,
+          deliveryFee: payload.deliveryFee,
+          installationFee: payload.installationFee,
+          notes: payload.notes,
+        }),
       });
       const data = await response.json();
       if (!data.success) {
@@ -1297,19 +1323,31 @@ export default function AdminOrders() {
       );
 
       const itemsTotal = payload.items.reduce((sum, item) => sum + item.totalCost, 0);
-      const deliveryFee = editingOrder?.deliveryFee ?? 0;
-      const installationFee = editingOrder?.wantsInstallation
-        ? editingOrder.installationFee
-        : 0;
-      const nextTotal = Math.max(0, itemsTotal + deliveryFee + installationFee);
+      const installationFee = payload.wantsInstallation ? payload.installationFee : 0;
+      const nextTotal = Math.max(0, itemsTotal + payload.deliveryFee + installationFee);
+      const optimisticPatch = {
+        items: payload.items,
+        totalAmount: nextTotal,
+        customerInfo: payload.customerInfo,
+        wantsInstallation: payload.wantsInstallation,
+        deliveryFee: payload.deliveryFee,
+        installationFee,
+        notes: payload.notes || "",
+      };
 
       for (const [queryKey] of previousOrderQueries) {
         queryClient.setQueryData<AdminOrdersQueryData>(queryKey, (oldData) =>
-          applyOrderItemsUpdate(oldData, payload.orderId, payload.items, nextTotal)
+          applyOrderItemsUpdate(
+            oldData,
+            payload.orderId,
+            payload.items,
+            nextTotal,
+            optimisticPatch
+          )
         );
       }
       queryClient.setQueryData<AdminOrdersQueryData>(ADMIN_ORDERS_STATS_QUERY_KEY, (oldData) =>
-        applyOrderItemsUpdate(oldData, payload.orderId, payload.items, nextTotal)
+        applyOrderItemsUpdate(oldData, payload.orderId, payload.items, nextTotal, optimisticPatch)
       );
 
       return { previousOrderQueries, previousOrderStatsQuery };
@@ -1479,6 +1517,11 @@ export default function AdminOrders() {
 
   const openEditOrder = (order: any) => {
     const lines = mapOrderItemsToManualLines(order.items);
+    const info =
+      order.customerInfo && typeof order.customerInfo === "object" ? order.customerInfo : {};
+    const customerType = info.customerType === "company" ? "company" : "person";
+    const readOptional = (value: unknown) =>
+      typeof value === "string" && value.trim() ? value.trim() : "";
 
     setEditingOrder({
       id: order._id,
@@ -1489,21 +1532,38 @@ export default function AdminOrders() {
     setManualOrderItems(lines);
     setHasSelectedManualReferenceByType({ panneau: false, store: false });
     setManualOrderError("");
-    setManualOrderForm((prev) => ({
-      ...prev,
+    setManualEmailError("");
+    setManualPhoneError("");
+    setManualMatriculeFiscaleError("");
+    setManualOrderForm({
+      customerType,
+      firstName: readOptional(info.firstName),
+      lastName: readOptional(info.lastName),
+      companyName: readOptional(info.companyName),
+      matriculeFiscale: formatMatriculeFiscale(
+        readMatriculeFiscale(info as Record<string, unknown>)
+      ),
+      email: readOptional(info.email),
+      phone: normalizePhoneValue(readOptional(info.phone)),
+      address: readOptional(info.address),
+      city: readOptional(info.city),
+      state: readOptional(info.state),
+      postalCode: readOptional(info.postalCode),
       productId: "",
+      curtainType: "panneau",
       width: "",
       height: "",
       quantity: "1",
-      curtainType: "panneau",
+      deliveryFee: "",
       wantsInstallation: order.wantsInstallation === true,
       installationFee:
         typeof order.installationFee === "number"
           ? order.installationFee.toFixed(2)
           : typeof installationFeeData?.fee === "number"
             ? installationFeeData.fee.toFixed(2)
-            : prev.installationFee,
-    }));
+            : "11",
+      notes: typeof order.notes === "string" ? order.notes : "",
+    });
     setIsManualOrderModalOpen(true);
   };
 
@@ -1538,15 +1598,7 @@ export default function AdminOrders() {
       totalCost: item.totalCost,
     }));
 
-    if (editingOrder) {
-      updateOrderItemsMutation.mutate({
-        orderId: editingOrder.id,
-        items: payloadItems,
-      });
-      return;
-    }
-
-    const deliveryFee = Number(autoDeliveryFee);
+    const deliveryFee = activeDeliveryFee;
     const installationFee =
       typeof installationFeeData?.fee === "number"
         ? installationFeeData.fee
@@ -1624,25 +1676,40 @@ export default function AdminOrders() {
       return;
     }
 
+    const customerInfo = {
+      customerType: manualOrderForm.customerType,
+      ...(manualOrderForm.customerType === "company"
+        ? {
+            companyName: manualOrderForm.companyName.trim(),
+            matriculeFiscale: formattedMatriculeFiscale,
+          }
+        : {
+            firstName: manualOrderForm.firstName.trim(),
+            lastName: manualOrderForm.lastName.trim(),
+          }),
+      email: normalizedEmail,
+      phone: normalizedPhone,
+      address: manualOrderForm.address.trim(),
+      city: manualOrderForm.city.trim(),
+      state: manualOrderForm.state.trim(),
+      postalCode: manualOrderForm.postalCode.trim(),
+    };
+
+    if (editingOrder) {
+      updateOrderItemsMutation.mutate({
+        orderId: editingOrder.id,
+        customerInfo,
+        items: payloadItems,
+        wantsInstallation: manualOrderForm.wantsInstallation === true,
+        deliveryFee,
+        installationFee,
+        notes: manualOrderForm.notes.trim(),
+      });
+      return;
+    }
+
     createOrderMutation.mutate({
-      customerInfo: {
-        customerType: manualOrderForm.customerType,
-        ...(manualOrderForm.customerType === "company"
-          ? {
-              companyName: manualOrderForm.companyName.trim(),
-              matriculeFiscale: formattedMatriculeFiscale,
-            }
-          : {
-              firstName: manualOrderForm.firstName.trim(),
-              lastName: manualOrderForm.lastName.trim(),
-            }),
-        email: normalizedEmail,
-        phone: normalizedPhone,
-        address: manualOrderForm.address.trim(),
-        city: manualOrderForm.city.trim(),
-        state: manualOrderForm.state.trim(),
-        postalCode: manualOrderForm.postalCode.trim(),
-      },
+      customerInfo,
       items: payloadItems,
       wantsInstallation: manualOrderForm.wantsInstallation === true,
       deliveryFee,
@@ -2159,11 +2226,7 @@ export default function AdminOrders() {
                     </div>
 
                     <form onSubmit={handleCreateManualOrder} className="space-y-5">
-                      <div
-                        className={`grid grid-cols-1 gap-5 ${
-                          editingOrder ? "" : "lg:grid-cols-2"
-                        }`}
-                      >
+                      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
                         <div className="space-y-4 rounded-xl border border-gray-200 p-4 dark:border-gray-700">
                           <h4 className="text-sm font-semibold text-gray-900 dark:text-white">
                             Configuration produit
@@ -2335,20 +2398,22 @@ export default function AdminOrders() {
                                 />
                               ) : (
                                 <input
-                                  type="number"
+                                  type="text"
+                                  inputMode="decimal"
                                   value={manualOrderForm.height}
                                   onChange={(e) =>
-                                    setManualOrderForm((prev) => ({ ...prev, height: e.target.value }))
+                                    setManualOrderForm((prev) => ({
+                                      ...prev,
+                                      height: sanitizeMeasurementInput(e.target.value),
+                                    }))
                                   }
-                                  min={1}
-                                  step={1}
+                                  placeholder="ex. 200"
                                   className={formNumberFieldClass}
                                 />
                               )}
                             </div>
                           </div>
 
-                          {!editingOrder && (
                           <div>
                             <label className={formFieldLabelClass}>Pose</label>
                             <div className="flex flex-wrap gap-4">
@@ -2383,7 +2448,6 @@ export default function AdminOrders() {
                               ))}
                             </div>
                           </div>
-                          )}
 
                           <div>
                             <label className={formFieldLabelClass}>
@@ -2523,7 +2587,6 @@ export default function AdminOrders() {
                           </div>
                         </div>
 
-                        {!editingOrder && (
                         <div className="space-y-4 rounded-xl border border-gray-200 p-4 dark:border-gray-700">
                           <h4 className="text-sm font-semibold text-gray-900 dark:text-white">
                             Informations client
@@ -2780,10 +2843,8 @@ export default function AdminOrders() {
                             />
                           </div>
                         </div>
-                        )}
                       </div>
 
-                      {!editingOrder && (
                       <div>
                         <label className={formFieldLabelClass}>
                           Notes (optionnel)
@@ -2797,7 +2858,6 @@ export default function AdminOrders() {
                           className={formTextareaClass}
                         />
                       </div>
-                      )}
 
                       {manualOrderError && (
                         <p className="text-sm font-medium text-red-600 dark:text-red-400">
@@ -2814,10 +2874,9 @@ export default function AdminOrders() {
                           disabled={
                             createOrderMutation.isPending ||
                             updateOrderItemsMutation.isPending ||
-                            (!editingOrder &&
-                              (Boolean(manualEmailError) ||
-                                Boolean(manualPhoneError) ||
-                                Boolean(manualMatriculeFiscaleError))) ||
+                            Boolean(manualEmailError) ||
+                            Boolean(manualPhoneError) ||
+                            Boolean(manualMatriculeFiscaleError) ||
                             (Boolean(editingOrder) && manualOrderItems.length === 0)
                           }
                           className="w-full sm:w-auto"
@@ -2878,14 +2937,28 @@ export default function AdminOrders() {
                               {new Date(order.createdAt).toLocaleDateString()}
                             </p>
                           </div>
-                          <span
-                            className={`inline-flex max-w-full shrink-0 whitespace-normal rounded-full px-2.5 py-1 text-xs font-semibold ${
+                          <select
+                            value={normalizedStatus}
+                            onChange={(e) => handleInlineStatusUpdate(order._id, e.target.value)}
+                            disabled={updateStatusMutation.isPending}
+                            aria-label="Modifier le statut"
+                            className={`inline-flex max-w-full shrink-0 cursor-pointer appearance-none whitespace-normal rounded-full border-0 px-2.5 py-1 pr-7 text-xs font-semibold outline-none focus:ring-2 focus:ring-gray-400/40 disabled:cursor-not-allowed disabled:opacity-60 ${
                               statusColors[normalizedStatus] ||
                               "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300"
                             }`}
+                            style={{
+                              backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236b7280'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E")`,
+                              backgroundRepeat: "no-repeat",
+                              backgroundPosition: "right 0.4rem center",
+                              backgroundSize: "0.9rem",
+                            }}
                           >
-                            {statusLabels[normalizedStatus]}
-                          </span>
+                            {statusOptions.map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
                         </div>
 
                         <div className="space-y-3 p-3">
@@ -2965,25 +3038,6 @@ export default function AdminOrders() {
                           </div>
 
                           <div className="flex flex-wrap items-center gap-2 border-t border-gray-100 pt-2.5 dark:border-gray-800">
-                            <label
-                              className="sr-only"
-                              htmlFor={`mobile-status-${order._id}`}
-                            >
-                              Statut
-                            </label>
-                            <select
-                              id={`mobile-status-${order._id}`}
-                              value={normalizedStatus}
-                              onChange={(e) => handleInlineStatusUpdate(order._id, e.target.value)}
-                              disabled={updateStatusMutation.isPending}
-                              className="box-border h-9 w-auto shrink-0 cursor-pointer rounded-lg border border-gray-300 bg-white px-3 py-0 text-xs font-semibold leading-none text-gray-800 shadow-sm outline-none focus:ring-2 focus:ring-gray-400/40 disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
-                            >
-                              {statusOptions.map((option) => (
-                                <option key={option.value} value={option.value}>
-                                  {option.label}
-                                </option>
-                              ))}
-                            </select>
                             <Button
                               type="button"
                               size="sm"
@@ -3036,7 +3090,6 @@ export default function AdminOrders() {
                         <th className={orderTableHeadClass}>Ville</th>
                         <th className={orderTableHeadClass}>Code postal</th>
                         <th className={orderTableHeadClass}>Email</th>
-                        <th className={orderTableHeadClass}>Statut</th>
                         <th className={orderTableHeadClass}>Date</th>
                         <th className={orderTableHeadClass}>Facture</th>
                         <th className={orderTableHeadClass}>Actions</th>
@@ -3060,14 +3113,30 @@ export default function AdminOrders() {
                           <td className={orderTableCellClass}>
                             <div className="inline-flex flex-col items-center gap-1.5">
                               <span className="font-mono">#{order._id.slice(-8)}</span>
-                              <span
-                                className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${
+                              <select
+                                value={normalizeStatus(order.status)}
+                                onChange={(e) => handleInlineStatusUpdate(order._id, e.target.value)}
+                                disabled={updateStatusMutation.isPending}
+                                aria-label="Modifier le statut"
+                                className={`inline-flex max-w-full shrink-0 cursor-pointer appearance-none whitespace-normal rounded-full border-0 px-2.5 py-1 pr-7 text-xs font-semibold outline-none focus:ring-2 focus:ring-gray-400/40 disabled:cursor-not-allowed disabled:opacity-60 ${
                                   statusColors[normalizeStatus(order.status)] ||
                                   "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300"
                                 }`}
+                                style={{
+                                  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236b7280'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E")`,
+                                  backgroundRepeat: "no-repeat",
+                                  backgroundPosition: "right 0.4rem center",
+                                  backgroundSize: "0.9rem",
+                                  transform: "scaleX(0.9)",
+                                  transformOrigin: "center center",
+                                }}
                               >
-                                {statusLabels[normalizeStatus(order.status)]}
-                              </span>
+                                {statusOptions.map((option) => (
+                                  <option key={option.value} value={option.value}>
+                                    {option.label}
+                                  </option>
+                                ))}
+                              </select>
                             </div>
                           </td>
                           <td className={orderTableCellClass}>{customer.name}</td>
@@ -3124,21 +3193,6 @@ export default function AdminOrders() {
                           <td className={orderTableCellClass}>{customer.city}</td>
                           <td className={orderTableCellClass}>{customer.postalCode}</td>
                           <td className={orderTableCellClass}>{customer.email}</td>
-                          <td className={orderTableCellClass}>
-                            <select
-                              value={normalizeStatus(order.status)}
-                              onChange={(e) => handleInlineStatusUpdate(order._id, e.target.value)}
-                              disabled={updateStatusMutation.isPending}
-                              className="box-border h-[2.125rem] min-w-[7.65rem] cursor-pointer rounded-xl border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold leading-none text-gray-800 shadow-sm outline-none focus:ring-2 focus:ring-gray-400/40 disabled:cursor-not-allowed disabled:opacity-60 sm:h-9 sm:px-4 sm:py-2 sm:text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
-                              aria-label="Modifier le statut"
-                            >
-                              {statusOptions.map((option) => (
-                                <option key={option.value} value={option.value}>
-                                  {option.label}
-                                </option>
-                              ))}
-                            </select>
-                          </td>
                           <td className={`${orderTableCellClass} text-gray-500 dark:text-gray-400`}>
                             {new Date(order.createdAt).toLocaleDateString()}
                           </td>
