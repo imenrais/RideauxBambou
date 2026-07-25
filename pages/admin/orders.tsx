@@ -2103,28 +2103,28 @@ export default function AdminOrders() {
                   <label className="mb-1 block w-full text-left text-[11px] font-medium leading-tight text-gray-600 dark:text-gray-400 sm:text-sm sm:text-gray-700 dark:sm:text-gray-300">
                     Filtrer par statut
                   </label>
-                  <select
-                    value={selectedStatus}
-                    onChange={(e) => {
-                      setSelectedStatus(e.target.value);
-                      setCurrentPage(1);
-                    }}
+              <select
+                value={selectedStatus}
+                onChange={(e) => {
+                  setSelectedStatus(e.target.value);
+                  setCurrentPage(1);
+                }}
                     className={`${formSelectClass} !box-border !h-8 !w-full !max-w-full !rounded-lg !px-2.5 !py-1 !text-xs !leading-tight sm:!h-auto sm:!rounded-md sm:!px-3 sm:!py-2 sm:!text-sm`}
                     style={{ width: "100%", maxWidth: "100%" }}
+              >
+                <option value="" className="text-gray-900 dark:text-white">
+                  Tous les statuts
+                </option>
+                {statusOptions.map((option) => (
+                  <option
+                    key={option.value}
+                    value={option.value}
+                    className="text-gray-900 dark:text-white"
                   >
-                    <option value="" className="text-gray-900 dark:text-white">
-                      Tous les statuts
-                    </option>
-                    {statusOptions.map((option) => (
-                      <option
-                        key={option.value}
-                        value={option.value}
-                        className="text-gray-900 dark:text-white"
-                      >
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
                 </div>
               </div>
             </div>
@@ -2210,7 +2210,7 @@ export default function AdminOrders() {
                           {editingOrder
                             ? `Modifier la commande #${editingOrder.id.slice(-8)}`
                             : "Ajouter une commande"}
-                        </h3>
+                  </h3>
                       </div>
                       <button
                         type="button"
@@ -2384,7 +2384,7 @@ export default function AdminOrders() {
                                   className={formNumberFieldClass}
                                 />
                               )}
-                            </div>
+                  </div>
                             <div>
                               <label className={formFieldLabelClass}>
                                 Hauteur (cm)
@@ -2579,7 +2579,7 @@ export default function AdminOrders() {
                                       <span className="text-gray-900 dark:text-white">
                                         {line.displayText ?? formatPrice(line.amount)}
                                       </span>
-                                    </div>
+                  </div>
                                   ))}
                                 </div>
                               </div>
@@ -2916,11 +2916,6 @@ export default function AdminOrders() {
                         installationFee: order.installationFee || 0,
                         customerInfo: order.customerInfo,
                       });
-                      const productLabel =
-                        (order.items || [])
-                          .map((item: any) => normalizeCurtainTypeName(item.curtainTypeName))
-                          .filter(Boolean)
-                          .join(", ") || "N/A";
                       const normalizedStatus = normalizeStatus(order.status);
                       return (
                       <div
@@ -2966,7 +2961,7 @@ export default function AdminOrders() {
                             <div className="min-w-0 flex-1 basis-[12rem] space-y-2">
                               <div>
                                 <p className="text-xs font-medium text-gray-500 dark:text-gray-400">
-                                  Client
+                          Client
                                 </p>
                                 <p className="mt-0.5 break-words text-sm font-medium text-gray-900 dark:text-white">
                                   {customer.name}
@@ -2998,43 +2993,101 @@ export default function AdminOrders() {
                             </p>
                           ) : null}
 
-                          <div className="grid grid-cols-1 gap-2.5 rounded-lg bg-gray-50 p-2.5 dark:bg-gray-800/50 sm:grid-cols-2">
+                          <div className="grid grid-cols-1 gap-2.5 rounded-lg bg-gray-50 p-2.5 dark:bg-gray-800/50">
                             <div>
                               <p className="text-xs font-medium text-gray-500 dark:text-gray-400">
-                                Total
+                          Produit
                               </p>
-                              <p className="mt-0.5 break-words text-sm font-semibold text-gray-900 dark:text-white">
-                                {displayTotal.toFixed(2)} TND
-                              </p>
+                              <div className="mt-0.5 space-y-1.5">
+                                {(order.items || []).length > 0 ? (
+                                  (order.items || []).map((item: any, index: number) => (
+                                    <div
+                                      key={`${order._id}-mobile-product-${index}`}
+                                      className="break-words text-sm text-gray-900 dark:text-white"
+                                    >
+                                      <p className="font-medium">
+                                        {normalizeCurtainTypeName(item.curtainTypeName) || "N/A"}
+                                        {item.quantity > 1 ? ` × ${item.quantity}` : ""}
+                                      </p>
+                                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                                        Largeur {item.width} cm · Hauteur {item.height} cm
+                                      </p>
+                                    </div>
+                                  ))
+                                ) : (
+                                  <p className="text-sm text-gray-900 dark:text-white">N/A</p>
+                                )}
+                              </div>
                             </div>
+
+                            <div className="grid grid-cols-2 gap-2.5">
+                              <div>
+                                <p className="text-xs font-medium text-gray-500 dark:text-gray-400">
+                          Total
+                                </p>
+                                <p className="mt-0.5 break-words text-sm font-semibold text-gray-900 dark:text-white">
+                                  {displayTotal.toFixed(2)} TND
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-xs font-medium text-gray-500 dark:text-gray-400">
+                                  Pose
+                                </p>
+                                <span
+                                  className={`mt-0.5 inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
+                                    order.wantsInstallation
+                                      ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+                                      : "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300"
+                                  }`}
+                                >
+                                  {order.wantsInstallation ? "Oui" : "Non"}
+                                </span>
+                              </div>
+                            </div>
+
                             <div>
-                              <p className="text-xs font-medium text-gray-500 dark:text-gray-400">
-                                Produit
-                              </p>
-                              <p className="mt-0.5 break-words text-sm text-gray-900 dark:text-white">
-                                {productLabel}
-                              </p>
-                            </div>
-                            <div className="sm:col-span-2">
                               <p className="text-xs font-medium text-gray-500 dark:text-gray-400">
                                 Adresse
                               </p>
                               <p className="mt-0.5 break-words text-sm leading-relaxed text-gray-700 dark:text-gray-300">
-                                {[customer.address, customer.city, customer.state, customer.postalCode]
-                                  .filter(Boolean)
-                                  .join(" · ") || "N/A"}
+                                {customer.address || "N/A"}
                               </p>
                             </div>
-                            {customer.email && customer.email !== "N/A" ? (
-                              <div className="sm:col-span-2">
+
+                            <div className="grid grid-cols-2 gap-2.5">
+                              <div>
+                                <p className="text-xs font-medium text-gray-500 dark:text-gray-400">
+                                  Gouvernorat
+                                </p>
+                                <p className="mt-0.5 break-words text-sm text-gray-900 dark:text-white">
+                                  {customer.state || "N/A"}
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-xs font-medium text-gray-500 dark:text-gray-400">
+                                  Ville
+                                </p>
+                                <p className="mt-0.5 break-words text-sm text-gray-900 dark:text-white">
+                                  {customer.city || "N/A"}
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-xs font-medium text-gray-500 dark:text-gray-400">
+                                  Code postal
+                                </p>
+                                <p className="mt-0.5 break-words text-sm text-gray-900 dark:text-white">
+                                  {customer.postalCode || "N/A"}
+                                </p>
+                              </div>
+                              <div>
                                 <p className="text-xs font-medium text-gray-500 dark:text-gray-400">
                                   Email
                                 </p>
                                 <p className="mt-0.5 break-words text-sm text-gray-700 dark:text-gray-300">
-                                  {customer.email}
+                                  {customer.email || "N/A"}
                                 </p>
                               </div>
-                            ) : null}
+                            </div>
                           </div>
 
                           <div className="flex flex-wrap items-center justify-start gap-2 border-t border-gray-100 pt-2.5 dark:border-gray-800">
@@ -3157,10 +3210,10 @@ export default function AdminOrders() {
                               {(order.items || []).map((item: any, index: number) => (
                                 <div key={`${order._id}-product-${index}`}>
                                   {normalizeCurtainTypeName(item.curtainTypeName)}
-                                </div>
+                              </div>
                               ))}
                               {(!order.items || order.items.length === 0) && <div>N/A</div>}
-                            </div>
+                              </div>
                           </td>
                           <td className={`${orderTableCellClass} text-gray-500 dark:text-gray-400`}>
                             <div className="space-y-1">
@@ -3215,8 +3268,8 @@ export default function AdminOrders() {
                                 variant="secondary"
                                 className="!h-[2.125rem] !px-3 !py-0 !text-xs !leading-none sm:!h-9 sm:!px-4 sm:!text-sm"
                                 onClick={() => openEditOrder(order)}
-                              >
-                                Modifier
+                            >
+                              Modifier
                               </Button>
                               <Button
                                 type="button"
@@ -3235,8 +3288,8 @@ export default function AdminOrders() {
                       );
                       })}
                     </tbody>
-                    </table>
-                  </div>
+                  </table>
+                </div>
                 </>
               )}
 
@@ -3284,25 +3337,25 @@ export default function AdminOrders() {
                         type="button"
                         variant="secondary"
                         size="sm"
-                        onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                        disabled={currentPage === 1}
+                          onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                          disabled={currentPage === 1}
                         className="min-w-[7.5rem] justify-center font-semibold"
-                      >
-                        Précédent
+                        >
+                          Précédent
                       </Button>
                       <Button
                         type="button"
                         variant="secondary"
                         size="sm"
-                        onClick={() =>
-                          setCurrentPage(
-                            Math.min(ordersData?.pagination?.totalPages || 1, currentPage + 1)
-                          )
-                        }
-                        disabled={currentPage === (ordersData?.pagination?.totalPages || 1)}
+                          onClick={() =>
+                            setCurrentPage(
+                              Math.min(ordersData?.pagination?.totalPages || 1, currentPage + 1)
+                            )
+                          }
+                          disabled={currentPage === (ordersData?.pagination?.totalPages || 1)}
                         className="min-w-[7.5rem] justify-center font-semibold"
-                      >
-                        Suivant
+                        >
+                          Suivant
                       </Button>
                     </div>
                   </div>
@@ -3342,8 +3395,8 @@ export default function AdminOrders() {
                   variant="secondary"
                   onClick={closeDeleteOrderModal}
                   disabled={deleteOrderMutation.isPending}
-                >
-                  Annuler
+                  >
+                    Annuler
                 </Button>
                 <Button
                   type="button"

@@ -358,9 +358,9 @@ export default function CheckoutPage() {
       <div className="min-h-screen bg-gray-100 dark:bg-gray-900">
         <Navigation />
         <div className="flex min-h-[calc(100vh-4rem)] items-center justify-center">
-          <div className="text-center">
-            <div className="mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-b-2 border-green-600"></div>
-            <p className="text-gray-600 dark:text-gray-400">Chargement...</p>
+        <div className="text-center">
+          <div className="mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-b-2 border-green-600"></div>
+          <p className="text-gray-600 dark:text-gray-400">Chargement...</p>
           </div>
         </div>
       </div>
@@ -499,7 +499,7 @@ export default function CheckoutPage() {
                             </span>
                             <span className="text-gray-900 dark:text-white">
                               {line.displayText ?? formatPrice(line.amount)}
-                            </span>
+                        </span>
                           </div>
                         ))}
                       </div>
@@ -521,11 +521,11 @@ export default function CheckoutPage() {
                   </h2>
 
                   <form onSubmit={handleSubmit} className="space-y-6">
-                    <div>
+                      <div>
                       <label className={formFieldLabelClass}>Type de client *</label>
                       <div className="flex flex-wrap gap-4">
                         {(["person", "company"] as const).map((type) => (
-                          <label
+                        <label
                             key={type}
                             className="flex items-center gap-2 text-gray-700 dark:text-gray-200"
                           >
@@ -597,33 +597,33 @@ export default function CheckoutPage() {
                       <div className="grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-2">
                         <div>
                           <label htmlFor="firstName" className={formFieldLabelClass}>
-                            Prénom *
-                          </label>
-                          <input
-                            type="text"
-                            id="firstName"
-                            name="firstName"
-                            value={formData.firstName}
-                            onChange={handleInputChange}
-                            required
+                          Prénom *
+                        </label>
+                        <input
+                          type="text"
+                          id="firstName"
+                          name="firstName"
+                          value={formData.firstName}
+                          onChange={handleInputChange}
+                          required
                             className={formSelectClass}
-                          />
-                        </div>
-                        <div>
-                          <label htmlFor="lastName" className={formFieldLabelClass}>
-                            Nom *
-                          </label>
-                          <input
-                            type="text"
-                            id="lastName"
-                            name="lastName"
-                            value={formData.lastName}
-                            onChange={handleInputChange}
-                            required
-                            className={formSelectClass}
-                          />
-                        </div>
+                        />
                       </div>
+                      <div>
+                          <label htmlFor="lastName" className={formFieldLabelClass}>
+                          Nom *
+                        </label>
+                        <input
+                          type="text"
+                          id="lastName"
+                          name="lastName"
+                          value={formData.lastName}
+                          onChange={handleInputChange}
+                          required
+                            className={formSelectClass}
+                        />
+                      </div>
+                    </div>
                     )}
 
                     <div>

@@ -10,9 +10,9 @@ import StorePanelBreakdown, {
 } from "../components/StorePanelBreakdown";
 import Button from "../components/ui/Button";
 import Card from "../components/ui/Card";
-import PriceDisplay from "../components/ui/PriceDisplay";
 import { useSimpleCart } from "../contexts/SimpleCartContext";
 import { useToast } from "../contexts/ToastContext";
+import { FiTrash2 } from "react-icons/fi";
 import { formatPanneauWidthOption } from "../lib/panneau-pricing";
 import {
   formFieldClass,
@@ -28,6 +28,7 @@ import {
   getStorePanelCountFromWidth,
   getStorePanelMeasurements,
 } from "../lib/store-panel-count";
+import { getCurtainLineTotal } from "../lib/order-pricing";
 import {
   formatMeasurement,
   parseMeasurement,
@@ -44,8 +45,16 @@ interface Product {
 
 export default function ConfigurerProduitPage() {
   const router = useRouter();
-  const { addItem, calculatePrice, storePriceSettings, panneauConfig, pricesLoaded, getTotalItems } =
-    useSimpleCart();
+  const {
+    addItem,
+    removeItem,
+    items,
+    calculatePrice,
+    panneauConfig,
+    pricesLoaded,
+    getTotalItems,
+    getTotalPrice,
+  } = useSimpleCart();
   const { success } = useToast();
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [width, setWidth] = useState<number | "">("");
@@ -58,6 +67,7 @@ export default function ConfigurerProduitPage() {
   const lastAppliedQueryProductIdRef = useRef<string | null>(null);
   const pendingUrlSelectionRef = useRef<{ id: string; type: "panneau" | "store" } | null>(null);
   const [priceCalculation, setPriceCalculation] = useState({ area: 0, pricePerM2: 0, total: 0 });
+  const [showContinueConfirm, setShowContinueConfirm] = useState(false);
 
   const { data: productsData, isLoading: isProductsLoading } = usePublicProductsQuery();
 
@@ -117,14 +127,10 @@ export default function ConfigurerProduitPage() {
 
     if (availablePanneauProducts.length > 0) {
       setCurtainType("panneau");
-      setSelectedProductId(availablePanneauProducts[0]._id);
-    } else if (availableStoreProducts.length > 0) {
-      setCurtainType("store");
-      setSelectedProductId(availableStoreProducts[0]._id);
     } else {
       setCurtainType("store");
-      setSelectedProductId(products[0]?._id ?? "");
     }
+    setSelectedProductId("");
 
     hasInitializedSelectionRef.current = true;
   }, [
@@ -180,11 +186,8 @@ export default function ConfigurerProduitPage() {
       return;
     }
 
-    // Curtain type changed (e.g. store → panneau): pick a valid reference so the
-    // product image does not go blank.
-    const fallbackProduct =
-      availableProductsForCurtainType[0] ?? productsForCurtainType[0] ?? null;
-    setSelectedProductId(fallbackProduct?._id ?? "");
+    // Curtain type changed: clear so the user picks a reference (admin-style).
+    setSelectedProductId("");
   }, [
     productsForCurtainType,
     availableProductsForCurtainType,
@@ -264,24 +267,31 @@ export default function ConfigurerProduitPage() {
     setPriceCalculation(calculation);
   }, [width, height, curtainType, calculatePrice, panneauConfig, pricesLoaded]);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const resetProductFields = () => {
+    setWidth("");
+    setStoreWidthInput("");
+    if (curtainType === "store") {
+      setHeight("");
+      setQuantity(1);
+    } else {
+      setQuantity(1);
+    }
+  };
 
+  const tryAddCurrentProduct = (): boolean => {
     if (!product || !product.isAvailable) {
-      return;
+      return false;
     }
 
-    if (width === "") {
-      return;
+    if (width === "" || height === "") {
+      return false;
     }
-    if (height === "") {
-      return;
-    }
+
     if (
       curtainType === "panneau" &&
       !availablePanneauProducts.some((p) => p._id === selectedProductId)
     ) {
-      return;
+      return false;
     }
 
     addItem({
@@ -294,21 +304,54 @@ export default function ConfigurerProduitPage() {
       curtainType,
     });
 
-    success("Produit ajouté au panier. Vous pouvez en ajouter d'autres.");
-    setWidth("");
-    setStoreWidthInput("");
-    if (curtainType === "store") {
-      setHeight("");
-      setQuantity(1);
-    } else {
-      setQuantity(1);
+    resetProductFields();
+    return true;
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!tryAddCurrentProduct()) {
+      return;
     }
+    success("Rideau ajouté. Vous pouvez en ajouter un autre ou continuer.");
   };
 
   const cartItemCount = getTotalItems();
+  const formReadyToAdd =
+    Boolean(product?.isAvailable) &&
+    width !== "" &&
+    height !== "" &&
+    !(
+      curtainType === "panneau" &&
+      !availablePanneauProducts.some((p) => p._id === selectedProductId)
+    );
+  const canContinue = cartItemCount > 0 || formReadyToAdd;
+
+  const handleContinueClick = () => {
+    const added = tryAddCurrentProduct();
+    if (!added && cartItemCount === 0) {
+      return;
+    }
+    setShowContinueConfirm(true);
+  };
+
+  const handleConfirmOrder = () => {
+    setShowContinueConfirm(false);
+    void router.push("/paiement");
+  };
+
+  const handleKeepShopping = () => {
+    setShowContinueConfirm(false);
+  };
 
   const formatPrice = (price: number) =>
     new Intl.NumberFormat("fr-FR", { style: "currency", currency: "TND" }).format(price);
+
+  const orderTotal = getTotalPrice();
+  const draftLineTotal = formReadyToAdd
+    ? getCurtainLineTotal(curtainType, priceCalculation.total, quantity)
+    : 0;
+  const summaryTotal = orderTotal + draftLineTotal;
 
   const storePanelMeasurements = useMemo(() => {
     if (curtainType !== "store" || width === "" || height === "" || width <= 0 || height <= 0) {
@@ -378,321 +421,371 @@ export default function ConfigurerProduitPage() {
 
               <Card>
                 <form onSubmit={handleSubmit} className="space-y-4">
-                  <div>
-                    <label className={formFieldLabelClass}>
-                      Référence
-                    </label>
-                    <select
-                      value={selectedProductId}
-                      onChange={(e) => setSelectedProductId(e.target.value)}
-                      className={formSelectClass}
-                      required
-                    >
-                      {productsForCurtainType.map((item) => (
-                        <option
-                          key={item._id}
-                          value={item._id}
-                          disabled={item.isAvailable === false}
-                        >
-                          {item.name}
-                          {item.isAvailable === false ? " — rupture de stock" : ""}
+                  <div className="space-y-4 rounded-xl border border-gray-200 p-4 dark:border-gray-700">
+                    <h4 className="text-sm font-semibold text-gray-900 dark:text-white">
+                      Configuration produit
+                    </h4>
+
+                    <div>
+                      <label className={formFieldLabelClass}>Référence</label>
+                      <select
+                        value={selectedProductId}
+                        onChange={(e) => setSelectedProductId(e.target.value)}
+                        className={`${formSelectClass} ${
+                          selectedProductId === ""
+                            ? "text-gray-400 dark:text-gray-400"
+                            : "text-gray-900 dark:text-white"
+                        }`}
+                        disabled={isProductsLoading || productsForCurtainType.length === 0}
+                      >
+                        <option value="" className="text-gray-400">
+                          Choisir la référence
                         </option>
-                      ))}
-                    </select>
-                    {curtainType === "panneau" &&
-                      panneauProductsAll.length > 0 &&
-                      panneauProductsAll.length < products.length && (
-                        <p className="mt-1 text-xs text-gray-600 dark:text-gray-400">
-                          Références disponibles en panneau :{" "}
-                          {panneauProductsAll.map((item) => item.name).join(", ")}
-                        </p>
-                      )}
-                    {curtainType === "panneau" && panneauProductsAll.length === 0 && (
-                      <p className="mt-1 text-xs text-red-600 dark:text-red-400">
-                        Aucune référence panneau n&apos;est configurée pour le moment.
-                      </p>
-                    )}
-                    {curtainType === "panneau" &&
-                      productsForCurtainType.length > 0 &&
-                      availableProductsForCurtainType.length === 0 && (
-                        <p className="mt-1 text-xs text-red-600 dark:text-red-400">
-                          Toutes les références panneau sont en rupture de stock.
-                        </p>
-                      )}
-                  </div>
-
-                  <div>
-                    <label className={formFieldLabelClass}>
-                      Type de rideau
-                    </label>
-                    <div className="flex flex-wrap gap-4">
-                      <label className="flex items-center gap-2 text-gray-700 dark:text-gray-200">
-                        <input
-                          type="radio"
-                          value="panneau"
-                          checked={curtainType === "panneau"}
-                          onChange={(e) => setCurtainType(e.target.value as "panneau" | "store")}
-                          className="sr-only"
-                        />
-                        <span className="flex h-4 w-4 items-center justify-center rounded-full border border-gray-300 bg-white">
-                          <span
-                            className={`h-2 w-2 rounded-full bg-black transition-opacity ${
-                              curtainType === "panneau" ? "opacity-100" : "opacity-0"
-                            }`}
-                          />
-                        </span>
-                        <span className="text-sm">Panneau</span>
-                      </label>
-                      <label className="flex items-center gap-2 text-gray-700 dark:text-gray-200">
-                        <input
-                          type="radio"
-                          value="store"
-                          checked={curtainType === "store"}
-                          onChange={(e) => setCurtainType(e.target.value as "panneau" | "store")}
-                          className="sr-only"
-                        />
-                        <span className="flex h-4 w-4 items-center justify-center rounded-full border border-gray-300 bg-white">
-                          <span
-                            className={`h-2 w-2 rounded-full bg-black transition-opacity ${
-                              curtainType === "store" ? "opacity-100" : "opacity-0"
-                            }`}
-                          />
-                        </span>
-                        <span className="text-sm">Store</span>
-                      </label>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    <div>
-                      <label className={formFieldLabelClass}>
-                        Largeur (cm)
-                      </label>
-                      {curtainType === "panneau" ? (
-                        <select
-                          value={width}
-                          onChange={(e) => setWidth(e.target.value ? Number(e.target.value) : "")}
-                          className={formSelectClass}
-                          style={{
-                            color: width === "" ? "#9CA3AF" : undefined,
-                          }}
-                          required
-                        >
-                          <option value="" style={{ color: "#9CA3AF" }}>
-                            Choisir la largeur
+                        {productsForCurtainType.map((item) => (
+                          <option
+                            key={item._id}
+                            value={item._id}
+                            disabled={item.isAvailable === false}
+                          >
+                            {item.name}
+                            {item.isAvailable === false ? " — rupture de stock" : ""}
                           </option>
-                          {panneauConfig.widths.map((entry) => (
-                            <option
-                              key={entry.id}
-                              value={entry.widthCm}
-                              style={{ color: isDarkMode ? "#FFFFFF" : "#111827" }}
-                            >
-                              {formatPanneauWidthOption(entry)}
-                            </option>
-                          ))}
-                        </select>
-                      ) : (
-                        <input
-                          type="text"
-                          inputMode="decimal"
-                          value={storeWidthInput}
-                          onChange={(e) => {
-                            const nextInput = sanitizeMeasurementInput(e.target.value);
-                            const parsed = parseMeasurement(nextInput);
-
-                            if (nextInput === "" || Number.isNaN(parsed)) {
-                              setStoreWidthInput(nextInput);
-                              setWidth("");
-                              return;
-                            }
-
-                            if (parsed > MAX_STORE_WIDTH_CM) {
-                              setStoreWidthInput(formatMeasurement(MAX_STORE_WIDTH_CM));
-                              setWidth(MAX_STORE_WIDTH_CM);
-                              return;
-                            }
-
-                            setStoreWidthInput(nextInput);
-                            setWidth(parsed > 0 ? parsed : "");
-                          }}
-                          placeholder="ex. 120,5"
-                          className={formNumberFieldClass}
-                          required
-                        />
-                      )}
-                      {curtainType === "panneau" && panneauConfig.widths.length > 0 && (
+                        ))}
+                      </select>
+                      {curtainType === "panneau" &&
+                        panneauProductsAll.length > 0 &&
+                        panneauProductsAll.length < products.length && (
+                          <p className="mt-1 text-xs text-gray-600 dark:text-gray-400">
+                            Références disponibles en panneau :{" "}
+                            {panneauProductsAll.map((item) => item.name).join(", ")}
+                          </p>
+                        )}
+                      {curtainType === "panneau" && panneauProductsAll.length === 0 && (
                         <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                          Largeurs disponibles:{" "}
-                          {panneauConfig.widths.map((entry) => `${entry.widthCm} cm`).join(", ")}.
+                          Aucune référence panneau configurée.
                         </p>
                       )}
+                      {curtainType === "panneau" &&
+                        productsForCurtainType.length > 0 &&
+                        availableProductsForCurtainType.length === 0 && (
+                          <p className="mt-1 text-xs text-red-600 dark:text-red-400">
+                            Toutes les références panneau sont en rupture de stock.
+                          </p>
+                        )}
                     </div>
+
                     <div>
-                      <label className={formFieldLabelClass}>
-                        Hauteur (cm)
-                      </label>
-                      {curtainType === "panneau" ? (
-                        <input
-                          type="number"
-                          value={panneauConfig.fixedHeightCm}
-                          disabled
-                          className={formFieldDisabledClass}
-                        />
-                      ) : (
-                        <input
-                          type="text"
-                          inputMode="decimal"
-                          value={height === "" ? "" : String(height)}
-                          onChange={(e) => {
-                            const sanitized = sanitizeMeasurementInput(e.target.value);
-                            if (sanitized === "") {
-                              setHeight("");
-                              return;
-                            }
-                            const parsed = parseMeasurement(sanitized);
-                            if (!Number.isNaN(parsed)) {
-                              setHeight(parsed);
-                            }
-                          }}
-                          placeholder="ex. 200"
-                          className={formNumberFieldClass}
-                          required
-                        />
-                      )}
-                      {curtainType === "panneau" && (
-                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                          Hauteur fixe pour panneau: {panneauConfig.fixedHeightCm} cm.
-                        </p>
-                      )}
+                      <label className={formFieldLabelClass}>Type de rideau</label>
+                      <div className="flex flex-wrap gap-4">
+                        <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200">
+                          <input
+                            type="radio"
+                            name="client-curtain-type"
+                            value="panneau"
+                            checked={curtainType === "panneau"}
+                            onChange={() => setCurtainType("panneau")}
+                            className="sr-only"
+                          />
+                          <span className="flex h-4 w-4 items-center justify-center rounded-full border border-gray-300 bg-white">
+                            <span
+                              className={`h-2 w-2 rounded-full bg-black transition-opacity ${
+                                curtainType === "panneau" ? "opacity-100" : "opacity-0"
+                              }`}
+                            />
+                          </span>
+                          Panneau
+                        </label>
+                        <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200">
+                          <input
+                            type="radio"
+                            name="client-curtain-type"
+                            value="store"
+                            checked={curtainType === "store"}
+                            onChange={() => setCurtainType("store")}
+                            className="sr-only"
+                          />
+                          <span className="flex h-4 w-4 items-center justify-center rounded-full border border-gray-300 bg-white">
+                            <span
+                              className={`h-2 w-2 rounded-full bg-black transition-opacity ${
+                                curtainType === "store" ? "opacity-100" : "opacity-0"
+                              }`}
+                            />
+                          </span>
+                          Store
+                        </label>
+                      </div>
                     </div>
-                  </div>
 
-                  <div>
-                    <label className={formFieldLabelClass}>
-                      Quantite
-                    </label>
-                    <div className="flex flex-wrap items-center justify-start gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => setQuantity((prev) => Math.max(1, prev - 1))}
-                        disabled={curtainType === "store"}
-                        className="flex h-8 w-8 items-center justify-center rounded-md border border-gray-300 text-base font-medium text-gray-700 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
-                      >
-                        -
-                      </button>
-                      <input
-                        type="number"
-                        value={quantity}
-                        readOnly
-                        className="h-8 w-10 rounded-md border border-gray-300 px-0 text-center text-base font-medium leading-none [text-align-last:center] focus:outline-none [-moz-appearance:textfield] sm:text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setQuantity((prev) => Math.min(10, prev + 1))}
-                        disabled={curtainType === "store"}
-                        className="flex h-8 w-8 items-center justify-center rounded-md border border-gray-300 text-base font-medium text-gray-700 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
-                      >
-                        +
-                      </button>
-                    </div>
-                    {curtainType === "store" && storePanelMeasurements.length === 0 && (
-                      <StorePanelQuantityHint />
-                    )}
-                  </div>
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                      <div>
+                        <label className={formFieldLabelClass}>Largeur (cm)</label>
+                        {curtainType === "panneau" ? (
+                          <select
+                            value={width}
+                            onChange={(e) =>
+                              setWidth(e.target.value ? Number(e.target.value) : "")
+                            }
+                            className={formSelectClass}
+                            style={{
+                              color: width === "" ? "#9CA3AF" : undefined,
+                            }}
+                          >
+                            <option value="" style={{ color: "#9CA3AF" }}>
+                              Choisir la largeur
+                            </option>
+                            {panneauConfig.widths.map((entry) => (
+                              <option
+                                key={entry.id}
+                                value={entry.widthCm}
+                                style={{ color: isDarkMode ? "#FFFFFF" : "#111827" }}
+                              >
+                                {formatPanneauWidthOption(entry)}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            value={storeWidthInput}
+                            onChange={(e) => {
+                              const nextInput = sanitizeMeasurementInput(e.target.value);
+                              const parsed = parseMeasurement(nextInput);
 
-                  {curtainType === "store" && storePanelMeasurements.length > 0 && (
-                    <StorePanelBreakdown
-                      panels={storePanelMeasurements}
-                    />
-                  )}
-
-                  <div className="rounded-lg bg-gray-50 p-3 sm:p-4 dark:bg-gray-700">
-                    <div className="space-y-1 text-sm text-gray-600 dark:text-gray-300">
-                      <div className="flex justify-between">
-                        <span>
-                          {curtainType === "panneau" ? "Prix:" : "Prix par m²:"}
-                        </span>
-                        <span>
-                          {curtainType === "panneau" ? (
-                            (() => {
-                              const selectedWidth = panneauConfig.widths.find(
-                                (entry) => entry.widthCm === width
-                              );
-
-                              if (!selectedWidth) {
-                                return formatPrice(priceCalculation.total);
+                              if (nextInput === "" || Number.isNaN(parsed)) {
+                                setStoreWidthInput(nextInput);
+                                setWidth("");
+                                return;
                               }
 
-                              return (
-                                <PriceDisplay
-                                  pricePerM2={selectedWidth.price}
-                                  salePricePerM2={selectedWidth.salePrice}
-                                  isSaleActive={panneauConfig.isSaleActive === true}
-                                  suffix=""
-                                  inline
-                                  listClassName="text-sm text-gray-500 line-through dark:text-gray-400"
-                                  saleClassName="text-sm font-semibold text-green-600 dark:text-green-400"
-                                />
-                              );
-                            })()
-                          ) : (
-                            <PriceDisplay
-                              pricePerM2={storePriceSettings.pricePerM2}
-                              salePricePerM2={storePriceSettings.salePricePerM2}
-                              isSaleActive={storePriceSettings.isSaleActive === true}
-                              suffix=""
-                              inline
-                              listClassName="text-sm text-gray-500 line-through dark:text-gray-400"
-                              saleClassName="text-sm font-semibold text-green-600 dark:text-green-400"
-                            />
-                          )}
-                        </span>
+                              if (parsed > MAX_STORE_WIDTH_CM) {
+                                setStoreWidthInput(formatMeasurement(MAX_STORE_WIDTH_CM));
+                                setWidth(MAX_STORE_WIDTH_CM);
+                                return;
+                              }
+
+                              setStoreWidthInput(nextInput);
+                              setWidth(parsed > 0 ? parsed : "");
+                            }}
+                            placeholder="ex. 120,5"
+                            className={formNumberFieldClass}
+                          />
+                        )}
                       </div>
-                      <div className="flex justify-between font-semibold text-gray-900 dark:text-white">
-                        <span>Total</span>
-                        <span>
-                          {formatPrice(
-                            curtainType === "store"
-                              ? priceCalculation.total
-                              : priceCalculation.total * quantity
-                          )}
-                        </span>
+                      <div>
+                        <label className={formFieldLabelClass}>Hauteur (cm)</label>
+                        {curtainType === "panneau" ? (
+                          <input
+                            type="number"
+                            value={panneauConfig.fixedHeightCm}
+                            disabled
+                            className={formFieldDisabledClass}
+                          />
+                        ) : (
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            value={height === "" ? "" : String(height)}
+                            onChange={(e) => {
+                              const sanitized = sanitizeMeasurementInput(e.target.value);
+                              if (sanitized === "") {
+                                setHeight("");
+                                return;
+                              }
+                              const parsed = parseMeasurement(sanitized);
+                              if (!Number.isNaN(parsed)) {
+                                setHeight(parsed);
+                              }
+                            }}
+                            placeholder="ex. 200"
+                            className={formNumberFieldClass}
+                          />
+                        )}
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className={formFieldLabelClass}>Quantité</label>
+                      <div className="flex flex-wrap items-center justify-start gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setQuantity((prev) => Math.max(1, prev - 1))}
+                          disabled={curtainType === "store"}
+                          className="flex h-7 w-7 items-center justify-center rounded-md border border-gray-300 text-base font-medium text-gray-700 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+                        >
+                          -
+                        </button>
+                        <input
+                          type="number"
+                          value={quantity}
+                          readOnly
+                          className="w-9 rounded-md border border-gray-300 px-0 py-1 text-center text-xs font-medium leading-none focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield]"
+                          style={{ textAlign: "center" }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setQuantity((prev) => Math.min(10, prev + 1))}
+                          disabled={curtainType === "store"}
+                          className="flex h-7 w-7 items-center justify-center rounded-md border border-gray-300 text-base font-medium text-gray-700 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+                        >
+                          +
+                        </button>
+                      </div>
+                      {curtainType === "store" && storePanelMeasurements.length === 0 && (
+                        <StorePanelQuantityHint />
+                      )}
+                    </div>
+
+                    {curtainType === "store" && storePanelMeasurements.length > 0 && (
+                      <StorePanelBreakdown panels={storePanelMeasurements} compact />
+                    )}
+
+                    <div className="flex flex-wrap justify-end gap-2">
+                      <Button
+                        type="submit"
+                        variant="secondary"
+                        disabled={
+                          height === "" ||
+                          width === "" ||
+                          !product ||
+                          !product.isAvailable
+                        }
+                      >
+                        {product && !product.isAvailable
+                          ? OUT_OF_STOCK_CLIENT_MESSAGE
+                          : "Ajouter rideau"}
+                      </Button>
+                    </div>
+
+                    <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
+                      <h4 className="mb-3 text-sm font-semibold text-gray-900 dark:text-white">
+                        Résumé de la commande
+                      </h4>
+                      <div className="space-y-3">
+                        {items.map((item) => (
+                          <div
+                            key={item.id}
+                            className="flex items-start justify-between gap-3 text-sm"
+                          >
+                            <div className="min-w-0 flex-1">
+                              <p className="font-medium text-gray-900 dark:text-white">
+                                {item.productName}
+                              </p>
+                              <p className="text-gray-500 dark:text-gray-400">
+                                {item.width}cm × {item.height}cm ·{" "}
+                                {item.curtainType === "panneau" ? "Panneau" : "Store"} · Qté{" "}
+                                {item.quantity}
+                              </p>
+                            </div>
+                            <div className="flex shrink-0 items-center gap-2">
+                              <span className="text-gray-900 dark:text-white">
+                                {formatPrice(
+                                  getCurtainLineTotal(
+                                    item.curtainType,
+                                    item.calculation.total,
+                                    item.quantity
+                                  )
+                                )}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => removeItem(item.id)}
+                                className="rounded-md p-1.5 text-red-600 transition-colors hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/30"
+                                aria-label="Retirer ce produit"
+                              >
+                                <FiTrash2 className="h-4 w-4" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+
+                        {formReadyToAdd && product ? (
+                          <div className="flex items-start justify-between gap-3 text-sm">
+                            <div className="min-w-0 flex-1">
+                              <p className="font-medium text-gray-900 dark:text-white">
+                                {product.productName}
+                              </p>
+                              <p className="text-gray-500 dark:text-gray-400">
+                                {width}cm × {height}cm ·{" "}
+                                {curtainType === "panneau" ? "Panneau" : "Store"} · Qté{" "}
+                                {quantity}
+                              </p>
+                            </div>
+                            <span className="shrink-0 text-gray-900 dark:text-white">
+                              {formatPrice(draftLineTotal)}
+                            </span>
+                          </div>
+                        ) : null}
+
+                        {(items.length > 0 || formReadyToAdd) && (
+                          <div className="border-t border-gray-200 pt-3 dark:border-gray-700">
+                            <div className="flex justify-between text-lg font-semibold">
+                              <span className="text-gray-900 dark:text-white">Total</span>
+                              <span className="text-gray-900 dark:text-white">
+                                {formatPrice(summaryTotal)}
+                              </span>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
 
-                  <div className="space-y-2 pt-2">
+                  <div className="flex justify-center pt-1">
                     <Button
-                      type="submit"
-                      disabled={
-                        height === "" ||
-                        !product ||
-                        !product.isAvailable
-                      }
-                      className="w-full bg-gray-900 hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100"
+                      type="button"
+                      className="min-w-[10rem]"
+                      disabled={!canContinue}
+                      onClick={handleContinueClick}
                     >
-                      {product && !product.isAvailable
-                        ? OUT_OF_STOCK_CLIENT_MESSAGE
-                        : "Ajouter au panier"}
+                      Continuer{cartItemCount > 0 ? ` (${cartItemCount})` : ""}
                     </Button>
-                    {cartItemCount > 0 && (
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        className="w-full"
-                        onClick={() => {
-                          void router.push("/paiement");
-                        }}
-                      >
-                        Commander ({cartItemCount})
-                      </Button>
-                    )}
                   </div>
                 </form>
               </Card>
             </>
           )}
         </main>
+
+        {showContinueConfirm && (
+          <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
+            <button
+              type="button"
+              className="absolute inset-0 bg-gray-900/50 backdrop-blur-sm"
+              onClick={handleKeepShopping}
+              aria-label="Fermer la confirmation"
+            />
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="continue-order-confirm-title"
+              className="relative w-full max-w-md rounded-2xl border border-gray-200 bg-white p-6 shadow-2xl dark:border-gray-700 dark:bg-gray-800"
+            >
+              <h3
+                id="continue-order-confirm-title"
+                className="text-center text-lg font-semibold text-gray-900 dark:text-white"
+              >
+                Confirmer la commande ?
+              </h3>
+              <p className="mt-2 text-center text-sm text-gray-600 dark:text-gray-300">
+                Êtes-vous sûr de vouloir commander maintenant, ou préférez-vous continuer vos
+                achats et ajouter d&apos;autres rideaux ?
+              </p>
+              <div className="mt-6 flex flex-col items-center gap-2 sm:flex-row sm:flex-wrap sm:justify-center">
+                <Button type="button" variant="secondary" onClick={handleKeepShopping}>
+                  Continuer mes achats
+                </Button>
+                <Button
+                  type="button"
+                  className="bg-gray-900 hover:bg-gray-800 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100"
+                  onClick={handleConfirmOrder}
+                >
+                  Oui, commander
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
 
         <Footer />
       </div>

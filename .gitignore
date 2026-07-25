@@ -38,9 +38,8 @@ Thumbs.db
 *.tsbuildinfo
 next-env.d.ts
 
-# uploads
-public/uploads/*
-!public/uploads/.gitkeep
+# uploads (runtime only — never commit uploaded images)
+public/uploads/
 
 # Local DB dumps / seed exports (may contain password hashes)
 data/
