@@ -59,33 +59,35 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   return (
     <ToastContext.Provider value={value}>
       {children}
-      <div className="pointer-events-none fixed inset-x-3 top-3 z-[100] flex flex-col gap-2 sm:left-auto sm:right-4 sm:w-full sm:max-w-sm">
-        <AnimatePresence>
-          {toasts.map((toast) => (
-            <motion.div
-              key={toast.id}
-              initial={{ opacity: 0, y: -12, scale: 0.98 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: -12, scale: 0.98 }}
-              transition={{ duration: 0.2 }}
-              className={`pointer-events-auto rounded-lg border px-4 py-3 shadow-lg ${typeStyles[toast.type]}`}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <p className="text-sm font-medium">{toast.message}</p>
-                <button
-                  type="button"
-                  onClick={() => removeToast(toast.id)}
-                  className="shrink-0 text-current opacity-70 transition hover:opacity-100"
-                >
-                  <span className="sr-only">Fermer</span>
-                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-            </motion.div>
-          ))}
-        </AnimatePresence>
+      <div className="pointer-events-none fixed top-3 right-3 left-3 z-[100] flex justify-end sm:left-auto sm:right-4">
+        <div className="flex w-full max-w-sm flex-col gap-2">
+          <AnimatePresence>
+            {toasts.map((toast) => (
+              <motion.div
+                key={toast.id}
+                initial={{ opacity: 0, y: -12, scale: 0.98 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -12, scale: 0.98 }}
+                transition={{ duration: 0.2 }}
+                className={`pointer-events-auto w-full rounded-lg border px-4 py-3 shadow-lg ${typeStyles[toast.type]}`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <p className="min-w-0 flex-1 break-words text-sm font-medium">{toast.message}</p>
+                  <button
+                    type="button"
+                    onClick={() => removeToast(toast.id)}
+                    className="shrink-0 text-current opacity-70 transition hover:opacity-100"
+                  >
+                    <span className="sr-only">Fermer</span>
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              </motion.div>
+            ))}
+          </AnimatePresence>
+        </div>
       </div>
     </ToastContext.Provider>
   );
