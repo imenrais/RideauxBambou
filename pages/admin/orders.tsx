@@ -2942,7 +2942,7 @@ export default function AdminOrders() {
                             onChange={(e) => handleInlineStatusUpdate(order._id, e.target.value)}
                             disabled={updateStatusMutation.isPending}
                             aria-label="Modifier le statut"
-                            className={`inline-flex max-w-full shrink-0 cursor-pointer appearance-none whitespace-normal rounded-full border-0 px-2.5 py-1 pr-7 text-xs font-semibold outline-none focus:ring-2 focus:ring-gray-400/40 disabled:cursor-not-allowed disabled:opacity-60 ${
+                            className={`compact-select inline-flex max-w-full shrink-0 cursor-pointer appearance-none whitespace-normal rounded-full border-0 px-2.5 py-1 pr-7 text-xs font-semibold outline-none focus:ring-2 focus:ring-gray-400/40 disabled:cursor-not-allowed disabled:opacity-60 ${
                               statusColors[normalizedStatus] ||
                               "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300"
                             }`}
@@ -3037,16 +3037,7 @@ export default function AdminOrders() {
                             ) : null}
                           </div>
 
-                          <div className="flex flex-wrap items-center gap-2 border-t border-gray-100 pt-2.5 dark:border-gray-800">
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="secondary"
-                              className="ml-auto box-border !h-9 shrink-0 !rounded-lg !px-3 !py-0 !text-xs !leading-none !shadow-sm"
-                              onClick={() => openEditOrder(order)}
-                            >
-                              Modifier
-                            </Button>
+                          <div className="flex flex-wrap items-center justify-start gap-2 border-t border-gray-100 pt-2.5 dark:border-gray-800">
                             <Button
                               type="button"
                               size="sm"
@@ -3055,6 +3046,15 @@ export default function AdminOrders() {
                               onClick={() => printInvoice(order)}
                             >
                               Imprimer
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="secondary"
+                              className="box-border !h-9 shrink-0 !rounded-lg !px-3 !py-0 !text-xs !leading-none !shadow-sm"
+                              onClick={() => openEditOrder(order)}
+                            >
+                              Modifier
                             </Button>
                             <Button
                               type="button"
@@ -3118,7 +3118,7 @@ export default function AdminOrders() {
                                 onChange={(e) => handleInlineStatusUpdate(order._id, e.target.value)}
                                 disabled={updateStatusMutation.isPending}
                                 aria-label="Modifier le statut"
-                                className={`inline-flex max-w-full shrink-0 cursor-pointer appearance-none whitespace-normal rounded-full border-0 px-2.5 py-1 pr-7 text-xs font-semibold outline-none focus:ring-2 focus:ring-gray-400/40 disabled:cursor-not-allowed disabled:opacity-60 ${
+                                className={`compact-select inline-flex max-w-full shrink-0 cursor-pointer appearance-none whitespace-normal rounded-full border-0 px-2.5 py-1 pr-7 text-xs font-semibold outline-none focus:ring-2 focus:ring-gray-400/40 disabled:cursor-not-allowed disabled:opacity-60 ${
                                   statusColors[normalizeStatus(order.status)] ||
                                   "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300"
                                 }`}
