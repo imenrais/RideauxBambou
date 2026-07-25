@@ -45,6 +45,11 @@ public/uploads/
 data/
 **/hostinger-seed.json
 
+# Agent/commit temp message files (never commit)
+COMMIT_MSG_TMP.txt
+*_COMMIT_MSG*.txt
+.git/COMMIT_MSG_TMP.txt
+
 # Local-only Hostinger helpers (never push)
 HOSTINGER-DEPLOYMENT.md
 HOSTINGER-DEPLOYMENT.md.tmp
