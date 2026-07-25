@@ -40,64 +40,51 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
 
   async headers() {
+    const isHttps = (process.env.NEXTAUTH_URL || process.env.APP_URL || "").startsWith("https://");
+
+    const csp = [
+      "default-src 'self'",
+      "img-src 'self' data: blob: https:",
+      "script-src 'self' 'unsafe-eval' 'unsafe-inline'",
+      "style-src 'self' 'unsafe-inline'",
+      "font-src 'self' data: https:",
+      "connect-src 'self' https:",
+      "frame-ancestors 'none'",
+      "base-uri 'self'",
+      "form-action 'self' https://accounts.google.com",
+      "object-src 'none'",
+      // Only force HTTPS upgrades when the public site URL is already https.
+      ...(isHttps ? ["upgrade-insecure-requests"] : []),
+    ].join("; ");
+
+    const securityHeaders = [
+      { key: "Content-Security-Policy", value: csp },
+      { key: "X-Frame-Options", value: "DENY" },
+      { key: "X-Content-Type-Options", value: "nosniff" },
+      { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+      { key: "X-DNS-Prefetch-Control", value: "on" },
+      { key: "X-XSS-Protection", value: "1; mode=block" },
+      {
+        key: "Permissions-Policy",
+        value:
+          "geolocation=(), microphone=(), camera=(), payment=(), usb=(), magnetometer=(), gyroscope=(), accelerometer=()",
+      },
+      { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
+      { key: "Cross-Origin-Resource-Policy", value: "same-origin" },
+      { key: "X-Powered-By", value: "" },
+    ];
+
+    if (isHttps) {
+      securityHeaders.splice(5, 0, {
+        key: "Strict-Transport-Security",
+        value: "max-age=31536000; includeSubDomains; preload",
+      });
+    }
+
     return [
       {
         source: "/(.*)",
-        headers: [
-          {
-            key: "Content-Security-Policy",
-            value:
-              // Next.js needs 'unsafe-inline' (and typically 'unsafe-eval' in practice)
-              // for the app to run. Other hardening (admin 404s, rate limits, live
-              // roles, server-side pricing, upload locks) stays independent of this.
-              "default-src 'self'; img-src 'self' data: blob: https:; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self' data: https:; connect-src 'self' https:; frame-ancestors 'none'; base-uri 'self'; form-action 'self' https://accounts.google.com; object-src 'none'; upgrade-insecure-requests;",
-          },
-          {
-            key: "X-Frame-Options",
-            value: "DENY",
-          },
-          {
-            key: "X-Content-Type-Options",
-            value: "nosniff",
-          },
-          {
-            key: "Referrer-Policy",
-            value: "strict-origin-when-cross-origin",
-          },
-          {
-            key: "X-DNS-Prefetch-Control",
-            value: "on",
-          },
-          {
-            key: "Strict-Transport-Security",
-            value: "max-age=31536000; includeSubDomains; preload",
-          },
-          {
-            key: "X-XSS-Protection",
-            value: "1; mode=block",
-          },
-          {
-            key: "Permissions-Policy",
-            value:
-              "geolocation=(), microphone=(), camera=(), payment=(), usb=(), magnetometer=(), gyroscope=(), accelerometer=()",
-          },
-          {
-            key: "Cross-Origin-Embedder-Policy",
-            value: "require-corp",
-          },
-          {
-            key: "Cross-Origin-Opener-Policy",
-            value: "same-origin",
-          },
-          {
-            key: "Cross-Origin-Resource-Policy",
-            value: "same-origin",
-          },
-          {
-            key: "X-Powered-By",
-            value: "",
-          },
-        ],
+        headers: securityHeaders,
       },
     ];
   },
