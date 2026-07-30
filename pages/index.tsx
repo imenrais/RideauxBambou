@@ -587,35 +587,35 @@ export default function Home({ title }: HomeProps) {
               Avis Clients
             </h2>
             {reviewImages.length > 0 ? (
-              <div className="-mx-3 flex gap-3 overflow-x-auto overflow-y-hidden overscroll-x-contain px-3 pb-2 touch-pan-x [-ms-overflow-style:none] [scrollbar-width:none] md:mx-0 md:grid md:grid-cols-2 md:gap-6 md:overflow-visible md:overscroll-auto md:px-0 md:pb-0 md:touch-auto md:[-ms-overflow-style:auto] md:[scrollbar-width:auto] lg:grid-cols-3 [&::-webkit-scrollbar]:hidden md:[&::-webkit-scrollbar]:block">
+              <div className="-mx-3 flex items-start gap-3 overflow-x-auto overflow-y-hidden overscroll-x-contain px-3 pb-2 touch-pan-x [-ms-overflow-style:none] [scrollbar-width:none] md:mx-0 md:grid md:grid-cols-2 md:items-start md:gap-6 md:overflow-visible md:overscroll-auto md:px-0 md:pb-0 md:touch-auto md:[-ms-overflow-style:auto] md:[scrollbar-width:auto] lg:grid-cols-3 [&::-webkit-scrollbar]:hidden md:[&::-webkit-scrollbar]:block">
                 {reviewImages.map((review) => (
                   <div
                     key={review._id}
-                    className="w-[min(72vw,260px)] shrink-0 md:w-auto md:shrink"
+                    className="w-[min(78vw,280px)] shrink-0 md:w-auto md:shrink"
                   >
-                    <Card padding="none" className="h-full overflow-hidden">
-                      <div className="overflow-hidden p-4">
+                    <Card padding="none" className="overflow-hidden">
+                      <div className="p-3 sm:p-4">
                         <div
-                          className={`relative h-40 overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-700 sm:h-56 ${
+                          className={`overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-700 ${
                             review.caption ? "mb-3 sm:mb-4" : ""
                           }`}
                         >
                           <Image
                             src={review.image}
-                            alt="Capture d'ecran d'avis client"
-                            fill
-                            sizes="(max-width: 768px) 72vw, (max-width: 1024px) 45vw, 30vw"
+                            alt="Capture d'écran d'avis client"
+                            width={720}
+                            height={900}
+                            sizes="(max-width: 768px) 78vw, (max-width: 1024px) 45vw, 30vw"
                             draggable={false}
-                            className="pointer-events-none select-none object-cover md:pointer-events-auto"
+                            className="pointer-events-none h-auto w-full select-none md:pointer-events-auto"
+                            style={{ width: "100%", height: "auto" }}
                           />
                         </div>
-                        <div className="text-left">
-                          {review.caption && (
-                            <p className="line-clamp-3 text-sm text-gray-600 dark:text-gray-300">
-                              {review.caption}
-                            </p>
-                          )}
-                        </div>
+                        {review.caption ? (
+                          <p className="text-left text-sm text-gray-600 dark:text-gray-300">
+                            {review.caption}
+                          </p>
+                        ) : null}
                       </div>
                     </Card>
                   </div>
@@ -627,27 +627,21 @@ export default function Home({ title }: HomeProps) {
 
         {/* Newsletter — bottom padding matches footer top padding above "Rideaux Bambou" */}
         <section className="mx-auto max-w-7xl px-3 pt-2 pb-6 sm:px-6 sm:pt-3 sm:pb-12 lg:px-8 lg:pt-4 lg:pb-12">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8 }}
-            viewport={{ once: true }}
-          >
-            <Card
-              padding="none"
-              className="relative overflow-hidden !border-0 bg-gradient-to-r from-gray-900 to-gray-800 shadow-md dark:from-gray-700 dark:to-gray-600"
+          <div className="relative overflow-hidden rounded-xl bg-gray-900 shadow-md">
+            {/* CSS background — reliable on mobile (Next Image fill can fail inside motion/transforms) */}
+            <div
+              className="pointer-events-none absolute inset-0 z-0 bg-cover bg-center opacity-55 sm:opacity-45"
+              style={{ backgroundImage: "url('/images/3.jpeg')" }}
+              aria-hidden
+            />
+            <div className="pointer-events-none absolute inset-0 z-0 bg-gradient-to-r from-gray-900/70 via-gray-900/50 to-gray-900/60 sm:from-gray-900/80 sm:via-gray-900/60 sm:to-gray-900/70" />
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.8 }}
+              viewport={{ once: true }}
+              className="relative z-10 px-4 py-5 text-center sm:px-8 sm:py-12 lg:px-12 lg:py-16"
             >
-              <div className="absolute inset-0">
-                <Image
-                  src="/images/3.jpeg"
-                  alt="Stores en bambou"
-                  fill
-                  sizes="(max-width: 1280px) 100vw, 1280px"
-                  className="object-cover object-center opacity-45"
-                />
-                <div className="absolute inset-0 bg-gradient-to-r from-gray-900/80 via-gray-900/60 to-gray-900/70" />
-              </div>
-              <div className="relative px-4 py-5 text-center sm:px-8 sm:py-12 lg:px-12 lg:py-16">
                 <h2 className="mb-2 text-lg font-bold leading-snug text-white sm:mb-4 sm:text-3xl lg:text-4xl">
                   Restez Informé des Offres Exclusives !
                 </h2>
@@ -743,9 +737,8 @@ export default function Home({ title }: HomeProps) {
                     {newsletterMessage}
                   </p>
                 )}
-              </div>
-            </Card>
-          </motion.div>
+            </motion.div>
+          </div>
         </section>
         </div>
 
