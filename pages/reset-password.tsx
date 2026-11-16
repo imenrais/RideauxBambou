@@ -117,7 +117,7 @@ export default function ResetPasswordPage({ title, token }: ResetPasswordPagePro
             >
               <div className="mb-8 text-center">
                 <Image
-                  src="/images/logo.png"
+                  src="/images/logo.jpeg"
                   alt="Rideaux Bambou"
                   width={48}
                   height={48}

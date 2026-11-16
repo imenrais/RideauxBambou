@@ -94,7 +94,7 @@ export default function OrderSuccessPage() {
         <title>Commande confirmée - Rideaux Bambou</title>
         <meta name="description" content="Votre commande a été confirmée avec succès" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <link rel="icon" href="/images/logo.png" />
+        <link rel="icon" href="/images/logo.jpeg" />
       </Head>
 
       <div className="min-h-screen bg-gray-100 dark:bg-gray-900">

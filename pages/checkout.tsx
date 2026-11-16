@@ -377,7 +377,7 @@ export default function CheckoutPage() {
         <title>Commande - Rideaux Bambou</title>
         <meta name="description" content="Finalisez votre commande de rideaux en bambou" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <link rel="icon" href="/images/logo.png" />
+        <link rel="icon" href="/images/logo.jpeg" />
       </Head>
 
       <div className="min-h-screen bg-gray-100 dark:bg-gray-900">

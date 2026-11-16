@@ -251,7 +251,7 @@ export default function AdminNavigation() {
           <Link href="/admin" className="group flex min-w-0 items-center gap-2 sm:gap-3">
             <div className="relative h-9 w-9 shrink-0 overflow-hidden rounded-full sm:h-10 sm:w-10">
               <Image
-                src="/images/logo.png"
+                src="/images/logo.jpeg"
                 alt="Rideaux Bambou Logo"
                 fill
                 className="object-cover"

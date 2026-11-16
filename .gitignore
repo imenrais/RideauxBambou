@@ -41,6 +41,11 @@ next-env.d.ts
 # uploads (runtime only — never commit uploaded images)
 public/uploads/
 
+# Local-only previous logo (keep on this computer, never push)
+public/images/old logo.png
+public/images/old-logo.png
+public/images/old logo.jpeg
+
 # Local DB dumps / seed exports (may contain password hashes)
 data/
 **/hostinger-seed.json

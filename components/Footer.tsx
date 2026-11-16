@@ -62,7 +62,7 @@ export default function Footer() {
               className="group inline-flex flex-nowrap items-center gap-2.5 sm:gap-3"
             >
               <Image
-                src="/images/logo.png"
+                src="/images/logo.jpeg"
                 alt="Rideaux Bambou Logo"
                 width={80}
                 height={80}

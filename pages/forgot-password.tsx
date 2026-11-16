@@ -83,7 +83,7 @@ export default function ForgotPasswordPage({ title }: ForgotPasswordPageProps) {
               {/* Header */}
               <div className="mb-8 text-center">
                 <Image
-                  src="/images/logo.png"
+                  src="/images/logo.jpeg"
                   alt="Rideaux Bambou"
                   width={48}
                   height={48}

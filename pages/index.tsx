@@ -221,8 +221,8 @@ export default function Home({ title }: HomeProps) {
           name="viewport"
           content="width=device-width, initial-scale=1, viewport-fit=cover"
         />
-        <link rel="icon" href="/images/logo.png" />
-        <link rel="apple-touch-icon" href="/images/logo.png" />
+        <link rel="icon" href="/images/logo.jpeg" />
+        <link rel="apple-touch-icon" href="/images/logo.jpeg" />
       </Head>
 
       <div className="min-h-dvh bg-gray-100 dark:bg-gray-900">

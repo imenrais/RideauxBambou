@@ -4,24 +4,24 @@
   "description": "Des rideaux en bambou naturels et élégants pour votre maison",
   "icons": [
     {
-      "src": "/images/logo.png",
+      "src": "/images/logo.jpeg",
       "sizes": "16x16",
-      "type": "image/png"
+      "type": "image/jpeg"
     },
     {
-      "src": "/images/logo.png",
+      "src": "/images/logo.jpeg",
       "sizes": "32x32",
-      "type": "image/png"
+      "type": "image/jpeg"
     },
     {
-      "src": "/images/logo.png",
+      "src": "/images/logo.jpeg",
       "sizes": "180x180",
-      "type": "image/png"
+      "type": "image/jpeg"
     },
     {
-      "src": "/images/logo.png",
+      "src": "/images/logo.jpeg",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/jpeg"
     }
   ],
   "theme_color": "#f3f4f6",

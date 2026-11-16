@@ -104,7 +104,7 @@ export default function LoginPage({ title }: LoginPageProps) {
               {/* Header */}
               <div className="mb-8 text-center">
                 <img
-                  src="/images/logo.png"
+                  src="/images/logo.jpeg"
                   alt="Rideaux Bambou"
                   className="mx-auto mb-4 h-12 w-12 object-contain"
                 />
